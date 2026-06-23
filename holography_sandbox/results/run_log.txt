@@ -1,5 +1,5 @@
 Building reference hologram …
-  GS phase retrieval done in 0.9s  (256×256, 50 iter)
+  GS phase retrieval done in 0.8s  (256×256, 50 iter)
 
 ── GS Convergence ──
   MSE: iter1=0.08747 → iter30=0.00075 → iter50=0.00071 → iter100=0.00068
@@ -122,6 +122,11 @@ Building reference hologram …
   Summary CSV saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\multi_scene_summary.csv
   Figure saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\multi_scene_summary.png
 
+── Viewing-Angle Diagnostic: retained energy vs SSIM ──
+  CSV saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\viewing_energy.csv
+  retained energy (mean): 100%=0.800, 75%=0.464, 50%=0.209, 25%=0.055, 10%=0.008
+  Figure saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\viewing_energy.png
+
 ══ Seed Sensitivity (5 GS seeds) ══
   CSV saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\seed_sensitivity.csv
   Summary CSV saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\seed_sensitivity_summary.csv
@@ -137,4 +142,4 @@ Building reference hologram …
   resolution    32x32      21.27 ± 1.08    0.239 ± 0.031   0.781 ± 0.026
   resolution    64x64      25.55 ± 0.59    0.627 ± 0.034   0.583 ± 0.022
 
-✓ All done in 38.3s — results in C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results/
+✓ All done in 38.2s — results in C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results/

@@ -453,7 +453,7 @@ all scenes the mean SSIM declines slowly from $0.634$ ($75\%$) to $0.615$
 ($50\%$) to $0.595$ ($25\%$) before dropping to $0.362$ at $10\%$.
 
 The near-flat $50\%\!\to\!25\%$ region warrants explanation, since one might
-suspect the bandwidth mask is inert there. It is not: measuring the fraction of
+suspect the bandwidth mask is inert there. It is not (Fig.~\ref{fig:viewing_energy}): measuring the fraction of
 hologram spectral energy that survives the circular mask shows monotone, large
 removal at every step---on average $0.80$, $0.46$, $0.21$, $0.055$, and $0.008$
 of the total energy is retained at $100/75/50/25/10\%$ bandwidth. The operator
@@ -472,6 +472,19 @@ broadband scenes are already largely lost at $75\%$ and decline gradually
 (\textit{natural\_photo} $0.237\!\to\!0.218\!\to\!0.163$). The wide across-scene
 standard deviation in Table~\ref{tab:viewing} is the signature of this split, not
 of operator inactivity.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{viewing_energy.png}
+  \caption{Viewing-angle operator verification. Retained hologram spectral
+  energy (blue, log axis; thin grey lines per scene, thick line the mean) falls
+  monotonically and by roughly two orders of magnitude as bandwidth is reduced,
+  confirming the mask is active at every step. Mean reconstruction SSIM (green,
+  right axis) nonetheless plateaus from $75\%$ to $25\%$ and drops sharply only at
+  $10\%$, because phase-only reconstruction depends on the energy-bearing
+  low-frequency core, which survives until the mask reaches $\sim\!10\%$.}
+  \label{fig:viewing_energy}
+\end{figure}
 
 \subsection{D4: Coherent Speckle}
 \begin{figure}[t]

@@ -29,9 +29,9 @@ so `\includegraphics` uses **bare filenames**. Two ways to build:
   directory (then the paper is self-contained, no relative paths leave the
   `paper/` folder).
 
-The seven referenced figures: `gs_convergence.png`, `sweep_resolution.png`,
-`sweep_phase_bits.png`, `sweep_viewing_angle.png`, `sweep_speckle.png`,
-`metrics_summary_plot.png`, `multi_scene_summary.png`.
+The eight referenced figures: `gs_convergence.png`, `sweep_resolution.png`,
+`sweep_phase_bits.png`, `sweep_viewing_angle.png`, `viewing_energy.png`,
+`sweep_speckle.png`, `metrics_summary_plot.png`, `multi_scene_summary.png`.
 
 ## What still needs filling in by the authors
 
