@@ -446,7 +446,7 @@ def _plot_multi_scene_summary(summary):
         ax.set_ylabel("SSIM (mean ± std across scenes)")
         ax.set_title(axis, fontweight="bold")
         ax.grid(True, alpha=0.3)
-    fig.suptitle("Multi-Scene Generalisation — SSIM (mean ± std, 4 scenes)",
+    fig.suptitle("Multi-Scene Generalisation — SSIM (mean ± std, 5 scenes)",
                  fontweight="bold")
     plt.tight_layout()
     path = os.path.join(RESULTS_DIR, "multi_scene_summary.png")
@@ -511,8 +511,14 @@ def run_seed_sensitivity():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def plot_metrics_summary(all_rows):
+    # Only the four reported degradation axes (D1-D4). The depth-plane sweep is a
+    # coherent-superposition demonstration, not a reported Part 1 axis, so it is
+    # excluded from this summary figure (see paper scope statement).
+    reported = ["resolution", "phase_bits", "viewing_angle", "speckle"]
     sweeps = {}
     for row in all_rows:
+        if row["sweep"] not in reported:
+            continue
         sweeps.setdefault(row["sweep"], []).append(row)
 
     fig, axes = plt.subplots(len(sweeps), 2, figsize=(12, 4 * len(sweeps)))

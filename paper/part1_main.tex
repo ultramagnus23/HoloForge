@@ -67,8 +67,9 @@ phase-retrieval seeds, we find phase quantisation to be perceptually lossless
 down to 4 bits and near-lossless at 2 bits ($\text{SSIM} = 0.98$ on the
 reference scene), with a systematic, theoretically predicted fidelity penalty at
 1 bit ($\text{SSIM} = 0.66$ on the reference scene; $0.27 \pm 0.20$ across
-scenes) attributable to the unavoidable twin image of a real-valued binary phase
-hologram. We further observe
+scenes, the low end driven by high-frequency content such as the natural
+photograph and resolution chart) attributable to the unavoidable twin image of a
+real-valued binary phase hologram. We further observe
 near-lossless reconstruction of low-spatial-frequency content down to $25\%$
 viewing-angle bandwidth ($\text{SSIM} > 0.97$), and a systematic divergence
 between PSNR and SSIM under resolution loss, where PSNR stays moderate while
@@ -274,7 +275,13 @@ Multi-wavelength (RGB) colour holography is explicitly out of scope for Part~1
 and is deferred to Part~2. A na\"ive ``colour'' axis that post-processes a
 monochrome reconstruction would not model any holographic colour physics, so it
 is excluded rather than reported (see the released
-\texttt{sweep\_color\_EXCLUDED.txt}).
+\texttt{sweep\_color\_EXCLUDED.txt}). Depth-plane multi-focus holography---in
+which several object planes are encoded by coherent superposition of
+per-plane holograms---is likewise treated separately and deferred to Part~2; the
+released code includes a physically correct complex-field superposition routine
+(summing $e^{j\phi}$ across planes rather than the phases themselves) as a
+demonstration, but a controlled depth-degradation study requires a depth-aware
+reference and metric that are beyond Part~1's single-plane scope.
 
 \subsection{Metrics}
 We evaluate reconstruction quality using three complementary metrics:
@@ -442,11 +449,29 @@ its onset at exactly 1 bit.
 Viewing-angle reduction is the gentlest of the four axes
 (Table~\ref{tab:viewing}). On the low-frequency reference scene SSIM remains
 above $0.97$ down to $25\%$ bandwidth and only falls to $0.728$ at $10\%$. Across
-all scenes the mean SSIM degrades slowly from $0.634$ ($75\%$) to $0.595$
-($25\%$) before dropping to $0.362$ at $10\%$, indicating that a substantial
-fraction of the diffraction bandwidth can be sacrificed before perceptually
-significant loss---most so for smooth, low-frequency content, and least for the
-high-frequency scenes (which the wide across-scene spread reflects).
+all scenes the mean SSIM declines slowly from $0.634$ ($75\%$) to $0.615$
+($50\%$) to $0.595$ ($25\%$) before dropping to $0.362$ at $10\%$.
+
+The near-flat $50\%\!\to\!25\%$ region warrants explanation, since one might
+suspect the bandwidth mask is inert there. It is not: measuring the fraction of
+hologram spectral energy that survives the circular mask shows monotone, large
+removal at every step---on average $0.80$, $0.46$, $0.21$, $0.055$, and $0.008$
+of the total energy is retained at $100/75/50/25/10\%$ bandwidth. The operator
+therefore discards $\sim\!95\%$ of the spectral energy by $25\%$ bandwidth. SSIM
+nonetheless plateaus because reconstruction quality is governed not by total
+retained energy but by whether the \emph{energy-bearing low-frequency core}
+survives: for compact, low-frequency targets that core lies within the $25\%$
+disc, so masking between $75\%$ and $25\%$ removes mostly low-energy
+high-frequency components to which a phase-only reconstruction is insensitive,
+whereas the sharp drop at $10\%$ coincides with the mask finally cutting into the
+core (retained energy $0.055\!\to\!0.008$). This is strongly
+content-dependent---and the flat average superimposes two distinct behaviours:
+low-frequency scenes are flat-then-cliff (\textit{gaussian\_spots}
+$0.978\!\to\!0.972$ from $75\%$ to $25\%$, then $0.728$ at $10\%$), whereas
+broadband scenes are already largely lost at $75\%$ and decline gradually
+(\textit{natural\_photo} $0.237\!\to\!0.218\!\to\!0.163$). The wide across-scene
+standard deviation in Table~\ref{tab:viewing} is the signature of this split, not
+of operator inactivity.
 
 \subsection{D4: Coherent Speckle}
 \begin{figure}[t]
@@ -484,10 +509,10 @@ quantitative tolerance budget for SLM phase accuracy and optical-surface quality
 \begin{figure}[t]
   \centering
   \includegraphics[width=\columnwidth]{metrics_summary_plot.png}
-  \caption{PSNR and SSIM across all degradation axes. The two metrics diverge
-  most strongly in the phase-quantisation sweep, where SSIM marks a categorical
-  failure at 1-bit that PSNR registers only as a continuation of a monotone
-  trend.}
+  \caption{PSNR and SSIM across the four reported degradation axes
+  (resolution, phase quantisation, viewing angle, speckle). The metrics diverge
+  most strongly under resolution loss, where PSNR remains a moderate
+  $13$--$17\,\text{dB}$ while SSIM collapses below $0.05$.}
   \label{fig:metrics_summary}
 \end{figure}
 \begin{figure}[t]
@@ -527,6 +552,12 @@ Table~\ref{tab:multiscene}) shows the same ordering of axis severity holds acros
 content types, while seed sensitivity (Table~\ref{tab:seed}) confirms the
 findings are not artefacts of a particular random initialisation: standard
 deviations across seeds are small ($\le 1.2\,\text{dB}$ PSNR, $\le 0.034$ SSIM).
+The large across-scene standard deviations in Table~\ref{tab:multiscene} are not
+unstructured noise; Table~\ref{tab:perscene} breaks the phase-quantisation sweep
+down per scene and shows the variance is driven by content frequency: the
+smooth \textit{gaussian\_spots} scene retains $\text{SSIM}=0.655$ at 1 bit while
+the broadband \textit{natural\_photo} falls to $0.089$, spanning almost the
+entire range of the $0.273 \pm 0.198$ aggregate.
 
 \begin{table}[t]
   \centering
@@ -542,6 +573,25 @@ deviations across seeds are small ($\le 1.2\,\text{dB}$ PSNR, $\le 0.034$ SSIM).
     Phase bits    & 1   & $0.273 \pm 0.198$ & $0.575 \pm 0.279$ \\
     Viewing angle & 25\% & $0.595 \pm 0.306$ & $0.435 \pm 0.257$ \\
     Viewing angle & 10\% & $0.362 \pm 0.202$ & $0.540 \pm 0.221$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \centering
+  \caption{Per-scene SSIM for the phase-quantisation sweep. The variance in
+  Table~\ref{tab:multiscene} is content-driven: low-frequency scenes survive the
+  1-bit transition far better than high-frequency ones.}
+  \label{tab:perscene}
+  \begin{tabular}{lcccc}
+    \toprule
+    Scene & 8-bit & 4-bit & 2-bit & 1-bit \\
+    \midrule
+    \textit{gaussian\_spots}   & $1.000$ & $1.000$ & $0.978$ & $0.655$ \\
+    \textit{letters}           & $1.000$ & $0.997$ & $0.818$ & $0.241$ \\
+    \textit{circle\_ring}      & $1.000$ & $0.978$ & $0.626$ & $0.213$ \\
+    \textit{resolution\_chart} & $1.000$ & $0.947$ & $0.504$ & $0.165$ \\
+    \textit{natural\_photo}    & $0.998$ & $0.749$ & $0.255$ & $0.089$ \\
     \bottomrule
   \end{tabular}
 \end{table}
