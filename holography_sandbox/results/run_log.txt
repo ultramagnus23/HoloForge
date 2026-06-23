@@ -1,0 +1,140 @@
+Building reference hologram …
+  GS phase retrieval done in 0.8s  (256×256, 50 iter)
+
+── GS Convergence ──
+  MSE: iter1=0.08747 → iter30=0.00075 → iter50=0.00071 → iter100=0.00068
+  saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\gs_convergence.png
+
+── Sweep 1: Resolution (complex-domain phase downsampling) ──
+    128x128             PSNR= 28.7  SSIM=0.860  LPIPS=0.3686  (proxy=0.00022)
+    64x64               PSNR= 25.9  SSIM=0.657  LPIPS=0.5557  (proxy=0.00051)
+    32x32               PSNR= 21.1  SSIM=0.226  LPIPS=0.7914  (proxy=0.00142)
+    16x16               PSNR= 15.5  SSIM=0.023  LPIPS=0.9237  (proxy=0.00316)
+  saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\sweep_resolution.png
+
+── Sweep 2: Phase Quantisation ──
+    8-bit               PSNR= 83.0  SSIM=1.000  LPIPS=0.0000  (proxy=0.00000)
+    4-bit               PSNR= 59.4  SSIM=1.000  LPIPS=0.0003  (proxy=0.00000)
+    2-bit               PSNR= 45.0  SSIM=0.978  LPIPS=0.0156  (proxy=0.00001)
+    1-bit               PSNR= 35.7  SSIM=0.655  LPIPS=0.1803  (proxy=0.00008)
+  saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\sweep_phase_bits.png
+
+── Sweep 3: Colour Channels — EXCLUDED (see results/sweep_color_EXCLUDED.txt) ──
+  COLOR CHANNELS SWEEP EXCLUDED FROM PART 1
+
+── Sweep 4: Viewing Angle (Bandwidth) ──
+    75%                 PSNR= 31.1  SSIM=0.978  LPIPS=0.1708  (proxy=0.00010)
+    50%                 PSNR= 28.9  SSIM=0.968  LPIPS=0.1640  (proxy=0.00008)
+    25%                 PSNR= 29.7  SSIM=0.972  LPIPS=0.1078  (proxy=0.00008)
+    10%                 PSNR= 29.2  SSIM=0.728  LPIPS=0.1483  (proxy=0.00007)
+  saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\sweep_viewing_angle.png
+
+── Sweep 5: Depth Planes (coherent field superposition) ──
+    3 planes            PSNR= 19.7  SSIM=0.159  LPIPS=0.3584  (proxy=0.00387)
+    2 planes            PSNR= 18.5  SSIM=0.162  LPIPS=0.2213  (proxy=0.00529)
+    1 planes            PSNR= 18.1  SSIM=0.013  LPIPS=1.0042  (proxy=0.00622)
+  saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\sweep_depth_planes.png
+
+── Sweep 6: Coherent Speckle (pre-reconstruction phase noise) ──
+    σ=0.10              PSNR= 60.1  SSIM=1.000  LPIPS=0.0002  (proxy=0.00000)
+    σ=0.30              PSNR= 49.7  SSIM=0.994  LPIPS=0.0052  (proxy=0.00000)
+    σ=0.60              PSNR= 42.7  SSIM=0.915  LPIPS=0.0534  (proxy=0.00002)
+    σ=1.00              PSNR= 34.9  SSIM=0.501  LPIPS=0.2575  (proxy=0.00015)
+    σ=π                 PSNR= 18.5  SSIM=0.008  LPIPS=0.9625  (proxy=0.00652)
+  saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\sweep_speckle.png
+
+  Metrics plot saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\metrics_summary_plot.png
+  CSV  saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\metrics_summary.csv
+
+══ Multi-Scene Validation (4 scenes) ══
+
+  Scene: gaussian_spots
+    [resolution    128x128 ] PSNR= 28.7 SSIM=0.860 LPIPS=0.3686
+    [resolution    64x64   ] PSNR= 25.9 SSIM=0.657 LPIPS=0.5557
+    [resolution    32x32   ] PSNR= 21.1 SSIM=0.226 LPIPS=0.7914
+    [resolution    16x16   ] PSNR= 15.5 SSIM=0.023 LPIPS=0.9237
+    [phase_bits    8-bit   ] PSNR= 83.0 SSIM=1.000 LPIPS=0.0000
+    [phase_bits    4-bit   ] PSNR= 59.4 SSIM=1.000 LPIPS=0.0003
+    [phase_bits    2-bit   ] PSNR= 45.0 SSIM=0.978 LPIPS=0.0156
+    [phase_bits    1-bit   ] PSNR= 35.7 SSIM=0.655 LPIPS=0.1803
+    [viewing_angle 75%     ] PSNR= 31.1 SSIM=0.978 LPIPS=0.1708
+    [viewing_angle 50%     ] PSNR= 28.9 SSIM=0.968 LPIPS=0.1640
+    [viewing_angle 25%     ] PSNR= 29.7 SSIM=0.972 LPIPS=0.1078
+    [viewing_angle 10%     ] PSNR= 29.2 SSIM=0.728 LPIPS=0.1483
+
+  Scene: resolution_chart
+    [resolution    128x128 ] PSNR= 11.1 SSIM=0.121 LPIPS=0.9319
+    [resolution    64x64   ] PSNR= 10.8 SSIM=0.047 LPIPS=0.8006
+    [resolution    32x32   ] PSNR= 10.8 SSIM=0.031 LPIPS=0.6974
+    [resolution    16x16   ] PSNR= 10.8 SSIM=0.068 LPIPS=0.7172
+    [phase_bits    8-bit   ] PSNR= 52.4 SSIM=1.000 LPIPS=0.0001
+    [phase_bits    4-bit   ] PSNR= 30.0 SSIM=0.947 LPIPS=0.0139
+    [phase_bits    2-bit   ] PSNR= 16.5 SSIM=0.504 LPIPS=0.3004
+    [phase_bits    1-bit   ] PSNR= 12.3 SSIM=0.165 LPIPS=0.9121
+    [viewing_angle 75%     ] PSNR= 12.3 SSIM=0.367 LPIPS=0.6398
+    [viewing_angle 50%     ] PSNR= 11.5 SSIM=0.334 LPIPS=0.6643
+    [viewing_angle 25%     ] PSNR= 11.4 SSIM=0.288 LPIPS=0.7169
+    [viewing_angle 10%     ] PSNR= 11.6 SSIM=0.188 LPIPS=0.7289
+
+  Scene: letters
+    [resolution    128x128 ] PSNR= 19.3 SSIM=0.653 LPIPS=0.4720
+    [resolution    64x64   ] PSNR= 18.0 SSIM=0.287 LPIPS=0.6827
+    [resolution    32x32   ] PSNR= 16.7 SSIM=0.068 LPIPS=0.7729
+    [resolution    16x16   ] PSNR= 15.1 SSIM=0.037 LPIPS=0.8764
+    [phase_bits    8-bit   ] PSNR= 71.6 SSIM=1.000 LPIPS=0.0000
+    [phase_bits    4-bit   ] PSNR= 46.0 SSIM=0.997 LPIPS=0.0005
+    [phase_bits    2-bit   ] PSNR= 32.3 SSIM=0.818 LPIPS=0.0574
+    [phase_bits    1-bit   ] PSNR= 24.3 SSIM=0.241 LPIPS=0.4004
+    [viewing_angle 75%     ] PSNR= 20.7 SSIM=0.921 LPIPS=0.1828
+    [viewing_angle 50%     ] PSNR= 19.9 SSIM=0.909 LPIPS=0.1875
+    [viewing_angle 25%     ] PSNR= 19.6 SSIM=0.897 LPIPS=0.2254
+    [viewing_angle 10%     ] PSNR= 19.2 SSIM=0.357 LPIPS=0.5285
+
+  Scene: circle_ring
+    [resolution    128x128 ] PSNR= 15.9 SSIM=0.249 LPIPS=0.6467
+    [resolution    64x64   ] PSNR= 15.3 SSIM=0.089 LPIPS=0.7204
+    [resolution    32x32   ] PSNR= 14.5 SSIM=0.056 LPIPS=0.7113
+    [resolution    16x16   ] PSNR= 13.7 SSIM=0.059 LPIPS=0.7845
+    [phase_bits    8-bit   ] PSNR= 61.4 SSIM=1.000 LPIPS=0.0000
+    [phase_bits    4-bit   ] PSNR= 38.4 SSIM=0.978 LPIPS=0.0047
+    [phase_bits    2-bit   ] PSNR= 24.3 SSIM=0.626 LPIPS=0.1352
+    [phase_bits    1-bit   ] PSNR= 18.2 SSIM=0.213 LPIPS=0.5160
+    [viewing_angle 75%     ] PSNR= 17.2 SSIM=0.666 LPIPS=0.3011
+    [viewing_angle 50%     ] PSNR= 16.7 SSIM=0.637 LPIPS=0.3297
+    [viewing_angle 25%     ] PSNR= 16.7 SSIM=0.598 LPIPS=0.3801
+    [viewing_angle 10%     ] PSNR= 16.6 SSIM=0.372 LPIPS=0.5189
+
+  Scene: natural_photo
+    [resolution    128x128 ] PSNR= 10.2 SSIM=0.059 LPIPS=0.8778
+    [resolution    64x64   ] PSNR= 10.0 SSIM=0.062 LPIPS=0.7646
+    [resolution    32x32   ] PSNR= 10.1 SSIM=0.044 LPIPS=0.8116
+    [resolution    16x16   ] PSNR= 10.1 SSIM=0.075 LPIPS=0.8823
+    [phase_bits    8-bit   ] PSNR= 48.0 SSIM=0.998 LPIPS=0.0004
+    [phase_bits    4-bit   ] PSNR= 26.6 SSIM=0.749 LPIPS=0.0942
+    [phase_bits    2-bit   ] PSNR= 13.6 SSIM=0.255 LPIPS=0.6066
+    [phase_bits    1-bit   ] PSNR= 10.9 SSIM=0.089 LPIPS=0.8683
+    [viewing_angle 75%     ] PSNR= 10.6 SSIM=0.237 LPIPS=0.7181
+    [viewing_angle 50%     ] PSNR= 10.3 SSIM=0.227 LPIPS=0.7534
+    [viewing_angle 25%     ] PSNR= 10.1 SSIM=0.218 LPIPS=0.7445
+    [viewing_angle 10%     ] PSNR= 10.6 SSIM=0.163 LPIPS=0.7752
+
+  CSV saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\multi_scene_metrics.csv
+  Summary CSV saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\multi_scene_summary.csv
+  Figure saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\multi_scene_summary.png
+
+══ Seed Sensitivity (5 GS seeds) ══
+  CSV saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\seed_sensitivity.csv
+  Summary CSV saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\seed_sensitivity_summary.csv
+
+  Seed-sensitivity summary (mean ± std across 5 seeds):
+  sweep         param     PSNR (dB)        SSIM           LPIPS         
+  phase_bits    1-bit      35.93 ± 0.22    0.600 ± 0.028   0.202 ± 0.011
+  phase_bits    2-bit      45.66 ± 0.79    0.975 ± 0.002   0.019 ± 0.004
+  phase_bits    4-bit      59.23 ± 0.22    1.000 ± 0.000   0.000 ± 0.000
+  phase_bits    8-bit      82.93 ± 0.70    1.000 ± 0.000   0.000 ± 0.000
+  resolution    128x128    28.63 ± 0.24    0.860 ± 0.009   0.381 ± 0.017
+  resolution    16x16      17.23 ± 1.09    0.036 ± 0.010   0.895 ± 0.021
+  resolution    32x32      21.27 ± 1.08    0.239 ± 0.031   0.781 ± 0.026
+  resolution    64x64      25.55 ± 0.59    0.627 ± 0.034   0.583 ± 0.022
+
+✓ All done in 37.5s — results in C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results/

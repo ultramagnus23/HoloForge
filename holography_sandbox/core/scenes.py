@@ -110,6 +110,36 @@ def circle_ring(size: int = 512, n_rings: int = 4) -> np.ndarray:
     return img
 
 
+def natural_photo(size: int = 512) -> np.ndarray:
+    """
+    A natural photographic scene — the standard 'cameraman' 512x512 grayscale
+    photo bundled with scikit-image (no download required, fully reproducible).
+
+    Provides broadband, natural-image spatial-frequency statistics as a
+    counterpoint to the synthetic test patterns. Resized to `size` and
+    normalised to [0, 1].
+    """
+    try:
+        from skimage.data import camera
+        from skimage.transform import resize
+        img = camera().astype(np.float32) / 255.0
+        if img.shape[0] != size:
+            img = resize(img, (size, size), order=1, anti_aliasing=True,
+                         preserve_range=True).astype(np.float32)
+        return _normalise(img)
+    except Exception:
+        # Fallback: deterministic band-limited noise texture if skimage.data
+        # is unavailable, so the scene suite never hard-fails.
+        rng = np.random.default_rng(0)
+        noise = rng.standard_normal((size, size)).astype(np.float32)
+        spec = np.fft.fftshift(np.fft.fft2(noise))
+        Y, X = np.mgrid[:size, :size]
+        r = np.sqrt((X - size / 2) ** 2 + (Y - size / 2) ** 2)
+        spec *= np.exp(-(r / (size * 0.12)) ** 2)
+        tex = np.real(np.fft.ifft2(np.fft.ifftshift(spec)))
+        return _normalise(tex)
+
+
 def letters(size: int = 512) -> np.ndarray:
     """
     Render the word 'HOLO' as a binary pixel image.
@@ -121,9 +151,20 @@ def letters(size: int = 512) -> np.ndarray:
         img_pil = PILImage.new("L", (size, size), 0)
         draw = ImageDraw.Draw(img_pil)
         font_size = size // 5
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
-        except Exception:
+        # Try a bold sans-serif across platforms (Windows, Linux, macOS).
+        font = None
+        for font_path in (
+            "arialbd.ttf", "Arial Bold.ttf", "arial.ttf",          # Windows
+            "C:/Windows/Fonts/arialbd.ttf", "C:/Windows/Fonts/segoeuib.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Linux
+            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",     # macOS
+        ):
+            try:
+                font = ImageFont.truetype(font_path, font_size)
+                break
+            except Exception:
+                continue
+        if font is None:
             font = ImageFont.load_default()
         text = "HOLO"
         bbox = draw.textbbox((0, 0), text, font=font)

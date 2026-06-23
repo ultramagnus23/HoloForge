@@ -1,0 +1,7 @@
+COLOR CHANNELS SWEEP EXCLUDED FROM PART 1
+==========================================
+Multi-wavelength RGB holography requires separate phase retrieval
+at each primary wavelength (638nm / 532nm / 450nm). This is deferred
+to Part 2. The present simulation is single-wavelength (532nm green).
+
+This exclusion is explicitly documented in the paper's scope section.
