@@ -54,7 +54,8 @@ from core.degradation import (
 )
 from core.metrics  import all_metrics
 from core.scenes   import (
-    gaussian_spots, resolution_chart, letters, circle_ring, multi_depth_scene,
+    gaussian_spots, resolution_chart, letters, circle_ring, natural_photo,
+    multi_depth_scene,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -354,6 +355,7 @@ SCENE_SUITE = {
     "resolution_chart": resolution_chart,
     "letters":          letters,
     "circle_ring":      circle_ring,
+    "natural_photo":    natural_photo,
 }
 
 MULTI_SCENE_AXES = ["resolution", "phase_bits", "viewing_angle"]

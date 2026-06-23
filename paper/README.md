@@ -18,17 +18,20 @@ as-is with the default `IEEEtran` class.
 
 ## Figures
 
-All `\includegraphics` paths point at `../holography_sandbox/results/`, which is
-populated by:
+Figures are resolved via `\graphicspath{{figures/}{../holography_sandbox/results/}}`,
+so `\includegraphics` uses **bare filenames**. Two ways to build:
 
-```bash
-cd ../holography_sandbox && python run_experiments.py
-```
+- **In place**: run the experiments first (populates `../holography_sandbox/results/`):
+  ```bash
+  cd ../holography_sandbox && python run_experiments.py   # ~40 s on CPU
+  ```
+- **For submission**: copy the referenced PNGs into a local `paper/figures/`
+  directory (then the paper is self-contained, no relative paths leave the
+  `paper/` folder).
 
-Run that first (it takes ~35 s on CPU) so the seven referenced figures exist:
-`gs_convergence.png`, `sweep_resolution.png`, `sweep_phase_bits.png`,
-`sweep_viewing_angle.png`, `sweep_speckle.png`, `metrics_summary_plot.png`,
-`multi_scene_summary.png`.
+The seven referenced figures: `gs_convergence.png`, `sweep_resolution.png`,
+`sweep_phase_bits.png`, `sweep_viewing_angle.png`, `sweep_speckle.png`,
+`metrics_summary_plot.png`, `multi_scene_summary.png`.
 
 ## What still needs filling in by the authors
 

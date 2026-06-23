@@ -1,21 +1,29 @@
 % paper/part1_main.tex
 % Part 1: HoloForge — Systematic Degradation Analysis in Phase-Only Computational Holography
-% Target: arXiv preprint (cs.GR / eess.IV / physics.optics) -> SPIE Optical Engineering
-%          (or SID Display Week short paper)
+% Target: arXiv preprint (cs.GR / eess.IV / physics.optics). Intended as a
+%          reproducible simulation study suitable for a workshop / short paper
+%          (e.g. SID Display Week, OPTICA Digital Holography) -- NOT framed as a
+%          full journal article.
 %
 % Build:  pdflatex part1_main.tex  (x2 for references)
+%         Figures are resolved via \graphicspath (see preamble): drop the PNGs
+%         from holography_sandbox/results/ into ./figures/ for submission, or
+%         build in place against ../holography_sandbox/results/.
 %
 % NOTE ON NUMBERS: every quantitative value in this draft is taken verbatim from
 % the experiment outputs in ../holography_sandbox/results/ produced by
 % run_experiments.py (commit-tracked CSVs: metrics_summary.csv,
 % multi_scene_summary.csv, seed_sensitivity_summary.csv). Single-scene values
 % refer to the gaussian_spots reference scene; "across scenes" values are the
-% mean +/- std over the four-scene suite.
+% mean +/- std over the five-scene suite.
 
 \documentclass[conference]{IEEEtran}
 \usepackage{amsmath,amssymb,graphicx,booktabs,hyperref,cite,xcolor}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
+% Figures: search a local ./figures/ dir first (for submission), then the
+% in-repo results directory (for building against freshly generated outputs).
+\graphicspath{{figures/}{../holography_sandbox/results/}}
 
 % ─── Metadata ────────────────────────────────────────────────────────────────
 \title{Systematic Degradation Analysis in Phase-Only\\Computational Holography: A Simulation Framework}
@@ -53,13 +61,14 @@ on holographic reconstruction quality using three complementary metrics: PSNR,
 SSIM, and LPIPS. All degradations are applied in the physically correct domain:
 resolution and bandwidth limits act on the complex SLM field, and speckle is
 modelled as random aperture-plane phase noise prior to coherent propagation
-rather than as additive intensity noise. Across parameter sweeps on four
-synthetic test scenes and five random phase-retrieval seeds, we find phase
-quantisation to be perceptually lossless down to 4 bits and near-lossless at 2
-bits ($\text{SSIM} = 0.98$ on the reference scene), with a systematic,
-theoretically predicted fidelity penalty at 1 bit ($\text{SSIM} = 0.66$ on the
-reference scene; $0.32 \pm 0.20$ across scenes) attributable to the unavoidable
-twin image of a real-valued binary phase hologram. We further observe
+rather than as additive intensity noise. Across parameter sweeps on five
+test scenes (four synthetic plus one natural photograph) and five random
+phase-retrieval seeds, we find phase quantisation to be perceptually lossless
+down to 4 bits and near-lossless at 2 bits ($\text{SSIM} = 0.98$ on the
+reference scene), with a systematic, theoretically predicted fidelity penalty at
+1 bit ($\text{SSIM} = 0.66$ on the reference scene; $0.27 \pm 0.20$ across
+scenes) attributable to the unavoidable twin image of a real-valued binary phase
+hologram. We further observe
 near-lossless reconstruction of low-spatial-frequency content down to $25\%$
 viewing-angle bandwidth ($\text{SSIM} > 0.97$), and a systematic divergence
 between PSNR and SSIM under resolution loss, where PSNR stays moderate while
@@ -87,12 +96,18 @@ levels (bit-depth), the angular bandwidth subtended by the display aperture
 (which determines the usable field of view), and coherent noise introduced by
 SLM surface roughness and laser speckle.
 
-Existing literature characterises these factors in isolation for specific
-hardware configurations~\cite{holoeye2023slm} or for specific phase-retrieval
-algorithms~\cite{shi2021towards, chakravarthula2019wirtinger}. A systematic,
-controllable simulation study that sweeps these parameters \emph{independently}
----with reproducible code, physically correct degradation operators, and
-standardised metrics---has, to the best of our knowledge, not been published.
+These factors have been studied extensively, but almost always \emph{in the
+course of proposing a new method}: phase quantisation and fast, heavily-quantised
+SLMs in the context of time-multiplexed neural holography~\cite{choi2022time};
+speckle and image fidelity in camera-in-the-loop and gradient-based
+CGH~\cite{peng2020neural, chakravarthula2019wirtinger, shi2021towards}; and
+viewing angle / field of view through the space--bandwidth product and the
+hardware that extends it. What is comparatively rare is a \emph{controlled,
+method-agnostic} study that isolates each degradation axis
+independently---holding the scene, propagation model, and retrieval algorithm
+fixed---with reproducible open code and standardised perceptual metrics. We do
+not claim these effects are unknown; rather, we provide a reproducible baseline
+that disentangles them, which we have not found assembled in one place.
 
 This paper makes the following contributions:
 \begin{enumerate}
@@ -103,7 +118,7 @@ This paper makes the following contributions:
   \item We characterise the bit-depth dependence of GS-computed phase holograms
         and show that the transition to a binary (1-bit) hologram incurs a
         systematic, theoretically predicted fidelity penalty from an unavoidable
-        twin image, which we verify is stable across four scenes and five
+        twin image, which we verify is stable across five scenes and five
         random seeds.
   \item We demonstrate that PSNR and SSIM diverge in their characterisation of
         holographic degradation, and that a true LPIPS perceptual metric provides
@@ -130,12 +145,19 @@ the number of addressable phase levels---directly bound the achievable space-
 bandwidth product and field of view~\cite{holoeye2023slm}. The diffraction
 angle of an SLM is set by its pixel pitch ($\sin\theta \approx
 \lambda/2\Delta x$), so smaller pixels widen the viewing zone but increase
-fabrication cost. Historically, binary (1-bit) computer-generated holograms were
-studied extensively because early devices could not address continuous
-phase~\cite{brown1966complex,lee1978computer}; the move to multi-level phase-only
-SLMs largely supplanted them for display because binary encodings sacrifice the
-conjugate-image and zero-order light. Our quantisation sweep revisits this
-transition quantitatively under a modern phase-retrieval pipeline.
+fabrication cost. The product of field of view and eyebox---the {\'e}tendue---is proportional to
+the SLM pixel count, imposing a fundamental trade-off that has motivated
+space--bandwidth-product extension and learned {\'e}tendue-expansion hardware.
+Pixel count and addressable phase levels are also costly, which has driven
+interest in \emph{fast, heavily-quantised} panels: time-multiplexed neural
+holography, for instance, explicitly targets low-bit-depth SLMs and compensates
+algorithmically~\cite{choi2022time}. Historically, binary (1-bit)
+computer-generated holograms were studied extensively because early devices could
+not address continuous phase~\cite{brown1966complex,lee1978computer}; the move to
+multi-level phase-only SLMs largely supplanted them for display because binary
+encodings incur an unavoidable conjugate (twin) image~\cite{gabor1948new}. Our
+quantisation sweep revisits this transition quantitatively, in a controlled
+setting, under a fixed modern phase-retrieval pipeline.
 
 \subsection{Phase Retrieval}
 The Gerchberg--Saxton algorithm~\cite{gerchberg1972practical} alternates
@@ -144,9 +166,15 @@ standard baseline for phase-only hologram synthesis. Fienup's input--output
 variants~\cite{fienup1982phase} improve convergence and stagnation behaviour,
 while recent work casts hologram synthesis as differentiable optimisation
 (Wirtinger / gradient-descent holography~\cite{chakravarthula2019wirtinger}) or
-learns the encoding directly with neural networks~\cite{shi2021towards}. We adopt
-classical GS as a transparent, widely understood baseline; characterising the
-degradation sensitivity of optimisation-based methods is left to future work.
+learns the encoding directly with neural
+networks~\cite{shi2021towards, peng2020neural}. GS is known to converge to lower
+reconstruction quality than these gradient-based and camera-in-the-loop methods,
+which better suppress speckle and model artefacts~\cite{peng2020neural}. We
+nevertheless adopt classical GS precisely \emph{because} it is transparent,
+deterministic given a seed, and widely understood---properties that make it a
+clean substrate for isolating degradation effects. Characterising the degradation
+sensitivity of optimisation-based and neural methods, which may shift the
+quantisation and bandwidth thresholds reported here, is left to future work.
 
 \subsection{Image Quality Metrics for Holography}
 Peak signal-to-noise ratio (PSNR) measures pixel-level fidelity but is known to
@@ -267,18 +295,20 @@ central observation in the results.
 \label{sec:experiments}
 
 \subsection{Test Scenes}
-We evaluate on four synthetic scenes that span different spatial-frequency
-profiles: (1) \textit{gaussian\_spots}---four Gaussian blobs of varying
-brightness (the low-frequency reference scene); (2)
-\textit{resolution\_chart}---bar gratings at spatial periods from $4$ to $64$
-px/cycle; (3) \textit{letters}---the word ``HOLO'' rendered at $256\times256$;
-and (4) \textit{circle\_ring}---a concentric-ring pattern testing radial
-symmetry.
+We evaluate on five scenes that span different spatial-frequency profiles: (1)
+\textit{gaussian\_spots}---four Gaussian blobs of varying brightness (the
+low-frequency reference scene); (2) \textit{resolution\_chart}---bar gratings at
+spatial periods from $4$ to $64$ px/cycle; (3) \textit{letters}---the word
+``HOLO'' rendered at $256\times256$; (4) \textit{circle\_ring}---a concentric-ring
+pattern testing radial symmetry; and (5) \textit{natural\_photo}---the standard
+``cameraman'' photograph (bundled with scikit-image, no download required),
+providing broadband natural-image statistics as a counterpoint to the four
+synthetic patterns.
 
 \subsection{Statistical Methodology}
 Single-scene sweeps (Section~\ref{sec:results}, individual tables) use the
 \textit{gaussian\_spots} reference scene. Generalisation is assessed by repeating
-the resolution, phase-quantisation, and viewing-angle sweeps on all four scenes
+the resolution, phase-quantisation, and viewing-angle sweeps on all five scenes
 and reporting mean~$\pm$~std across scenes (Table~\ref{tab:multiscene}). Stability
 to phase-retrieval initialisation is assessed by repeating the two most critical
 sweeps (phase quantisation and resolution) across five random GS seeds
@@ -301,7 +331,7 @@ result set is regenerated end-to-end by a single command,
 \subsection{GS Convergence}
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\columnwidth]{../holography_sandbox/results/gs_convergence.png}
+  \includegraphics[width=\columnwidth]{gs_convergence.png}
   \caption{GS convergence: per-iteration reconstruction MSE over 100 iterations
   at $256\times256$. The error drops by two orders of magnitude within $\sim$30
   iterations and is essentially flat thereafter; we use 50 iterations throughout.}
@@ -316,37 +346,41 @@ sufficient while 30 leave a modest residual.
 \subsection{D1: Spatial Resolution}
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\columnwidth]{../holography_sandbox/results/sweep_resolution.png}
+  \includegraphics[width=\columnwidth]{sweep_resolution.png}
   \caption{Resolution degradation: reconstructions at effective SLM resolutions
   of $256$, $128$, $64$, $32$, and $16$ pixels (complex-domain downsampling).}
   \label{fig:resolution}
 \end{figure}
 \begin{table}[t]
   \centering
-  \caption{Resolution sweep (mean $\pm$ std across four scenes)}
+  \caption{Resolution sweep (mean $\pm$ std across five scenes)}
   \label{tab:resolution}
   \begin{tabular}{lccc}
     \toprule
     Resolution & PSNR (dB) & SSIM & LPIPS \\
     \midrule
-    128$\times$128 & $18.74 \pm 6.43$ & $0.471 \pm 0.298$ & $0.605 \pm 0.213$ \\
-    64$\times$64   & $17.49 \pm 5.48$ & $0.270 \pm 0.241$ & $0.690 \pm 0.088$ \\
-    32$\times$32   & $15.79 \pm 3.73$ & $0.095 \pm 0.077$ & $0.743 \pm 0.040$ \\
-    16$\times$16   & $13.78 \pm 1.85$ & $0.047 \pm 0.018$ & $0.825 \pm 0.080$ \\
+    128$\times$128 & $17.03 \pm 6.69$ & $0.388 \pm 0.313$ & $0.659 \pm 0.220$ \\
+    64$\times$64   & $15.99 \pm 5.74$ & $0.228 \pm 0.231$ & $0.705 \pm 0.085$ \\
+    32$\times$32   & $14.66 \pm 4.03$ & $0.085 \pm 0.072$ & $0.757 \pm 0.045$ \\
+    16$\times$16   & $13.05 \pm 2.22$ & $0.052 \pm 0.020$ & $0.837 \pm 0.075$ \\
     \bottomrule
   \end{tabular}
 \end{table}
 Resolution degradation is monotonic across all three metrics
-(Table~\ref{tab:resolution}). On the low-frequency reference scene the decline is
-graceful ($\text{SSIM} = 0.860$ at $128\times128$, $0.657$ at $64\times64$),
-whereas high-frequency scenes such as \textit{resolution\_chart} collapse almost
-immediately---the large across-scene standard deviations in
-Table~\ref{tab:resolution} reflect this strong content dependence.
+(Table~\ref{tab:resolution}). The across-scene standard deviations are large
+because survival under resolution reduction is governed by the target's
+spatial-frequency content relative to the SLM space--bandwidth budget: on the
+low-frequency reference scene the decline is graceful ($\text{SSIM} = 0.860$ at
+$128\times128$, $0.657$ at $64\times64$), whereas high-frequency content such as
+\textit{resolution\_chart} and the fine detail of \textit{natural\_photo}
+collapses almost immediately once the effective pixel count can no longer
+represent it. The variance is thus not noise but a measurable signature of
+content-dependent bandwidth demand.
 
 \subsection{D2: Phase Quantisation}
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\columnwidth]{../holography_sandbox/results/sweep_phase_bits.png}
+  \includegraphics[width=\columnwidth]{sweep_phase_bits.png}
   \caption{Phase quantisation: reconstructions at 8, 4, 2, and 1 bit(s). The
   1-bit (binary phase) case retains coarse structure but loses fidelity to an
   unavoidable twin image.}
@@ -372,8 +406,8 @@ and near-lossless at 2 bits, with a systematic fidelity penalty at the 1-bit
 (binary) transition (Table~\ref{tab:phase_bits}, Fig.~\ref{fig:phase_bits}). On
 the reference scene SSIM is $1.000$ at 4 and 8 bits, $0.978$ at 2 bits, and
 $0.655$ at 1 bit, while PSNR declines smoothly
-($83.0 \to 59.4 \to 45.0 \to 35.7\,\text{dB}$). Across the four scenes the 1-bit
-case is more content-sensitive (SSIM $0.318\pm0.196$) but the ordering is
+($83.0 \to 59.4 \to 45.0 \to 35.7\,\text{dB}$). Across the five scenes the 1-bit
+case is more content-sensitive (SSIM $0.273\pm0.198$) but the ordering is
 preserved. Crucially, the 1-bit loss is \emph{systematic rather than
 stochastic}: across five random GS seeds the 1-bit SSIM is $0.600\pm0.028$
 (Table~\ref{tab:seed}), a tight distribution indicating the degradation is
@@ -384,7 +418,7 @@ its onset at exactly 1 bit.
 \subsection{D3: Viewing-Angle Bandwidth}
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\columnwidth]{../holography_sandbox/results/sweep_viewing_angle.png}
+  \includegraphics[width=\columnwidth]{sweep_viewing_angle.png}
   \caption{Viewing-angle bandwidth reduction to $75\%$, $50\%$, $25\%$, and
   $10\%$ of the Nyquist limit. Low-frequency content tolerates aggressive
   bandwidth reduction.}
@@ -392,31 +426,32 @@ its onset at exactly 1 bit.
 \end{figure}
 \begin{table}[t]
   \centering
-  \caption{Viewing-angle sweep (mean $\pm$ std across four scenes)}
+  \caption{Viewing-angle sweep (mean $\pm$ std across five scenes)}
   \label{tab:viewing}
   \begin{tabular}{lccc}
     \toprule
     Bandwidth & PSNR (dB) & SSIM & LPIPS \\
     \midrule
-    75\% & $20.30 \pm 6.90$ & $0.733 \pm 0.242$ & $0.324 \pm 0.190$ \\
-    50\% & $19.26 \pm 6.35$ & $0.712 \pm 0.252$ & $0.336 \pm 0.200$ \\
-    25\% & $19.32 \pm 6.67$ & $0.689 \pm 0.270$ & $0.358 \pm 0.229$ \\
-    10\% & $19.14 \pm 6.40$ & $0.411 \pm 0.197$ & $0.481 \pm 0.210$ \\
+    75\% & $18.37 \pm 7.28$ & $0.634 \pm 0.293$ & $0.402 \pm 0.232$ \\
+    50\% & $17.46 \pm 6.72$ & $0.615 \pm 0.297$ & $0.420 \pm 0.244$ \\
+    25\% & $17.47 \pm 7.02$ & $0.595 \pm 0.306$ & $0.435 \pm 0.257$ \\
+    10\% & $17.44 \pm 6.66$ & $0.362 \pm 0.202$ & $0.540 \pm 0.221$ \\
     \bottomrule
   \end{tabular}
 \end{table}
 Viewing-angle reduction is the gentlest of the four axes
 (Table~\ref{tab:viewing}). On the low-frequency reference scene SSIM remains
 above $0.97$ down to $25\%$ bandwidth and only falls to $0.728$ at $10\%$. Across
-all scenes the mean SSIM degrades slowly from $0.733$ ($75\%$) to $0.689$
-($25\%$) before dropping to $0.411$ at $10\%$, indicating that a substantial
+all scenes the mean SSIM degrades slowly from $0.634$ ($75\%$) to $0.595$
+($25\%$) before dropping to $0.362$ at $10\%$, indicating that a substantial
 fraction of the diffraction bandwidth can be sacrificed before perceptually
-significant loss---most so for smooth, low-frequency content.
+significant loss---most so for smooth, low-frequency content, and least for the
+high-frequency scenes (which the wide across-scene spread reflects).
 
 \subsection{D4: Coherent Speckle}
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\columnwidth]{../holography_sandbox/results/sweep_speckle.png}
+  \includegraphics[width=\columnwidth]{sweep_speckle.png}
   \caption{Coherent speckle from aperture-plane phase noise of increasing std
   $\sigma$. Reconstruction remains near-perfect up to $\sigma\approx0.3$ rad and
   collapses as $\sigma\to\pi$.}
@@ -448,7 +483,7 @@ quantitative tolerance budget for SLM phase accuracy and optical-surface quality
 \subsection{Metric Divergence and Generalisation}
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\columnwidth]{../holography_sandbox/results/metrics_summary_plot.png}
+  \includegraphics[width=\columnwidth]{metrics_summary_plot.png}
   \caption{PSNR and SSIM across all degradation axes. The two metrics diverge
   most strongly in the phase-quantisation sweep, where SSIM marks a categorical
   failure at 1-bit that PSNR registers only as a continuation of a monotone
@@ -457,8 +492,8 @@ quantitative tolerance budget for SLM phase accuracy and optical-surface quality
 \end{figure}
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\columnwidth]{../holography_sandbox/results/multi_scene_summary.png}
-  \caption{Multi-scene generalisation: SSIM (mean $\pm$ std across four scenes)
+  \includegraphics[width=\columnwidth]{multi_scene_summary.png}
+  \caption{Multi-scene generalisation: SSIM (mean $\pm$ std across five scenes)
   for the resolution, phase-quantisation, and viewing-angle axes.}
   \label{fig:multiscene}
 \end{figure}
@@ -495,18 +530,18 @@ deviations across seeds are small ($\le 1.2\,\text{dB}$ PSNR, $\le 0.034$ SSIM).
 
 \begin{table}[t]
   \centering
-  \caption{Across-scene summary (mean $\pm$ std, four scenes)}
+  \caption{Across-scene summary (mean $\pm$ std, five scenes)}
   \label{tab:multiscene}
   \begin{tabular}{llcc}
     \toprule
     Axis & Param & SSIM & LPIPS \\
     \midrule
-    Resolution    & 128 & $0.471 \pm 0.298$ & $0.605 \pm 0.213$ \\
-    Resolution    & 16  & $0.047 \pm 0.018$ & $0.825 \pm 0.080$ \\
-    Phase bits    & 2   & $0.731 \pm 0.181$ & $0.127 \pm 0.109$ \\
-    Phase bits    & 1   & $0.318 \pm 0.196$ & $0.502 \pm 0.266$ \\
-    Viewing angle & 25\% & $0.689 \pm 0.270$ & $0.358 \pm 0.229$ \\
-    Viewing angle & 10\% & $0.411 \pm 0.197$ & $0.481 \pm 0.210$ \\
+    Resolution    & 128 & $0.388 \pm 0.313$ & $0.659 \pm 0.220$ \\
+    Resolution    & 16  & $0.052 \pm 0.020$ & $0.837 \pm 0.075$ \\
+    Phase bits    & 2   & $0.636 \pm 0.250$ & $0.223 \pm 0.215$ \\
+    Phase bits    & 1   & $0.273 \pm 0.198$ & $0.575 \pm 0.279$ \\
+    Viewing angle & 25\% & $0.595 \pm 0.306$ & $0.435 \pm 0.257$ \\
+    Viewing angle & 10\% & $0.362 \pm 0.202$ & $0.540 \pm 0.221$ \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -574,8 +609,12 @@ This study has several acknowledged limitations.
 \textit{Single-wavelength simulation.} All experiments use $\lambda=532\,\text{nm}$;
 multi-wavelength (RGB) holography introduces wavelength-dependent diffraction and
 chromatic effects and is deferred to Part~2.
-\textit{Synthetic scenes only.} All targets are synthetic; results on natural or
-photographic content may differ, particularly where GS converges more slowly.
+\textit{Limited scene diversity.} Four of the five scenes are synthetic and the
+fifth is a single natural photograph; results on a broad corpus of natural or
+photographic content---especially high-frequency, texture-rich imagery where GS
+converges more slowly---remain to be characterised. The wide across-scene
+variance we already observe (Tables~\ref{tab:resolution},~\ref{tab:viewing})
+suggests content diversity is consequential and warrants a larger test set.
 \textit{No human-observer validation.} The claim that simulation metrics predict
 \emph{perceived} hologram quality is not yet validated with human subjects; Part~2
 addresses this through a psychophysical forced-choice study.
@@ -590,7 +629,7 @@ profiles.
 We presented \textsc{HoloForge}, a reproducible simulation framework for
 systematic characterisation of degradation in phase-only holographic displays,
 with all degradation operators applied in their physically correct domains.
-Across four degradation axes, four scenes, and five random seeds we found phase
+Across four degradation axes, five scenes, and five random seeds we found phase
 quantisation to be near-lossless down to 2 bits with a systematic, theoretically
 predicted twin-image penalty at the 1-bit (binary) transition, near-lossless
 behaviour of low-frequency content under aggressive viewing-angle reduction, a
@@ -625,6 +664,17 @@ vol.~591, pp.~234--239, 2021.
 P. Chakravarthula, Y. Peng, J. Kollin, H. Fuchs, and F. Heide, ``Wirtinger
 holography for near-eye displays,'' \textit{ACM Trans. Graph.}, vol.~38, no.~6,
 pp.~1--13, 2019.
+
+\bibitem{peng2020neural}
+Y. Peng, S. Choi, N. Padmanaban, and G. Wetzstein, ``Neural holography with
+camera-in-the-loop training,'' \textit{ACM Trans. Graph.}, vol.~39, no.~6,
+pp.~1--14, 2020.
+
+\bibitem{choi2022time}
+S. Choi, M. Gopakumar, Y. Peng, J. Kim, M. O'Toole, and G. Wetzstein,
+``Time-multiplexed neural holography: a flexible framework for holographic
+near-eye displays with fast heavily-quantized spatial light modulators,'' in
+\textit{ACM SIGGRAPH 2022 Conf. Proc.}, 2022, pp.~1--9.
 
 \bibitem{gerchberg1972practical}
 R. W. Gerchberg and W. O. Saxton, ``A practical algorithm for the determination

@@ -104,6 +104,20 @@ Building reference hologram …
     [viewing_angle 25%     ] PSNR= 16.7 SSIM=0.598 LPIPS=0.3801
     [viewing_angle 10%     ] PSNR= 16.6 SSIM=0.372 LPIPS=0.5189
 
+  Scene: natural_photo
+    [resolution    128x128 ] PSNR= 10.2 SSIM=0.059 LPIPS=0.8778
+    [resolution    64x64   ] PSNR= 10.0 SSIM=0.062 LPIPS=0.7646
+    [resolution    32x32   ] PSNR= 10.1 SSIM=0.044 LPIPS=0.8116
+    [resolution    16x16   ] PSNR= 10.1 SSIM=0.075 LPIPS=0.8823
+    [phase_bits    8-bit   ] PSNR= 48.0 SSIM=0.998 LPIPS=0.0004
+    [phase_bits    4-bit   ] PSNR= 26.6 SSIM=0.749 LPIPS=0.0942
+    [phase_bits    2-bit   ] PSNR= 13.6 SSIM=0.255 LPIPS=0.6066
+    [phase_bits    1-bit   ] PSNR= 10.9 SSIM=0.089 LPIPS=0.8683
+    [viewing_angle 75%     ] PSNR= 10.6 SSIM=0.237 LPIPS=0.7181
+    [viewing_angle 50%     ] PSNR= 10.3 SSIM=0.227 LPIPS=0.7534
+    [viewing_angle 25%     ] PSNR= 10.1 SSIM=0.218 LPIPS=0.7445
+    [viewing_angle 10%     ] PSNR= 10.6 SSIM=0.163 LPIPS=0.7752
+
   CSV saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\multi_scene_metrics.csv
   Summary CSV saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\multi_scene_summary.csv
   Figure saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\multi_scene_summary.png
@@ -123,4 +137,4 @@ Building reference hologram …
   resolution    32x32      21.27 ± 1.08    0.239 ± 0.031   0.781 ± 0.026
   resolution    64x64      25.55 ± 0.59    0.627 ± 0.034   0.583 ± 0.022
 
-✓ All done in 32.8s — results in C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results/
+✓ All done in 37.5s — results in C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results/
