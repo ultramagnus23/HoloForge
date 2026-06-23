@@ -1,0 +1,43 @@
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# ─── LaTeX build artifacts (paper/) ──────────────────────────────────────────
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.lof
+*.lot
+# Keep the source .tex; ignore the compiled PDF (regenerate with pdflatex)
+paper/*.pdf
+
+# ─── OS / editor cruft ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/
+
+# ─── Result artifacts ────────────────────────────────────────────────────────
+# Figures (.png), metric tables (.csv) and notes (.txt) ARE versioned — they
+# back the paper. The large intermediate .npy arrays are regenerable by
+# run_experiments.py and are not tracked.
+holography_sandbox/results/*.npy

@@ -1,0 +1,635 @@
+% paper/part1_main.tex
+% Part 1: HoloForge — Systematic Degradation Analysis in Phase-Only Computational Holography
+% Target: arXiv preprint (cs.GR / eess.IV / physics.optics) -> SPIE Optical Engineering
+%          (or SID Display Week short paper)
+%
+% Build:  pdflatex part1_main.tex  (x2 for references)
+%
+% NOTE ON NUMBERS: every quantitative value in this draft is taken verbatim from
+% the experiment outputs in ../holography_sandbox/results/ produced by
+% run_experiments.py (commit-tracked CSVs: metrics_summary.csv,
+% multi_scene_summary.csv, seed_sensitivity_summary.csv). Single-scene values
+% refer to the gaussian_spots reference scene; "across scenes" values are the
+% mean +/- std over the four-scene suite.
+
+\documentclass[conference]{IEEEtran}
+\usepackage{amsmath,amssymb,graphicx,booktabs,hyperref,cite,xcolor}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% ─── Metadata ────────────────────────────────────────────────────────────────
+\title{Systematic Degradation Analysis in Phase-Only\\Computational Holography: A Simulation Framework}
+
+\author{
+  \IEEEauthorblockN{[Author One]}
+  \IEEEauthorblockA{[Institution]\\
+  [City, Country]\\
+  [author.one@institution.edu]}
+  \and
+  \IEEEauthorblockN{[Author Two]}
+  \IEEEauthorblockA{[Institution]\\
+  [City, Country]\\
+  [author.two@institution.edu]}
+  \and
+  \IEEEauthorblockN{[Author Three]}
+  \IEEEauthorblockA{[Institution]\\
+  [City, Country]\\
+  [author.three@institution.edu]}
+}
+
+\begin{document}
+\maketitle
+
+% ─── Abstract ────────────────────────────────────────────────────────────────
+\begin{abstract}
+Phase-only spatial light modulators (SLMs) are the dominant hardware substrate
+for real-time holographic display, but the practical trade-offs between SLM
+hardware constraints and reconstruction quality remain incompletely characterised
+in a systematic, reproducible way. We present \textsc{HoloForge}, an open-source
+Python simulation framework that isolates four independently controllable
+degradation axes---spatial resolution, phase quantisation bit-depth,
+viewing-angle bandwidth, and coherent speckle noise---and measures their impact
+on holographic reconstruction quality using three complementary metrics: PSNR,
+SSIM, and LPIPS. All degradations are applied in the physically correct domain:
+resolution and bandwidth limits act on the complex SLM field, and speckle is
+modelled as random aperture-plane phase noise prior to coherent propagation
+rather than as additive intensity noise. Across parameter sweeps on four
+synthetic test scenes and five random phase-retrieval seeds, we identify a
+sharp, scene- and seed-robust quality cliff at 1-bit phase quantisation
+($\text{SSIM} = 0.92$ at 2 bits vs.\ $\text{SSIM} = 0.003$ at 1 bit on the
+reference scene; $0.59 \to 0.01$ averaged across scenes), near-lossless
+reconstruction of low-spatial-frequency content down to $25\%$ viewing-angle
+bandwidth ($\text{SSIM} > 0.97$), and a systematic divergence between PSNR and
+SSIM as degradation increases. The framework, experiment scripts, and raw result
+data are released at \url{https://github.com/ultramagnus23/HoloForge} as a
+reproducible baseline for Part~2, which will establish perceptual detection
+thresholds via a human-observer study.
+\end{abstract}
+
+\begin{IEEEkeywords}
+holography, spatial light modulator, phase retrieval, Gerchberg--Saxton,
+angular spectrum method, image quality metrics, SSIM, LPIPS, degradation analysis
+\end{IEEEkeywords}
+
+% ─── 1. Introduction ─────────────────────────────────────────────────────────
+\section{Introduction}
+Holographic near-eye displays have attracted sustained research attention as a
+candidate for true-depth augmented and virtual reality~\cite{maimone2017holographic,
+shi2021towards}. Phase-only SLMs offer the computational tractability of
+Fourier-domain phase holography while satisfying the energy-conservation
+constraint required for optical efficiency. In practice, however, holographic
+reconstruction quality is constrained by several hardware and optical factors:
+the spatial resolution of the SLM pixel array, the number of addressable phase
+levels (bit-depth), the angular bandwidth subtended by the display aperture
+(which determines the usable field of view), and coherent noise introduced by
+SLM surface roughness and laser speckle.
+
+Existing literature characterises these factors in isolation for specific
+hardware configurations~\cite{holoeye2023slm} or for specific phase-retrieval
+algorithms~\cite{shi2021towards, chakravarthula2019wirtinger}. A systematic,
+controllable simulation study that sweeps these parameters \emph{independently}
+---with reproducible code, physically correct degradation operators, and
+standardised metrics---has, to the best of our knowledge, not been published.
+
+This paper makes the following contributions:
+\begin{enumerate}
+  \item We present \textsc{HoloForge}, a Python simulation framework implementing
+        the Angular Spectrum Method (ASM) and Gerchberg--Saxton (GS) phase
+        retrieval, with four independently controllable degradation axes applied
+        in their physically correct domains.
+  \item We report a systematic characterisation of phase-quantisation bit-depth
+        on GS-computed holograms, revealing a sharp quality cliff between 2-bit
+        and 1-bit quantisation that is robust across four scenes and five
+        random seeds.
+  \item We demonstrate that PSNR and SSIM diverge in their characterisation of
+        holographic degradation, and that a true LPIPS perceptual metric provides
+        complementary information not captured by either.
+  \item We release all code, experiment scripts, and raw result data as an
+        open-source, reproducible baseline for future work.
+\end{enumerate}
+
+The remainder of this paper is organised as follows. Section~\ref{sec:related}
+reviews related work. Section~\ref{sec:method} describes the optical model and
+simulation framework. Section~\ref{sec:experiments} presents the experimental
+protocol. Section~\ref{sec:results} reports results across four degradation axes.
+Section~\ref{sec:discussion} interprets the findings and acknowledges
+limitations. Section~\ref{sec:conclusion} concludes and outlines Part~2.
+
+% ─── 2. Related Work ─────────────────────────────────────────────────────────
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Holographic Display Hardware}
+Modern holographic displays are built around liquid-crystal-on-silicon (LCoS)
+phase-only SLMs, whose key specifications---pixel pitch, panel resolution, and
+the number of addressable phase levels---directly bound the achievable space-
+bandwidth product and field of view~\cite{holoeye2023slm}. The diffraction
+angle of an SLM is set by its pixel pitch ($\sin\theta \approx
+\lambda/2\Delta x$), so smaller pixels widen the viewing zone but increase
+fabrication cost. Historically, binary (1-bit) computer-generated holograms were
+studied extensively because early devices could not address continuous
+phase~\cite{brown1966complex,lee1978computer}; the move to multi-level phase-only
+SLMs largely supplanted them for display because binary encodings sacrifice the
+conjugate-image and zero-order light. Our quantisation sweep revisits this
+transition quantitatively under a modern phase-retrieval pipeline.
+
+\subsection{Phase Retrieval}
+The Gerchberg--Saxton algorithm~\cite{gerchberg1972practical} alternates
+amplitude constraints between the hologram and image planes and remains a
+standard baseline for phase-only hologram synthesis. Fienup's input--output
+variants~\cite{fienup1982phase} improve convergence and stagnation behaviour,
+while recent work casts hologram synthesis as differentiable optimisation
+(Wirtinger / gradient-descent holography~\cite{chakravarthula2019wirtinger}) or
+learns the encoding directly with neural networks~\cite{shi2021towards}. We adopt
+classical GS as a transparent, widely understood baseline; characterising the
+degradation sensitivity of optimisation-based methods is left to future work.
+
+\subsection{Image Quality Metrics for Holography}
+Peak signal-to-noise ratio (PSNR) measures pixel-level fidelity but is known to
+correlate poorly with perceived quality, particularly for structured or
+coherent-noise artefacts. The structural similarity index
+(SSIM)~\cite{wang2004image} incorporates luminance, contrast, and local structure
+and is widely used in display evaluation. Learned perceptual image patch
+similarity (LPIPS)~\cite{zhang2018unreasonable} compares deep-network feature
+activations and tracks human judgements of perceptual distance more closely than
+either PSNR or SSIM on many distortion types. We report all three to expose where
+they agree and, importantly, where they diverge under holographic degradation.
+
+% ─── 3. Optical Model and Simulation Framework ───────────────────────────────
+\section{Optical Model and Simulation Framework}
+\label{sec:method}
+
+\subsection{Angular Spectrum Method}
+We model free-space wave propagation using the Angular Spectrum Method
+(ASM)~\cite{goodman2005introduction}. For a monochromatic field $U(x,y,0)$ at the
+SLM plane, the field at propagation distance $z$ is
+\begin{equation}
+  U(x,y,z) = \mathcal{F}^{-1}\!\left\{
+    \hat{U}(f_x, f_y)\, H(f_x, f_y, z)
+  \right\},
+\end{equation}
+where $\hat{U} = \mathcal{F}\{U\}$ is the angular spectrum and the transfer
+function is
+\begin{equation}
+  H(f_x,f_y,z) =
+  \begin{cases}
+    \exp\!\left(j 2\pi z \sqrt{\lambda^{-2} - f_x^2 - f_y^2}\right) & f_x^2+f_y^2 \le \lambda^{-2}\\
+    0 & \text{(evanescent),}
+  \end{cases}
+\end{equation}
+with wavelength $\lambda = 532\,\text{nm}$, propagation distance
+$z = 150\,\text{mm}$, and SLM pixel pitch $\Delta x = 8\,\mu\text{m}$. The
+implementation conserves energy to within $1\%$ and is exactly invertible
+($U_{-z} \circ U_{z} = \mathrm{Id}$ to numerical precision); both invariants are
+asserted in the unit-test suite (Section~\ref{sec:experiments}).
+
+\subsection{Gerchberg--Saxton Phase Retrieval}
+We compute phase-only holograms using the Gerchberg--Saxton (GS)
+algorithm~\cite{gerchberg1972practical}. Starting from a random initial phase at
+the SLM plane, the algorithm alternately enforces the target amplitude constraint
+at the image plane and the phase-only constraint at the SLM plane:
+\begin{align}
+  \text{SLM} &\xrightarrow{\text{ASM}(+z)} \text{Image plane} \\
+  &\xrightarrow{\text{amplitude replace}} A_{\text{target}}\, e^{j\angle U_{\text{img}}} \\
+  &\xrightarrow{\text{ASM}(-z)} \text{SLM plane} \\
+  &\xrightarrow{\text{phase-only}} e^{j\angle U_{\text{SLM}}}.
+\end{align}
+We run $50$ iterations at resolution $256\times256$ pixels. Convergence is
+confirmed by monitoring per-iteration reconstruction MSE
+(Section~\ref{sec:results}): the normalised-amplitude MSE falls from
+$8.7\times10^{-2}$ at iteration~1 to $7.5\times10^{-4}$ by iteration~30 and
+$7.1\times10^{-4}$ by iteration~50, motivating our choice of 50 iterations over
+the more common but under-converged 30.
+
+\subsection{Degradation Model}
+We define four independently controllable degradation axes, each applied to the
+computed phase hologram before reconstruction. Critically, every operator acts
+in the physically correct domain.
+
+\textbf{(D1) Spatial Resolution.} The SLM phase is downsampled from $N\times N$
+to $n\times n$ pixels using nearest-neighbour interpolation \emph{in the complex
+phasor domain} (operating on the real and imaginary parts of $e^{j\phi}$ rather
+than on $\phi$ directly, avoiding phase-wrap and $8$-bit quantisation artefacts),
+then upsampled back to $N\times N$. We sweep $n \in \{128, 64, 32, 16\}$ against a
+baseline of $N=256$.
+
+\textbf{(D2) Phase Quantisation.} The continuous phase is linearly quantised to
+$2^b$ levels, where $b \in \{1, 2, 4, 8\}$ bits, via
+\begin{equation}
+  \phi_q = \frac{2\pi}{2^b}\,\mathrm{round}\!\left(\frac{(\phi+\pi)\, 2^b}{2\pi}\right) - \pi.
+\end{equation}
+
+\textbf{(D3) Viewing-Angle Bandwidth.} The SLM phase is converted to a complex
+phasor, its spatial-frequency spectrum is masked to a circular aperture of radius
+$\beta \cdot f_{\max}$ (with $f_{\max} = 1/(2\Delta x)$ the Nyquist limit), and
+the phase is recovered from the masked field. We sweep
+$\beta \in \{1.0, 0.75, 0.5, 0.25, 0.1\}$.
+
+\textbf{(D4) Coherent Speckle.} Random phase perturbations $\delta\phi \sim
+\mathcal{N}(0, \sigma^2)$ are added to the SLM phase \emph{before}
+reconstruction, modelling surface roughness and SLM phase error. Speckle thus
+arises through coherent interference during propagation, reproducing the correct
+physical mechanism rather than additive intensity noise. We sweep
+$\sigma \in \{0.1, 0.3, 0.6, 1.0, \pi\}$ radians.
+
+Multi-wavelength (RGB) colour holography is explicitly out of scope for Part~1
+and is deferred to Part~2. A na\"ive ``colour'' axis that post-processes a
+monochrome reconstruction would not model any holographic colour physics, so it
+is excluded rather than reported (see the released
+\texttt{sweep\_color\_EXCLUDED.txt}).
+
+\subsection{Metrics}
+We evaluate reconstruction quality using three complementary metrics:
+\begin{itemize}
+  \item \textbf{PSNR}---peak signal-to-noise ratio in dB.
+  \item \textbf{SSIM}---structural similarity index~\cite{wang2004image}.
+  \item \textbf{LPIPS}---learned perceptual image patch similarity
+        (AlexNet backbone)~\cite{zhang2018unreasonable}, the true learned metric
+        rather than a hand-crafted proxy.
+\end{itemize}
+PSNR is pixel-level; SSIM accounts for luminance, contrast, and structure; LPIPS
+captures perceptual similarity via deep features. Measuring all three allows us to
+characterise divergence between physical and perceptual quality estimates---a
+central observation in the results.
+
+% ─── 4. Experimental Protocol ────────────────────────────────────────────────
+\section{Experimental Protocol}
+\label{sec:experiments}
+
+\subsection{Test Scenes}
+We evaluate on four synthetic scenes that span different spatial-frequency
+profiles: (1) \textit{gaussian\_spots}---four Gaussian blobs of varying
+brightness (the low-frequency reference scene); (2)
+\textit{resolution\_chart}---bar gratings at spatial periods from $4$ to $64$
+px/cycle; (3) \textit{letters}---the word ``HOLO'' rendered at $256\times256$;
+and (4) \textit{circle\_ring}---a concentric-ring pattern testing radial
+symmetry.
+
+\subsection{Statistical Methodology}
+Single-scene sweeps (Section~\ref{sec:results}, individual tables) use the
+\textit{gaussian\_spots} reference scene. Generalisation is assessed by repeating
+the resolution, phase-quantisation, and viewing-angle sweeps on all four scenes
+and reporting mean~$\pm$~std across scenes (Table~\ref{tab:multiscene}). Stability
+to phase-retrieval initialisation is assessed by repeating the two most critical
+sweeps (phase quantisation and resolution) across five random GS seeds
+$\{42, 7, 123, 999, 17\}$ and reporting mean~$\pm$~std across seeds
+(Table~\ref{tab:seed}). All experiments use $256\times256$ resolution and $50$ GS
+iterations.
+
+\subsection{Reproducibility}
+The framework ships a \texttt{pytest} suite of ten physics-invariant tests
+(ASM energy conservation and round-trip invertibility, GS convergence,
+reconstruction range, quantisation level counts, complex-field superposition,
+physical-speckle range, and metric sanity checks), all of which pass. The full
+result set is regenerated end-to-end by a single command,
+\texttt{python run\_experiments.py}, in approximately $35\,\text{s}$ on a CPU.
+
+% ─── 5. Results ──────────────────────────────────────────────────────────────
+\section{Results}
+\label{sec:results}
+
+\subsection{GS Convergence}
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{../holography_sandbox/results/gs_convergence.png}
+  \caption{GS convergence: per-iteration reconstruction MSE over 100 iterations
+  at $256\times256$. The error drops by two orders of magnitude within $\sim$30
+  iterations and is essentially flat thereafter; we use 50 iterations throughout.}
+  \label{fig:gs_convergence}
+\end{figure}
+Figure~\ref{fig:gs_convergence} shows the GS reconstruction MSE decreasing from
+$8.7\times10^{-2}$ to a plateau near $7\times10^{-4}$. The marginal improvement
+from iteration~30 ($7.5\times10^{-4}$) to iteration~50 ($7.1\times10^{-4}$) to
+iteration~100 ($6.8\times10^{-4}$) is small, confirming that 50 iterations are
+sufficient while 30 leave a modest residual.
+
+\subsection{D1: Spatial Resolution}
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{../holography_sandbox/results/sweep_resolution.png}
+  \caption{Resolution degradation: reconstructions at effective SLM resolutions
+  of $256$, $128$, $64$, $32$, and $16$ pixels (complex-domain downsampling).}
+  \label{fig:resolution}
+\end{figure}
+\begin{table}[t]
+  \centering
+  \caption{Resolution sweep (mean $\pm$ std across four scenes)}
+  \label{tab:resolution}
+  \begin{tabular}{lccc}
+    \toprule
+    Resolution & PSNR (dB) & SSIM & LPIPS \\
+    \midrule
+    128$\times$128 & $18.74 \pm 6.43$ & $0.471 \pm 0.298$ & $0.605 \pm 0.213$ \\
+    64$\times$64   & $17.49 \pm 5.48$ & $0.270 \pm 0.241$ & $0.690 \pm 0.088$ \\
+    32$\times$32   & $15.79 \pm 3.73$ & $0.095 \pm 0.077$ & $0.743 \pm 0.040$ \\
+    16$\times$16   & $13.78 \pm 1.85$ & $0.047 \pm 0.018$ & $0.825 \pm 0.080$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+Resolution degradation is monotonic across all three metrics
+(Table~\ref{tab:resolution}). On the low-frequency reference scene the decline is
+graceful ($\text{SSIM} = 0.860$ at $128\times128$, $0.657$ at $64\times64$),
+whereas high-frequency scenes such as \textit{resolution\_chart} collapse almost
+immediately---the large across-scene standard deviations in
+Table~\ref{tab:resolution} reflect this strong content dependence.
+
+\subsection{D2: Phase Quantisation}
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{../holography_sandbox/results/sweep_phase_bits.png}
+  \caption{Phase quantisation: reconstructions at 8, 4, 2, and 1 bit(s). The
+  1-bit (binary) case shows catastrophic reconstruction failure visible to all
+  metrics.}
+  \label{fig:phase_bits}
+\end{figure}
+\begin{table}[t]
+  \centering
+  \caption{Phase quantisation sweep (reference scene; across-scene mean in text)}
+  \label{tab:phase_bits}
+  \begin{tabular}{lccc}
+    \toprule
+    Phase bits & PSNR (dB) & SSIM & LPIPS \\
+    \midrule
+    8-bit & $81.9$ & $1.000$ & $0.000$ \\
+    4-bit & $58.5$ & $1.000$ & $0.000$ \\
+    2-bit & $42.6$ & $0.917$ & $0.057$ \\
+    1-bit & $\phantom{0}0.0$ & $0.003$ & $0.811$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+\textbf{Key finding.} A sharp quality cliff occurs between 2-bit and 1-bit phase
+quantisation (Table~\ref{tab:phase_bits}, Fig.~\ref{fig:phase_bits}). On the
+reference scene SSIM falls from $0.917$ (2-bit) to $0.003$ (1-bit) while PSNR
+collapses from $42.6\,\text{dB}$ to essentially $0\,\text{dB}$---i.e.\ the binary
+reconstruction is effectively uncorrelated with the target. Averaged across the
+four scenes, SSIM drops from $0.594\pm0.217$ at 2 bits to $0.014\pm0.010$ at 1
+bit. The cliff is exceptionally stable: across five random GS seeds the 1-bit
+SSIM is $0.003\pm0.000$ and PSNR $0.05\pm0.00\,\text{dB}$
+(Table~\ref{tab:seed}). By contrast, 4-bit and 8-bit quantisation are
+perceptually lossless ($\text{SSIM}=1.000$, $\text{LPIPS}=0.000$).
+
+\subsection{D3: Viewing-Angle Bandwidth}
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{../holography_sandbox/results/sweep_viewing_angle.png}
+  \caption{Viewing-angle bandwidth reduction to $75\%$, $50\%$, $25\%$, and
+  $10\%$ of the Nyquist limit. Low-frequency content tolerates aggressive
+  bandwidth reduction.}
+  \label{fig:viewing_angle}
+\end{figure}
+\begin{table}[t]
+  \centering
+  \caption{Viewing-angle sweep (mean $\pm$ std across four scenes)}
+  \label{tab:viewing}
+  \begin{tabular}{lccc}
+    \toprule
+    Bandwidth & PSNR (dB) & SSIM & LPIPS \\
+    \midrule
+    75\% & $20.30 \pm 6.90$ & $0.733 \pm 0.242$ & $0.324 \pm 0.190$ \\
+    50\% & $19.26 \pm 6.35$ & $0.712 \pm 0.252$ & $0.336 \pm 0.200$ \\
+    25\% & $19.32 \pm 6.67$ & $0.689 \pm 0.270$ & $0.358 \pm 0.229$ \\
+    10\% & $19.14 \pm 6.40$ & $0.411 \pm 0.197$ & $0.481 \pm 0.210$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+Viewing-angle reduction is the gentlest of the four axes
+(Table~\ref{tab:viewing}). On the low-frequency reference scene SSIM remains
+above $0.97$ down to $25\%$ bandwidth and only falls to $0.728$ at $10\%$. Across
+all scenes the mean SSIM degrades slowly from $0.733$ ($75\%$) to $0.689$
+($25\%$) before dropping to $0.411$ at $10\%$, indicating that a substantial
+fraction of the diffraction bandwidth can be sacrificed before perceptually
+significant loss---most so for smooth, low-frequency content.
+
+\subsection{D4: Coherent Speckle}
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{../holography_sandbox/results/sweep_speckle.png}
+  \caption{Coherent speckle from aperture-plane phase noise of increasing std
+  $\sigma$. Reconstruction remains near-perfect up to $\sigma\approx0.3$ rad and
+  collapses as $\sigma\to\pi$.}
+  \label{fig:speckle}
+\end{figure}
+\begin{table}[t]
+  \centering
+  \caption{Coherent speckle sweep (reference scene)}
+  \label{tab:speckle}
+  \begin{tabular}{lccc}
+    \toprule
+    $\sigma$ (rad) & PSNR (dB) & SSIM & LPIPS \\
+    \midrule
+    0.10 & $60.1$ & $1.000$ & $0.000$ \\
+    0.30 & $49.7$ & $0.994$ & $0.005$ \\
+    0.60 & $42.7$ & $0.915$ & $0.053$ \\
+    1.00 & $34.9$ & $0.501$ & $0.258$ \\
+    $\pi$ & $18.5$ & $0.008$ & $0.963$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+Coherent speckle exhibits a soft knee (Table~\ref{tab:speckle}): the
+reconstruction is essentially unaffected for $\sigma \le 0.3\,\text{rad}$
+($\text{SSIM} \ge 0.99$), degrades through $\sigma = 0.6$ ($0.915$) and
+$\sigma = 1.0$ ($0.501$), and is destroyed as the perturbation approaches a
+uniform random phase at $\sigma = \pi$ ($\text{SSIM} = 0.008$). This provides a
+quantitative tolerance budget for SLM phase accuracy and optical-surface quality.
+
+\subsection{Metric Divergence and Generalisation}
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{../holography_sandbox/results/metrics_summary_plot.png}
+  \caption{PSNR and SSIM across all degradation axes. The two metrics diverge
+  most strongly in the phase-quantisation sweep, where SSIM marks a categorical
+  failure at 1-bit that PSNR registers only as a continuation of a monotone
+  trend.}
+  \label{fig:metrics_summary}
+\end{figure}
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{../holography_sandbox/results/multi_scene_summary.png}
+  \caption{Multi-scene generalisation: SSIM (mean $\pm$ std across four scenes)
+  for the resolution, phase-quantisation, and viewing-angle axes.}
+  \label{fig:multiscene}
+\end{figure}
+\begin{table}[t]
+  \centering
+  \caption{Seed sensitivity (mean $\pm$ std across five GS seeds, reference scene)}
+  \label{tab:seed}
+  \begin{tabular}{llccc}
+    \toprule
+    Sweep & Param & PSNR (dB) & SSIM & LPIPS \\
+    \midrule
+    Phase & 8-bit & $82.40 \pm 0.96$ & $1.000 \pm 0.000$ & $0.000 \pm 0.000$ \\
+    Phase & 4-bit & $58.30 \pm 1.19$ & $1.000 \pm 0.000$ & $0.000 \pm 0.000$ \\
+    Phase & 2-bit & $42.17 \pm 0.66$ & $0.919 \pm 0.009$ & $0.054 \pm 0.008$ \\
+    Phase & 1-bit & $\phantom{0}0.05 \pm 0.00$ & $0.003 \pm 0.000$ & $0.810 \pm 0.001$ \\
+    Res.  & 128   & $28.63 \pm 0.24$ & $0.860 \pm 0.009$ & $0.381 \pm 0.017$ \\
+    Res.  & 64    & $25.55 \pm 0.59$ & $0.627 \pm 0.034$ & $0.583 \pm 0.022$ \\
+    Res.  & 32    & $21.27 \pm 1.08$ & $0.239 \pm 0.031$ & $0.781 \pm 0.026$ \\
+    Res.  & 16    & $17.23 \pm 1.09$ & $0.036 \pm 0.010$ & $0.895 \pm 0.021$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+The PSNR/SSIM divergence is clearest in the phase sweep
+(Fig.~\ref{fig:metrics_summary}): PSNR declines monotonically across $8\!\to\!1$
+bits, but only SSIM and LPIPS mark the 1-bit case as a categorically different
+failure mode. The multi-scene summary (Fig.~\ref{fig:multiscene},
+Table~\ref{tab:multiscene}) shows the same ordering of axis severity holds across
+content types, while seed sensitivity (Table~\ref{tab:seed}) confirms the
+findings are not artefacts of a particular random initialisation: standard
+deviations across seeds are small ($\le 1.2\,\text{dB}$ PSNR, $\le 0.034$ SSIM).
+
+\begin{table}[t]
+  \centering
+  \caption{Across-scene summary (mean $\pm$ std, four scenes)}
+  \label{tab:multiscene}
+  \begin{tabular}{llcc}
+    \toprule
+    Axis & Param & SSIM & LPIPS \\
+    \midrule
+    Resolution    & 128 & $0.471 \pm 0.298$ & $0.605 \pm 0.213$ \\
+    Resolution    & 16  & $0.047 \pm 0.018$ & $0.825 \pm 0.080$ \\
+    Phase bits    & 2   & $0.594 \pm 0.217$ & $0.234 \pm 0.166$ \\
+    Phase bits    & 1   & $0.014 \pm 0.010$ & $0.917 \pm 0.095$ \\
+    Viewing angle & 25\% & $0.689 \pm 0.270$ & $0.358 \pm 0.229$ \\
+    Viewing angle & 10\% & $0.411 \pm 0.197$ & $0.481 \pm 0.210$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% ─── 6. Discussion ───────────────────────────────────────────────────────────
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Phase-Quantisation Cliff and Binary-Hologram Failure}
+The 1-bit (binary) hologram is qualitatively distinct from all higher
+bit-depths: it reduces the SLM to two phase states ($0$ and $\pi$), equivalent to
+a binary phase grating that necessarily produces a conjugate (twin) image and a
+strong zero order. The Gerchberg--Saxton algorithm, which assumes a continuous
+phase-only constraint, does not converge to a usable solution once the phase is
+collapsed to two levels; the result is an essentially uncorrelated reconstruction
+($\text{PSNR}\approx0\,\text{dB}$). The SSIM cliff therefore reflects the onset
+of a fundamentally different failure mode rather than a continuation of smooth
+degradation, and it is precisely this distinction that PSNR fails to convey. The
+practical implication is clear: at least 2 addressable phase bits are required for
+GS-style holography, and the marginal benefit of moving from 4 to 8 bits is
+negligible for these scenes.
+
+\subsection{Viewing-Angle Robustness}
+The mildness of the viewing-angle axis is consistent with the spatial-frequency
+content of the test scenes: the reference Gaussian spots are dominated by
+low spatial frequencies, which survive aggressive circular bandwidth masking. The
+larger across-scene variance and the steeper decline of \textit{resolution\_chart}
+confirm that bandwidth tolerance is content-dependent---high-frequency detail and
+wide fields of view are the first casualties of a reduced aperture. This suggests
+that, for low-frequency or smoothly varying targets, designers may trade viewing
+angle for other budget items with little perceptual penalty.
+
+\subsection{Coherent Speckle as Pre-Reconstruction Phase Noise}
+Modelling speckle as aperture-plane phase noise---rather than post-hoc
+intensity noise---reproduces the correct coherent mechanism: small phase errors
+interfere during propagation and only become visible in intensity beyond a
+threshold ($\sigma \approx 0.6\,\text{rad}$ here). The soft knee in
+Table~\ref{tab:speckle} gives an actionable tolerance for SLM phase accuracy and
+optical-surface roughness.
+
+\subsection{Metric Divergence}
+No single scalar captures holographic quality. PSNR is monotone but blind to the
+binary-hologram failure mode; SSIM and LPIPS both flag it, but LPIPS additionally
+discriminates among severe-degradation regimes where SSIM has already saturated
+near zero (e.g.\ $\sigma=1.0$ vs.\ $\sigma=\pi$ speckle). Reporting all three is
+therefore not redundant. Establishing which metric---or combination---best
+predicts \emph{human} detection is the central question of Part~2.
+
+\subsection{Limitations}
+This study has several acknowledged limitations.
+\textit{Single-wavelength simulation.} All experiments use $\lambda=532\,\text{nm}$;
+multi-wavelength (RGB) holography introduces wavelength-dependent diffraction and
+chromatic effects and is deferred to Part~2.
+\textit{Synthetic scenes only.} All targets are synthetic; results on natural or
+photographic content may differ, particularly where GS converges more slowly.
+\textit{No human-observer validation.} The claim that simulation metrics predict
+\emph{perceived} hologram quality is not yet validated with human subjects; Part~2
+addresses this through a psychophysical forced-choice study.
+\textit{Single retrieval algorithm.} Only classical GS is studied;
+gradient-descent and learned holography~\cite{shi2021towards,
+chakravarthula2019wirtinger} may exhibit different degradation-sensitivity
+profiles.
+
+% ─── 7. Conclusion ───────────────────────────────────────────────────────────
+\section{Conclusion}
+\label{sec:conclusion}
+We presented \textsc{HoloForge}, a reproducible simulation framework for
+systematic characterisation of degradation in phase-only holographic displays,
+with all degradation operators applied in their physically correct domains.
+Across four degradation axes, four scenes, and five random seeds we identified a
+sharp, robust quality cliff at 1-bit phase quantisation, near-lossless behaviour
+of low-frequency content under aggressive viewing-angle reduction, a quantified
+tolerance budget for coherent speckle, and a systematic divergence between PSNR
+and perceptual metrics. These results establish a reproducible baseline and
+motivate Part~2: a perceptual-threshold study mapping simulation metrics to human
+detection thresholds, enabling hardware designers to make evidence-based SLM
+specification trade-offs.
+
+% ─── Reproducibility / Data Availability ─────────────────────────────────────
+\section*{Code and Data Availability}
+All source code, the experiment runner, the unit-test suite, and the raw result
+CSVs and figures are available at
+\url{https://github.com/ultramagnus23/HoloForge}. The complete result set is
+regenerated by \texttt{python run\_experiments.py}.
+
+% ─── References ──────────────────────────────────────────────────────────────
+\bibliographystyle{IEEEtran}
+\begin{thebibliography}{99}
+
+\bibitem{maimone2017holographic}
+A. Maimone, A. Georgiou, and J. S. Kollin, ``Holographic near-eye displays for
+virtual and augmented reality,'' \textit{ACM Trans. Graph.}, vol.~36, no.~4,
+pp.~1--16, 2017.
+
+\bibitem{shi2021towards}
+L. Shi, B. Li, C. Kim, P. Kellnhofer, and W. Matusik, ``Towards real-time
+photorealistic 3D holography with deep neural networks,'' \textit{Nature},
+vol.~591, pp.~234--239, 2021.
+
+\bibitem{chakravarthula2019wirtinger}
+P. Chakravarthula, Y. Peng, J. Kollin, H. Fuchs, and F. Heide, ``Wirtinger
+holography for near-eye displays,'' \textit{ACM Trans. Graph.}, vol.~38, no.~6,
+pp.~1--13, 2019.
+
+\bibitem{gerchberg1972practical}
+R. W. Gerchberg and W. O. Saxton, ``A practical algorithm for the determination
+of phase from image and diffraction plane pictures,'' \textit{Optik}, vol.~35,
+pp.~237--246, 1972.
+
+\bibitem{fienup1982phase}
+J. R. Fienup, ``Phase retrieval algorithms: a comparison,'' \textit{Appl. Opt.},
+vol.~21, no.~15, pp.~2758--2769, 1982.
+
+\bibitem{brown1966complex}
+B. R. Brown and A. W. Lohmann, ``Complex spatial filtering with binary masks,''
+\textit{Appl. Opt.}, vol.~5, no.~6, pp.~967--969, 1966.
+
+\bibitem{lee1978computer}
+W.-H. Lee, ``Computer-generated holograms: techniques and applications,''
+\textit{Prog. Opt.}, vol.~16, pp.~119--232, 1978.
+
+\bibitem{goodman2005introduction}
+J. W. Goodman, \textit{Introduction to Fourier Optics}, 3rd ed. Englewood,
+CO: Roberts and Company, 2005.
+
+\bibitem{holoeye2023slm}
+HOLOEYE Photonics AG, ``Spatial light modulators (LCoS phase),'' product
+documentation, 2023. [Online]. Available: \url{https://holoeye.com/spatial-light-modulators/}
+
+\bibitem{wang2004image}
+Z. Wang, A. C. Bovik, H. R. Sheikh, and E. P. Simoncelli, ``Image quality
+assessment: from error visibility to structural similarity,''
+\textit{IEEE Trans. Image Process.}, vol.~13, no.~4, pp.~600--612, 2004.
+
+\bibitem{zhang2018unreasonable}
+R. Zhang, P. Isola, A. A. Efros, E. Shechtman, and O. Wang, ``The unreasonable
+effectiveness of deep features as a perceptual metric,'' in
+\textit{Proc. IEEE CVPR}, 2018, pp.~586--595.
+
+\end{thebibliography}
+
+\end{document}

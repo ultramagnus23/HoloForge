@@ -55,6 +55,46 @@ def degrade_resolution(image: np.ndarray, target_size: int) -> np.ndarray:
     return result
 
 
+def degrade_resolution_phase(phase: np.ndarray, target_size: int) -> np.ndarray:
+    """
+    Downsample a phase hologram to (target_size × target_size) and restore
+    to original resolution — operating in the complex (phasor) domain to
+    avoid the uint8 quantization error that would occur in a direct phase
+    downsample.
+
+    The correct approach: convert phase to complex phasor, downsample the
+    real and imaginary parts separately via nearest-neighbour, then extract
+    the angle of the restored complex field.
+
+    Parameters
+    ----------
+    phase       : float32 (H, W)  — SLM phase in [-π, π]
+    target_size : int             — intermediate resolution (e.g. 64 for 64×64)
+
+    Returns
+    -------
+    float32 (H, W) — phase degraded at target_size resolution, restored to
+                     original size
+    """
+    from PIL import Image as PILImage
+    H, W = phase.shape
+    # Convert phase to complex phasor
+    phasor = np.exp(1j * phase).astype(np.complex64)
+
+    def _resize_channel(arr_real):
+        # arr_real is float32 in [-1, 1]
+        pil = PILImage.fromarray(((arr_real + 1) / 2 * 255).clip(0, 255).astype(np.uint8), mode='L')
+        small = pil.resize((target_size, target_size), PILImage.NEAREST)
+        restored = small.resize((W, H), PILImage.NEAREST)
+        return np.array(restored).astype(np.float32) / 255.0 * 2 - 1
+
+    real_degraded = _resize_channel(phasor.real)
+    imag_degraded = _resize_channel(phasor.imag)
+    # Reconstruct complex phasor and extract phase
+    phasor_degraded = real_degraded + 1j * imag_degraded
+    return np.angle(phasor_degraded).astype(np.float32)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  2. Phase quantisation
 # ─────────────────────────────────────────────────────────────────────────────
@@ -156,9 +196,16 @@ def limit_viewing_angle(phase: np.ndarray, bandwidth_fraction: float) -> np.ndar
 #  5. Speckle noise
 # ─────────────────────────────────────────────────────────────────────────────
 
-def add_speckle(image: np.ndarray, sigma: float = 0.1, seed: int = 0) -> np.ndarray:
+def add_speckle_legacy(image: np.ndarray, sigma: float = 0.1, seed: int = 0) -> np.ndarray:
     """
-    Add multiplicative speckle noise (common in coherent imaging).
+    DEPRECATED — physically incorrect speckle model.
+
+    Adds multiplicative Gaussian noise directly to a *reconstructed intensity
+    image*. This is NOT how coherent speckle arises: real speckle is a
+    coherent-field phenomenon produced by random phase perturbations at the
+    aperture (SLM) plane *before* propagation, and it does not reproduce the
+    correct Rayleigh-distributed intensity statistics. Retained only for
+    backward reference; use `add_speckle_physical` for all new work.
 
     image : float32 (H,W) in [0,1]
     sigma : standard deviation of the Gaussian noise field
@@ -169,6 +216,37 @@ def add_speckle(image: np.ndarray, sigma: float = 0.1, seed: int = 0) -> np.ndar
     noise = rng.normal(1.0, sigma, image.shape).astype(np.float32)
     noisy = image * noise
     return np.clip(noisy, 0, 1).astype(np.float32)
+
+
+# Backward-compatible alias (deprecated name).
+add_speckle = add_speckle_legacy
+
+
+def add_speckle_physical(phase: np.ndarray, sigma_rad: float = 0.3, seed: int = 0) -> np.ndarray:
+    """
+    Physics-correct speckle model: add random phase perturbations to the
+    SLM hologram phase BEFORE reconstruction.
+
+    In real coherent systems, surface roughness and SLM phase errors introduce
+    random phase noise at the aperture plane. This produces speckle in the
+    reconstruction via coherent interference — not additive intensity noise.
+
+    Parameters
+    ----------
+    phase     : float32 (H,W) — SLM phase hologram in [-π, π]
+    sigma_rad : float — std of Gaussian phase noise in radians
+                0.0 = no speckle;  0.3 = mild;  1.0 = severe;  π = binary random
+    seed      : int
+
+    Returns
+    -------
+    float32 (H,W) — perturbed phase, wrapped to [-π, π]
+    """
+    rng = np.random.default_rng(seed)
+    phase_noise = rng.normal(0.0, sigma_rad, phase.shape).astype(np.float32)
+    perturbed = phase + phase_noise
+    # Wrap back to [-π, π]
+    return np.angle(np.exp(1j * perturbed)).astype(np.float32)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

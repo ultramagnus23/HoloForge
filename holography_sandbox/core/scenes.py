@@ -121,9 +121,20 @@ def letters(size: int = 512) -> np.ndarray:
         img_pil = PILImage.new("L", (size, size), 0)
         draw = ImageDraw.Draw(img_pil)
         font_size = size // 5
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
-        except Exception:
+        # Try a bold sans-serif across platforms (Windows, Linux, macOS).
+        font = None
+        for font_path in (
+            "arialbd.ttf", "Arial Bold.ttf", "arial.ttf",          # Windows
+            "C:/Windows/Fonts/arialbd.ttf", "C:/Windows/Fonts/segoeuib.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Linux
+            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",     # macOS
+        ):
+            try:
+                font = ImageFont.truetype(font_path, font_size)
+                break
+            except Exception:
+                continue
+        if font is None:
             font = ImageFont.load_default()
         text = "HOLO"
         bbox = draw.textbbox((0, 0), text, font=font)

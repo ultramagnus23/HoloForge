@@ -98,7 +98,8 @@ def gerchberg_saxton(
     dx: float = 8e-6,
     z: float = 0.1,
     seed: int = 42,
-) -> np.ndarray:
+    return_history: bool = False,
+):
     """
     Classic Gerchberg-Saxton algorithm.
 
@@ -108,14 +109,24 @@ def gerchberg_saxton(
     Parameters
     ----------
     target_amplitude : float32 array (H, W)  — desired intensity pattern [0..1]
-    n_iter           : int    — number of GS iterations
+    n_iter           : int    — number of GS iterations (default 50; 30 is
+                                below standard practice for research-grade GS
+                                at 256×256)
     wavelength       : float  — [m]
     dx               : float  — SLM pixel pitch [m]
     z                : float  — propagation distance [m]
+    seed             : int    — RNG seed for the random initial phase
+    return_history   : bool   — if True, also return a list of per-iteration
+                                reconstruction-amplitude MSE values, allowing
+                                convergence to be monitored.
 
     Returns
     -------
     phase_hologram : float32 array (H, W)  — phase in [-π, π]
+        (if return_history is False)
+    (phase_hologram, history) : tuple(float32 array, list[float])
+        (if return_history is True), where history[i] is the normalised
+        reconstruction-amplitude MSE after iteration i.
     """
     rng = np.random.default_rng(seed)
     H, W = target_amplitude.shape
@@ -125,10 +136,19 @@ def gerchberg_saxton(
     slm_field = np.exp(1j * slm_phase).astype(np.complex64)
 
     target_amp = target_amplitude.astype(np.float32)
+    history = [] if return_history else None
 
     for _ in range(n_iter):
         # Forward propagate to image plane
         img_field = propagate_asm(slm_field, z, wavelength, dx)
+
+        # Track per-iteration reconstruction error (normalised amplitude MSE)
+        if return_history:
+            recon_amp = np.abs(img_field)
+            recon_amp = recon_amp / (recon_amp.max() + 1e-12)
+            err = float(np.mean((recon_amp - target_amp) ** 2))
+            history.append(err)
+
         # Replace amplitude with target, keep phase
         img_phase = np.angle(img_field)
         img_field_constrained = target_amp * np.exp(1j * img_phase)
@@ -137,7 +157,10 @@ def gerchberg_saxton(
         # Enforce phase-only constraint at SLM
         slm_field = np.exp(1j * np.angle(slm_field)).astype(np.complex64)
 
-    return np.angle(slm_field).astype(np.float32)
+    phase = np.angle(slm_field).astype(np.float32)
+    if return_history:
+        return phase, history
+    return phase
 
 
 # ─────────────────────────────────────────────────────────────────────────────
