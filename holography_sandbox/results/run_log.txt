@@ -13,10 +13,10 @@ Building reference hologram …
   saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\sweep_resolution.png
 
 ── Sweep 2: Phase Quantisation ──
-    8-bit               PSNR= 81.9  SSIM=1.000  LPIPS=0.0000  (proxy=0.00000)
-    4-bit               PSNR= 58.5  SSIM=1.000  LPIPS=0.0003  (proxy=0.00000)
-    2-bit               PSNR= 42.6  SSIM=0.917  LPIPS=0.0570  (proxy=0.00002)
-    1-bit               PSNR=  0.0  SSIM=0.003  LPIPS=0.8110  (proxy=0.00012)
+    8-bit               PSNR= 83.0  SSIM=1.000  LPIPS=0.0000  (proxy=0.00000)
+    4-bit               PSNR= 59.4  SSIM=1.000  LPIPS=0.0003  (proxy=0.00000)
+    2-bit               PSNR= 45.0  SSIM=0.978  LPIPS=0.0156  (proxy=0.00001)
+    1-bit               PSNR= 35.7  SSIM=0.655  LPIPS=0.1803  (proxy=0.00008)
   saved → C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results\sweep_phase_bits.png
 
 ── Sweep 3: Colour Channels — EXCLUDED (see results/sweep_color_EXCLUDED.txt) ──
@@ -53,10 +53,10 @@ Building reference hologram …
     [resolution    64x64   ] PSNR= 25.9 SSIM=0.657 LPIPS=0.5557
     [resolution    32x32   ] PSNR= 21.1 SSIM=0.226 LPIPS=0.7914
     [resolution    16x16   ] PSNR= 15.5 SSIM=0.023 LPIPS=0.9237
-    [phase_bits    8-bit   ] PSNR= 81.9 SSIM=1.000 LPIPS=0.0000
-    [phase_bits    4-bit   ] PSNR= 58.5 SSIM=1.000 LPIPS=0.0003
-    [phase_bits    2-bit   ] PSNR= 42.6 SSIM=0.917 LPIPS=0.0570
-    [phase_bits    1-bit   ] PSNR=  0.0 SSIM=0.003 LPIPS=0.8110
+    [phase_bits    8-bit   ] PSNR= 83.0 SSIM=1.000 LPIPS=0.0000
+    [phase_bits    4-bit   ] PSNR= 59.4 SSIM=1.000 LPIPS=0.0003
+    [phase_bits    2-bit   ] PSNR= 45.0 SSIM=0.978 LPIPS=0.0156
+    [phase_bits    1-bit   ] PSNR= 35.7 SSIM=0.655 LPIPS=0.1803
     [viewing_angle 75%     ] PSNR= 31.1 SSIM=0.978 LPIPS=0.1708
     [viewing_angle 50%     ] PSNR= 28.9 SSIM=0.968 LPIPS=0.1640
     [viewing_angle 25%     ] PSNR= 29.7 SSIM=0.972 LPIPS=0.1078
@@ -67,10 +67,10 @@ Building reference hologram …
     [resolution    64x64   ] PSNR= 10.8 SSIM=0.047 LPIPS=0.8006
     [resolution    32x32   ] PSNR= 10.8 SSIM=0.031 LPIPS=0.6974
     [resolution    16x16   ] PSNR= 10.8 SSIM=0.068 LPIPS=0.7172
-    [phase_bits    8-bit   ] PSNR= 53.4 SSIM=1.000 LPIPS=0.0001
-    [phase_bits    4-bit   ] PSNR= 29.4 SSIM=0.939 LPIPS=0.0169
-    [phase_bits    2-bit   ] PSNR= 14.6 SSIM=0.357 LPIPS=0.4970
-    [phase_bits    1-bit   ] PSNR=  1.5 SSIM=0.024 LPIPS=1.0618
+    [phase_bits    8-bit   ] PSNR= 52.4 SSIM=1.000 LPIPS=0.0001
+    [phase_bits    4-bit   ] PSNR= 30.0 SSIM=0.947 LPIPS=0.0139
+    [phase_bits    2-bit   ] PSNR= 16.5 SSIM=0.504 LPIPS=0.3004
+    [phase_bits    1-bit   ] PSNR= 12.3 SSIM=0.165 LPIPS=0.9121
     [viewing_angle 75%     ] PSNR= 12.3 SSIM=0.367 LPIPS=0.6398
     [viewing_angle 50%     ] PSNR= 11.5 SSIM=0.334 LPIPS=0.6643
     [viewing_angle 25%     ] PSNR= 11.4 SSIM=0.288 LPIPS=0.7169
@@ -81,10 +81,10 @@ Building reference hologram …
     [resolution    64x64   ] PSNR= 18.0 SSIM=0.287 LPIPS=0.6827
     [resolution    32x32   ] PSNR= 16.7 SSIM=0.068 LPIPS=0.7729
     [resolution    16x16   ] PSNR= 15.1 SSIM=0.037 LPIPS=0.8764
-    [phase_bits    8-bit   ] PSNR= 68.7 SSIM=1.000 LPIPS=0.0000
-    [phase_bits    4-bit   ] PSNR= 47.0 SSIM=0.997 LPIPS=0.0006
-    [phase_bits    2-bit   ] PSNR= 27.5 SSIM=0.663 LPIPS=0.1384
-    [phase_bits    1-bit   ] PSNR=  0.2 SSIM=0.005 LPIPS=0.8593
+    [phase_bits    8-bit   ] PSNR= 71.6 SSIM=1.000 LPIPS=0.0000
+    [phase_bits    4-bit   ] PSNR= 46.0 SSIM=0.997 LPIPS=0.0005
+    [phase_bits    2-bit   ] PSNR= 32.3 SSIM=0.818 LPIPS=0.0574
+    [phase_bits    1-bit   ] PSNR= 24.3 SSIM=0.241 LPIPS=0.4004
     [viewing_angle 75%     ] PSNR= 20.7 SSIM=0.921 LPIPS=0.1828
     [viewing_angle 50%     ] PSNR= 19.9 SSIM=0.909 LPIPS=0.1875
     [viewing_angle 25%     ] PSNR= 19.6 SSIM=0.897 LPIPS=0.2254
@@ -95,10 +95,10 @@ Building reference hologram …
     [resolution    64x64   ] PSNR= 15.3 SSIM=0.089 LPIPS=0.7204
     [resolution    32x32   ] PSNR= 14.5 SSIM=0.056 LPIPS=0.7113
     [resolution    16x16   ] PSNR= 13.7 SSIM=0.059 LPIPS=0.7845
-    [phase_bits    8-bit   ] PSNR= 62.5 SSIM=1.000 LPIPS=0.0000
-    [phase_bits    4-bit   ] PSNR= 35.8 SSIM=0.978 LPIPS=0.0043
-    [phase_bits    2-bit   ] PSNR= 21.8 SSIM=0.440 LPIPS=0.2419
-    [phase_bits    1-bit   ] PSNR=  0.5 SSIM=0.023 LPIPS=0.9376
+    [phase_bits    8-bit   ] PSNR= 61.4 SSIM=1.000 LPIPS=0.0000
+    [phase_bits    4-bit   ] PSNR= 38.4 SSIM=0.978 LPIPS=0.0047
+    [phase_bits    2-bit   ] PSNR= 24.3 SSIM=0.626 LPIPS=0.1352
+    [phase_bits    1-bit   ] PSNR= 18.2 SSIM=0.213 LPIPS=0.5160
     [viewing_angle 75%     ] PSNR= 17.2 SSIM=0.666 LPIPS=0.3011
     [viewing_angle 50%     ] PSNR= 16.7 SSIM=0.637 LPIPS=0.3297
     [viewing_angle 25%     ] PSNR= 16.7 SSIM=0.598 LPIPS=0.3801
@@ -114,13 +114,13 @@ Building reference hologram …
 
   Seed-sensitivity summary (mean ± std across 5 seeds):
   sweep         param     PSNR (dB)        SSIM           LPIPS         
-  phase_bits    1-bit       0.05 ± 0.00    0.003 ± 0.000   0.810 ± 0.001
-  phase_bits    2-bit      42.17 ± 0.66    0.919 ± 0.009   0.054 ± 0.008
-  phase_bits    4-bit      58.30 ± 1.19    1.000 ± 0.000   0.000 ± 0.000
-  phase_bits    8-bit      82.40 ± 0.96    1.000 ± 0.000   0.000 ± 0.000
+  phase_bits    1-bit      35.93 ± 0.22    0.600 ± 0.028   0.202 ± 0.011
+  phase_bits    2-bit      45.66 ± 0.79    0.975 ± 0.002   0.019 ± 0.004
+  phase_bits    4-bit      59.23 ± 0.22    1.000 ± 0.000   0.000 ± 0.000
+  phase_bits    8-bit      82.93 ± 0.70    1.000 ± 0.000   0.000 ± 0.000
   resolution    128x128    28.63 ± 0.24    0.860 ± 0.009   0.381 ± 0.017
   resolution    16x16      17.23 ± 1.09    0.036 ± 0.010   0.895 ± 0.021
   resolution    32x32      21.27 ± 1.08    0.239 ± 0.031   0.781 ± 0.026
   resolution    64x64      25.55 ± 0.59    0.627 ± 0.034   0.583 ± 0.022
 
-✓ All done in 34.4s — results in C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results/
+✓ All done in 32.8s — results in C:\Users\chait\Downloads\HoloForge\HoloForge\holography_sandbox\results/

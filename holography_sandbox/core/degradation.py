@@ -101,22 +101,36 @@ def degrade_resolution_phase(phase: np.ndarray, target_size: int) -> np.ndarray:
 
 def quantise_phase(phase: np.ndarray, bits: int) -> np.ndarray:
     """
-    Quantise a phase array (values in [-π, π]) to `bits` bits.
+    Quantise a phase array to `2**bits` evenly spaced levels over the full
+    2π period.
 
     bits=8 → 256 levels  (essentially lossless for perception)
     bits=4 → 16 levels
     bits=2 → 4 levels
-    bits=1 → 2 levels  (binary hologram)
+    bits=1 → 2 levels  (genuine binary phase hologram, levels π apart)
 
-    Returns float32 phase array in [-π, π].
+    Implementation note
+    -------------------
+    Phase is periodic, so the quantiser must place `n_levels` bins over the
+    *open* interval [-π, π). A naive mapping over the *closed* interval
+    [-π, π] using (n_levels - 1) spacing collides the two endpoints
+    (e^{-jπ} = e^{+jπ} = -1), yielding only `n_levels - 1` distinct phasors —
+    and for bits=1 a degenerate, single-valued (constant) hologram. We instead
+    use a mid-rise quantiser: bin centres at (k + 0.5)·(2π/n_levels), which
+    gives exactly `n_levels` distinct, evenly spaced phase values with no
+    endpoint collision. For bits=1 this yields a true two-level binary phase
+    hologram ({-π/2, +π/2}, i.e. phasors π apart).
+
+    Returns float32 phase array in [-π, π).
     """
     n_levels = 2 ** bits
-    # Map [-π, π] → [0, 1]
-    normalized = (phase + np.pi) / (2 * np.pi)
-    # Quantise
-    quantized = np.round(normalized * (n_levels - 1)) / (n_levels - 1)
-    # Map back to [-π, π]
-    return (quantized * 2 * np.pi - np.pi).astype(np.float32)
+    step = 2 * np.pi / n_levels
+    # Map phase to [0, 2π), assign to one of n_levels bins.
+    wrapped = np.mod(phase + np.pi, 2 * np.pi)
+    idx = np.clip(np.floor(wrapped / step).astype(np.int64), 0, n_levels - 1)
+    # Bin centre, shifted back to [-π, π).
+    quantised = (idx + 0.5) * step - np.pi
+    return quantised.astype(np.float32)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

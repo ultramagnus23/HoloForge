@@ -54,13 +54,16 @@ SSIM, and LPIPS. All degradations are applied in the physically correct domain:
 resolution and bandwidth limits act on the complex SLM field, and speckle is
 modelled as random aperture-plane phase noise prior to coherent propagation
 rather than as additive intensity noise. Across parameter sweeps on four
-synthetic test scenes and five random phase-retrieval seeds, we identify a
-sharp, scene- and seed-robust quality cliff at 1-bit phase quantisation
-($\text{SSIM} = 0.92$ at 2 bits vs.\ $\text{SSIM} = 0.003$ at 1 bit on the
-reference scene; $0.59 \to 0.01$ averaged across scenes), near-lossless
-reconstruction of low-spatial-frequency content down to $25\%$ viewing-angle
-bandwidth ($\text{SSIM} > 0.97$), and a systematic divergence between PSNR and
-SSIM as degradation increases. The framework, experiment scripts, and raw result
+synthetic test scenes and five random phase-retrieval seeds, we find phase
+quantisation to be perceptually lossless down to 4 bits and near-lossless at 2
+bits ($\text{SSIM} = 0.98$ on the reference scene), with a systematic,
+theoretically predicted fidelity penalty at 1 bit ($\text{SSIM} = 0.66$ on the
+reference scene; $0.32 \pm 0.20$ across scenes) attributable to the unavoidable
+twin image of a real-valued binary phase hologram. We further observe
+near-lossless reconstruction of low-spatial-frequency content down to $25\%$
+viewing-angle bandwidth ($\text{SSIM} > 0.97$), and a systematic divergence
+between PSNR and SSIM under resolution loss, where PSNR stays moderate while
+SSIM registers structural collapse. The framework, experiment scripts, and raw result
 data are released at \url{https://github.com/ultramagnus23/HoloForge} as a
 reproducible baseline for Part~2, which will establish perceptual detection
 thresholds via a human-observer study.
@@ -97,9 +100,10 @@ This paper makes the following contributions:
         the Angular Spectrum Method (ASM) and Gerchberg--Saxton (GS) phase
         retrieval, with four independently controllable degradation axes applied
         in their physically correct domains.
-  \item We report a systematic characterisation of phase-quantisation bit-depth
-        on GS-computed holograms, revealing a sharp quality cliff between 2-bit
-        and 1-bit quantisation that is robust across four scenes and five
+  \item We characterise the bit-depth dependence of GS-computed phase holograms
+        and show that the transition to a binary (1-bit) hologram incurs a
+        systematic, theoretically predicted fidelity penalty from an unavoidable
+        twin image, which we verify is stable across four scenes and five
         random seeds.
   \item We demonstrate that PSNR and SSIM diverge in their characterisation of
         holographic degradation, and that a true LPIPS perceptual metric provides
@@ -213,11 +217,17 @@ than on $\phi$ directly, avoiding phase-wrap and $8$-bit quantisation artefacts)
 then upsampled back to $N\times N$. We sweep $n \in \{128, 64, 32, 16\}$ against a
 baseline of $N=256$.
 
-\textbf{(D2) Phase Quantisation.} The continuous phase is linearly quantised to
-$2^b$ levels, where $b \in \{1, 2, 4, 8\}$ bits, via
+\textbf{(D2) Phase Quantisation.} The continuous phase is quantised to $2^b$
+evenly spaced levels, $b \in \{1, 2, 4, 8\}$ bits, using a mid-rise quantiser
+over the periodic phase circle,
 \begin{equation}
-  \phi_q = \frac{2\pi}{2^b}\,\mathrm{round}\!\left(\frac{(\phi+\pi)\, 2^b}{2\pi}\right) - \pi.
+  \phi_q = \frac{2\pi}{2^b}\!\left(\left\lfloor \frac{(\phi+\pi)\, 2^b}{2\pi} \right\rfloor + \tfrac{1}{2}\right) - \pi.
 \end{equation}
+The mid-rise form places exactly $2^b$ distinct phasors over $[-\pi,\pi)$; a
+na\"ive closed-interval mapping would instead collide $-\pi$ and $+\pi$ (which
+share the phasor $-1$) and, at $b=1$, collapse to a single-valued constant
+hologram. At $b=1$ the two levels lie $\pi$ apart, yielding a genuine binary
+phase hologram.
 
 \textbf{(D3) Viewing-Angle Bandwidth.} The SLM phase is converted to a complex
 phasor, its spatial-frequency spectrum is masked to a circular aperture of radius
@@ -338,8 +348,8 @@ Table~\ref{tab:resolution} reflect this strong content dependence.
   \centering
   \includegraphics[width=\columnwidth]{../holography_sandbox/results/sweep_phase_bits.png}
   \caption{Phase quantisation: reconstructions at 8, 4, 2, and 1 bit(s). The
-  1-bit (binary) case shows catastrophic reconstruction failure visible to all
-  metrics.}
+  1-bit (binary phase) case retains coarse structure but loses fidelity to an
+  unavoidable twin image.}
   \label{fig:phase_bits}
 \end{figure}
 \begin{table}[t]
@@ -350,23 +360,26 @@ Table~\ref{tab:resolution} reflect this strong content dependence.
     \toprule
     Phase bits & PSNR (dB) & SSIM & LPIPS \\
     \midrule
-    8-bit & $81.9$ & $1.000$ & $0.000$ \\
-    4-bit & $58.5$ & $1.000$ & $0.000$ \\
-    2-bit & $42.6$ & $0.917$ & $0.057$ \\
-    1-bit & $\phantom{0}0.0$ & $0.003$ & $0.811$ \\
+    8-bit & $83.0$ & $1.000$ & $0.000$ \\
+    4-bit & $59.4$ & $1.000$ & $0.000$ \\
+    2-bit & $45.0$ & $0.978$ & $0.016$ \\
+    1-bit & $35.7$ & $0.655$ & $0.180$ \\
     \bottomrule
   \end{tabular}
 \end{table}
-\textbf{Key finding.} A sharp quality cliff occurs between 2-bit and 1-bit phase
-quantisation (Table~\ref{tab:phase_bits}, Fig.~\ref{fig:phase_bits}). On the
-reference scene SSIM falls from $0.917$ (2-bit) to $0.003$ (1-bit) while PSNR
-collapses from $42.6\,\text{dB}$ to essentially $0\,\text{dB}$---i.e.\ the binary
-reconstruction is effectively uncorrelated with the target. Averaged across the
-four scenes, SSIM drops from $0.594\pm0.217$ at 2 bits to $0.014\pm0.010$ at 1
-bit. The cliff is exceptionally stable: across five random GS seeds the 1-bit
-SSIM is $0.003\pm0.000$ and PSNR $0.05\pm0.00\,\text{dB}$
-(Table~\ref{tab:seed}). By contrast, 4-bit and 8-bit quantisation are
-perceptually lossless ($\text{SSIM}=1.000$, $\text{LPIPS}=0.000$).
+\textbf{Key finding.} Phase quantisation is perceptually lossless down to 4 bits
+and near-lossless at 2 bits, with a systematic fidelity penalty at the 1-bit
+(binary) transition (Table~\ref{tab:phase_bits}, Fig.~\ref{fig:phase_bits}). On
+the reference scene SSIM is $1.000$ at 4 and 8 bits, $0.978$ at 2 bits, and
+$0.655$ at 1 bit, while PSNR declines smoothly
+($83.0 \to 59.4 \to 45.0 \to 35.7\,\text{dB}$). Across the four scenes the 1-bit
+case is more content-sensitive (SSIM $0.318\pm0.196$) but the ordering is
+preserved. Crucially, the 1-bit loss is \emph{systematic rather than
+stochastic}: across five random GS seeds the 1-bit SSIM is $0.600\pm0.028$
+(Table~\ref{tab:seed}), a tight distribution indicating the degradation is
+structural, not an artefact of initialisation. Section~\ref{sec:discussion}
+identifies this loss as the signature of an unavoidable twin image and predicts
+its onset at exactly 1 bit.
 
 \subsection{D3: Viewing-Angle Bandwidth}
 \begin{figure}[t]
@@ -457,10 +470,10 @@ quantitative tolerance budget for SLM phase accuracy and optical-surface quality
     \toprule
     Sweep & Param & PSNR (dB) & SSIM & LPIPS \\
     \midrule
-    Phase & 8-bit & $82.40 \pm 0.96$ & $1.000 \pm 0.000$ & $0.000 \pm 0.000$ \\
-    Phase & 4-bit & $58.30 \pm 1.19$ & $1.000 \pm 0.000$ & $0.000 \pm 0.000$ \\
-    Phase & 2-bit & $42.17 \pm 0.66$ & $0.919 \pm 0.009$ & $0.054 \pm 0.008$ \\
-    Phase & 1-bit & $\phantom{0}0.05 \pm 0.00$ & $0.003 \pm 0.000$ & $0.810 \pm 0.001$ \\
+    Phase & 8-bit & $82.93 \pm 0.70$ & $1.000 \pm 0.000$ & $0.000 \pm 0.000$ \\
+    Phase & 4-bit & $59.23 \pm 0.22$ & $1.000 \pm 0.000$ & $0.000 \pm 0.000$ \\
+    Phase & 2-bit & $45.66 \pm 0.79$ & $0.975 \pm 0.002$ & $0.019 \pm 0.004$ \\
+    Phase & 1-bit & $35.93 \pm 0.22$ & $0.600 \pm 0.028$ & $0.202 \pm 0.011$ \\
     Res.  & 128   & $28.63 \pm 0.24$ & $0.860 \pm 0.009$ & $0.381 \pm 0.017$ \\
     Res.  & 64    & $25.55 \pm 0.59$ & $0.627 \pm 0.034$ & $0.583 \pm 0.022$ \\
     Res.  & 32    & $21.27 \pm 1.08$ & $0.239 \pm 0.031$ & $0.781 \pm 0.026$ \\
@@ -468,10 +481,13 @@ quantitative tolerance budget for SLM phase accuracy and optical-surface quality
     \bottomrule
   \end{tabular}
 \end{table}
-The PSNR/SSIM divergence is clearest in the phase sweep
-(Fig.~\ref{fig:metrics_summary}): PSNR declines monotonically across $8\!\to\!1$
-bits, but only SSIM and LPIPS mark the 1-bit case as a categorically different
-failure mode. The multi-scene summary (Fig.~\ref{fig:multiscene},
+The PSNR/SSIM divergence is clearest in the resolution sweep
+(Fig.~\ref{fig:metrics_summary}): at $16\times16$ effective resolution PSNR
+remains a seemingly moderate $13$--$17\,\text{dB}$ while SSIM has collapsed below
+$0.05$, so PSNR fails to register the structural destruction that SSIM and LPIPS
+both capture. LPIPS additionally discriminates within the severe-degradation
+regime where SSIM has saturated near zero (e.g.\ speckle $\sigma=1.0$ vs.\
+$\sigma=\pi$). The multi-scene summary (Fig.~\ref{fig:multiscene},
 Table~\ref{tab:multiscene}) shows the same ordering of axis severity holds across
 content types, while seed sensitivity (Table~\ref{tab:seed}) confirms the
 findings are not artefacts of a particular random initialisation: standard
@@ -487,8 +503,8 @@ deviations across seeds are small ($\le 1.2\,\text{dB}$ PSNR, $\le 0.034$ SSIM).
     \midrule
     Resolution    & 128 & $0.471 \pm 0.298$ & $0.605 \pm 0.213$ \\
     Resolution    & 16  & $0.047 \pm 0.018$ & $0.825 \pm 0.080$ \\
-    Phase bits    & 2   & $0.594 \pm 0.217$ & $0.234 \pm 0.166$ \\
-    Phase bits    & 1   & $0.014 \pm 0.010$ & $0.917 \pm 0.095$ \\
+    Phase bits    & 2   & $0.731 \pm 0.181$ & $0.127 \pm 0.109$ \\
+    Phase bits    & 1   & $0.318 \pm 0.196$ & $0.502 \pm 0.266$ \\
     Viewing angle & 25\% & $0.689 \pm 0.270$ & $0.358 \pm 0.229$ \\
     Viewing angle & 10\% & $0.411 \pm 0.197$ & $0.481 \pm 0.210$ \\
     \bottomrule
@@ -499,19 +515,32 @@ deviations across seeds are small ($\le 1.2\,\text{dB}$ PSNR, $\le 0.034$ SSIM).
 \section{Discussion}
 \label{sec:discussion}
 
-\subsection{Phase-Quantisation Cliff and Binary-Hologram Failure}
-The 1-bit (binary) hologram is qualitatively distinct from all higher
-bit-depths: it reduces the SLM to two phase states ($0$ and $\pi$), equivalent to
-a binary phase grating that necessarily produces a conjugate (twin) image and a
-strong zero order. The Gerchberg--Saxton algorithm, which assumes a continuous
-phase-only constraint, does not converge to a usable solution once the phase is
-collapsed to two levels; the result is an essentially uncorrelated reconstruction
-($\text{PSNR}\approx0\,\text{dB}$). The SSIM cliff therefore reflects the onset
-of a fundamentally different failure mode rather than a continuation of smooth
-degradation, and it is precisely this distinction that PSNR fails to convey. The
-practical implication is clear: at least 2 addressable phase bits are required for
-GS-style holography, and the marginal benefit of moving from 4 to 8 bits is
-negligible for these scenes.
+\subsection{The 1-bit Transition: an Unavoidable Twin Image}
+A binary phase hologram with its two levels $\pi$ apart is, up to a global phase
+factor, \emph{real-valued} (the phasors are $\pm j$, i.e.\ $j$ times a real
+$\pm1$ pattern). Real-valued holograms---binary phase or binary amplitude
+alike---are subject to the classical \emph{twin-image
+problem}~\cite{gabor1948new}: because a real transmittance cannot encode the sign
+of the diffracted field, the reconstruction necessarily contains the target
+\emph{and} an equal-energy conjugate order. No Gerchberg--Saxton iteration can
+remove the twin, since every member of the binary constraint set is real-valued.
+
+This yields a concrete, falsifiable prediction: the fidelity penalty should
+appear at exactly the bit depth at which the quantised hologram becomes
+real-valued---$1$ bit---and should be \emph{structural} (a function of the
+target's asymmetry) rather than stochastic. The data bear this out. The 1-bit
+penalty is present for every scene and every seed, the reconstruction retains
+coarse structure (SSIM $0.655$ on the reference scene, not a random field), and
+the across-seed spread is tight ($\sigma_{\text{SSIM}} = 0.028$), exactly as
+expected for a deterministic, symmetry-induced artefact. For $b \ge 2$ the
+hologram is genuinely complex-valued, the real-valuedness constraint is lifted,
+the twin image is no longer forced, and reconstruction is near-lossless.
+
+The practical implication is sharpened accordingly: $2$ addressable phase bits
+suffice for GS-style holography of these targets and $4$ bits are effectively
+lossless; the distinctive cost of a $1$-bit device is the twin image, which is a
+property of binary phase encoding itself rather than a failure of the retrieval
+algorithm.
 
 \subsection{Viewing-Angle Robustness}
 The mildness of the viewing-angle axis is consistent with the spatial-frequency
@@ -532,11 +561,12 @@ Table~\ref{tab:speckle} gives an actionable tolerance for SLM phase accuracy and
 optical-surface roughness.
 
 \subsection{Metric Divergence}
-No single scalar captures holographic quality. PSNR is monotone but blind to the
-binary-hologram failure mode; SSIM and LPIPS both flag it, but LPIPS additionally
-discriminates among severe-degradation regimes where SSIM has already saturated
-near zero (e.g.\ $\sigma=1.0$ vs.\ $\sigma=\pi$ speckle). Reporting all three is
-therefore not redundant. Establishing which metric---or combination---best
+No single scalar captures holographic quality. PSNR can remain moderate while
+structure is destroyed---most visibly under resolution loss, where
+$13$--$17\,\text{dB}$ coexists with $\text{SSIM} < 0.05$---so it must not be read
+in isolation. SSIM tracks structural degradation but saturates near zero under
+severe noise; LPIPS retains discrimination there (e.g.\ speckle $\sigma=1.0$
+vs.\ $\sigma=\pi$). Reporting all three is therefore not redundant. Establishing which metric---or combination---best
 predicts \emph{human} detection is the central question of Part~2.
 
 \subsection{Limitations}
@@ -560,11 +590,12 @@ profiles.
 We presented \textsc{HoloForge}, a reproducible simulation framework for
 systematic characterisation of degradation in phase-only holographic displays,
 with all degradation operators applied in their physically correct domains.
-Across four degradation axes, four scenes, and five random seeds we identified a
-sharp, robust quality cliff at 1-bit phase quantisation, near-lossless behaviour
-of low-frequency content under aggressive viewing-angle reduction, a quantified
-tolerance budget for coherent speckle, and a systematic divergence between PSNR
-and perceptual metrics. These results establish a reproducible baseline and
+Across four degradation axes, four scenes, and five random seeds we found phase
+quantisation to be near-lossless down to 2 bits with a systematic, theoretically
+predicted twin-image penalty at the 1-bit (binary) transition, near-lossless
+behaviour of low-frequency content under aggressive viewing-angle reduction, a
+quantified tolerance budget for coherent speckle, and a systematic divergence
+between PSNR and perceptual metrics under resolution loss. These results establish a reproducible baseline and
 motivate Part~2: a perceptual-threshold study mapping simulation metrics to human
 detection thresholds, enabling hardware designers to make evidence-based SLM
 specification trade-offs.
@@ -603,6 +634,10 @@ pp.~237--246, 1972.
 \bibitem{fienup1982phase}
 J. R. Fienup, ``Phase retrieval algorithms: a comparison,'' \textit{Appl. Opt.},
 vol.~21, no.~15, pp.~2758--2769, 1982.
+
+\bibitem{gabor1948new}
+D. Gabor, ``A new microscopic principle,'' \textit{Nature}, vol.~161,
+pp.~777--778, 1948.
 
 \bibitem{brown1966complex}
 B. R. Brown and A. W. Lohmann, ``Complex spatial filtering with binary masks,''
