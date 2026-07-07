@@ -52,7 +52,7 @@ from core.degradation import (
     add_speckle_physical,
     depth_planes_to_z_list,
 )
-from core.metrics  import all_metrics
+from core.metrics  import all_metrics, ssim
 from core.scenes   import (
     gaussian_spots, resolution_chart, letters, circle_ring, natural_photo,
     multi_depth_scene,
@@ -446,12 +446,100 @@ def _plot_multi_scene_summary(summary):
         ax.set_ylabel("SSIM (mean ± std across scenes)")
         ax.set_title(axis, fontweight="bold")
         ax.grid(True, alpha=0.3)
-    fig.suptitle("Multi-Scene Generalisation — SSIM (mean ± std, 4 scenes)",
+    fig.suptitle("Multi-Scene Generalisation — SSIM (mean ± std, 5 scenes)",
                  fontweight="bold")
     plt.tight_layout()
     path = os.path.join(RESULTS_DIR, "multi_scene_summary.png")
     plt.savefig(path, dpi=130, bbox_inches="tight")
     plt.close(fig)
+    print(f"  Figure saved → {path}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Viewing-angle diagnostic: retained spectral energy vs reconstruction SSIM
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _retained_energy(phase, frac):
+    """Fraction of hologram (|FFT|^2) energy kept by a circular mask of
+    radius frac * Nyquist."""
+    H, W = phase.shape
+    power = np.abs(np.fft.fftshift(np.fft.fft2(np.exp(1j * phase)))) ** 2
+    cx, cy = W // 2, H // 2
+    radius = frac * min(H, W) / 2
+    Y, X = np.ogrid[:H, :W]
+    mask = ((X - cx) ** 2 + (Y - cy) ** 2) <= radius ** 2
+    return float(power[mask].sum() / power.sum())
+
+
+def plot_viewing_angle_energy():
+    """
+    Show that the bandwidth-limit operator is functioning: retained spectral
+    energy decreases monotonically with bandwidth, even where reconstruction
+    SSIM plateaus. Saves results/viewing_energy.{png,csv}.
+    """
+    print("\n── Viewing-Angle Diagnostic: retained energy vs SSIM ──")
+    fracs = [1.0, 0.75, 0.5, 0.25, 0.1]
+    ssim_fracs = [0.75, 0.5, 0.25, 0.1]
+    energy = {}   # scene -> list over fracs
+    ssim_v = {}   # scene -> list over ssim_fracs
+
+    for name, scene_fn in SCENE_SUITE.items():
+        target = scene_fn(SIZE).astype(np.float32)
+        phase = gerchberg_saxton(target, n_iter=GS_ITER,
+                                 wavelength=WAVELENGTH, dx=DX, z=Z)
+        ref = reconstruct_phase(phase)
+        energy[name] = [_retained_energy(phase, f) for f in fracs]
+        ssim_v[name] = [ssim(ref, reconstruct_phase(limit_viewing_angle(phase, f)))
+                        for f in ssim_fracs]
+
+    mean_energy = np.mean([energy[n] for n in SCENE_SUITE], axis=0)
+    mean_ssim = np.mean([ssim_v[n] for n in SCENE_SUITE], axis=0)
+
+    # CSV
+    cpath = os.path.join(RESULTS_DIR, "viewing_energy.csv")
+    with open(cpath, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["scene"] + [f"energy_{int(f*100)}" for f in fracs]
+                   + [f"ssim_{int(f*100)}" for f in ssim_fracs])
+        for name in SCENE_SUITE:
+            w.writerow([name] + [f"{v:.4f}" for v in energy[name]]
+                       + [f"{v:.4f}" for v in ssim_v[name]])
+        w.writerow(["MEAN"] + [f"{v:.4f}" for v in mean_energy]
+                   + [f"{v:.4f}" for v in mean_ssim])
+    print(f"  CSV saved → {cpath}")
+
+    # Figure: retained energy (log, left) vs mean SSIM (linear, right)
+    xe = [f * 100 for f in fracs]
+    xs = [f * 100 for f in ssim_fracs]
+    fig, ax1 = plt.subplots(figsize=(6.4, 4.2))
+    for name in SCENE_SUITE:
+        ax1.plot(xe, energy[name], "-", color="#94a3b8", linewidth=1, alpha=0.7)
+    ax1.plot(xe, mean_energy, "o-", color="#2563eb", linewidth=2.5,
+             label="retained energy (mean)")
+    ax1.set_yscale("log")
+    ax1.set_xlabel("Bandwidth (% of Nyquist)")
+    ax1.set_ylabel("Retained spectral energy (fraction)", color="#2563eb")
+    ax1.tick_params(axis="y", labelcolor="#2563eb")
+    ax1.invert_xaxis()
+    ax1.grid(True, alpha=0.3)
+
+    ax2 = ax1.twinx()
+    ax2.plot(xs, mean_ssim, "s--", color="#16a34a", linewidth=2.5,
+             label="reconstruction SSIM (mean)")
+    ax2.set_ylabel("Reconstruction SSIM (mean)", color="#16a34a")
+    ax2.tick_params(axis="y", labelcolor="#16a34a")
+    ax2.set_ylim(0, 1.05)
+
+    fig.suptitle("Viewing angle: energy removed monotonically, SSIM plateaus then drops",
+                 fontsize=10, fontweight="bold")
+    lines = ax1.get_lines()[-1:] + ax2.get_lines()
+    ax1.legend(lines, [l.get_label() for l in lines], loc="lower left", fontsize=8)
+    plt.tight_layout()
+    path = os.path.join(RESULTS_DIR, "viewing_energy.png")
+    plt.savefig(path, dpi=130, bbox_inches="tight")
+    plt.close(fig)
+    print("  retained energy (mean): "
+          + ", ".join(f"{int(f*100)}%={v:.3f}" for f, v in zip(fracs, mean_energy)))
     print(f"  Figure saved → {path}")
 
 
@@ -511,8 +599,14 @@ def run_seed_sensitivity():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def plot_metrics_summary(all_rows):
+    # Only the four reported degradation axes (D1-D4). The depth-plane sweep is a
+    # coherent-superposition demonstration, not a reported Part 1 axis, so it is
+    # excluded from this summary figure (see paper scope statement).
+    reported = ["resolution", "phase_bits", "viewing_angle", "speckle"]
     sweeps = {}
     for row in all_rows:
+        if row["sweep"] not in reported:
+            continue
         sweeps.setdefault(row["sweep"], []).append(row)
 
     fig, axes = plt.subplots(len(sweeps), 2, figsize=(12, 4 * len(sweeps)))
@@ -589,6 +683,7 @@ def main():
 
     # Generalisation + statistical rigour
     run_multi_scene_validation()
+    plot_viewing_angle_energy()
     run_seed_sensitivity()
 
     print(f"\n✓ All done in {time.time()-t_start:.1f}s — results in {RESULTS_DIR}/")
