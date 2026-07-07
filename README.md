@@ -4,7 +4,9 @@ A simulation framework for a single question: **when you degrade a hologram, doe
 
 HoloForge models the full pipeline of a phase-only holographic display (Angular-Spectrum propagation + Gerchberg-Saxton phase retrieval), then systematically degrades it along the axes a real SLM-based display is constrained by — spatial resolution, phase-quantization bits, colour channels, viewing angle, depth planes, and speckle — and scores each reconstruction with both physical (PSNR, SSIM) and perceptual-proxy (LPIPS-proxy) metrics. The recurring finding: physical and perceptual quality diverge, and that gap is where display engineering budgets should actually be spent.
 
-> Working paper: *"Towards Perception-Driven Computational Holography: A Simulation Framework for Exploring Trade-Offs Between Optical Fidelity and Visual Experience."* — in progress, targeting arXiv (cs.GR / eess.IV).
+> **Part 1 preprint published:** *"Systematic Degradation Analysis in Phase-Only Computational Holography: A Simulation Framework"* — [Optica Open](https://preprints.opticaopen.org/articles/preprint/Systematic_Degradation_Analysis_in_Phase-Only_Computational_Holography_A_Simulation_Framework/32874356?file=66233162).
+>
+> Part 2 (RGB + human perceptual study): in progress, targeting arXiv (cs.GR / eess.IV).
 
 ---
 
@@ -71,4 +73,4 @@ Python · NumPy · SciPy · scikit-image · Matplotlib · OpenCV · Jupyter
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Apache License 2.0 — see [LICENSE](LICENSE).

@@ -3,6 +3,8 @@
 `part1_main.tex` — *Systematic Degradation Analysis in Phase-Only Computational
 Holography: A Simulation Framework.* IEEE conference format (`IEEEtran`).
 
+**Published preprint:** [Optica Open](https://preprints.opticaopen.org/articles/preprint/Systematic_Degradation_Analysis_in_Phase-Only_Computational_Holography_A_Simulation_Framework/32874356?file=66233162).
+
 ## Building
 
 The paper has **no external `.bib`** (references are embedded in a
