@@ -1,0 +1,11 @@
+# PVA/acrylamide at 405 nm -- FILL RANGES FROM TABLE 1 READING (cite each)
+D0: 0.1          # um^2/s  [cite]
+sigma: 0.08      # um      [cite]
+kappa: 2.0       #         [cite - dose sensitivity at 405nm]
+gamma: 1.0
+dn_max: 3.5e-3   #         [cite]
+k_bleach: 0.2
+alpha_D: 1.0
+shrinkage: 0.005 #         [cite]
+thickness: 30.0  # um
+n0: 1.5

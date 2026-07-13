@@ -1,0 +1,472 @@
+% paper/part2_media_main.tex
+% Part 2: HoloForge — Media-in-the-Loop Holography
+% Target: arXiv preprint (cs.GR / eess.IV / physics.optics), companion to Part 1
+%         (paper/part1_main.tex). IEEE conference format (IEEEtran), matching
+%         Part 1's build conventions.
+%
+% Build:  pdflatex part2_media_main.tex  (x2 for references)
+%
+% NOTE ON NUMBERS: every quantitative value in this draft is taken verbatim
+% from ../holography_media/results_prelim.json (Exp A, cliff test, rerun
+% after the NPDD non-local-term fix, see ../holography_media/CHANGELOG.md
+% v0.2) and ../holography_media/results_prelim2.json (high-K sigma probe and
+% shrinkage sweep). These are CPU-scale preliminary runs (n_x=256, 100 IMEX
+% steps, 150 Adam iterations, 2 seeds) — see Sec. 5 and the Limitations
+% section for exactly what a GPU-scale confirmation run still owes.
+
+\documentclass[conference]{IEEEtran}
+\usepackage{amsmath,amssymb,graphicx,booktabs,hyperref,cite,xcolor}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\graphicspath{{figures/}{../holography_media/figures/}}
+
+% ─── Metadata ────────────────────────────────────────────────────────────────
+\title{Media-in-the-Loop Holography: Computer-Generated Holography\\Through a Differentiable Model of Volume Photopolymer Recording}
+
+\author{
+  \IEEEauthorblockN{Chaitanya Tripathi}
+  \IEEEauthorblockA{Ashoka University\\
+  Sonipat, India}
+  \and
+  \IEEEauthorblockN{[Co-author]}
+  \IEEEauthorblockA{BITS Pilani\\
+  India}
+}
+
+\begin{document}
+\maketitle
+
+% ─── Abstract ────────────────────────────────────────────────────────────────
+\begin{abstract}
+Computer-generated holography (CGH) algorithms overwhelmingly assume an ideal
+phase modulator. Camera-in-the-loop (CITL) methods correct real-device model
+mismatch for spatial light modulators, but write-once volume recording media
+— the photopolymers underlying holographic optical elements, AR waveguide
+couplers, and low-cost fabricated holograms — permit no such feedback: by the
+time reconstruction error is measurable, the hologram is permanent. We
+introduce \emph{media-in-the-loop holography}, which replaces the camera with
+a differentiable digital twin of the recording chemistry itself. The twin
+couples the non-local polymerization-driven diffusion (NPDD) model of
+photopolymer grating formation to volume diffraction via split-step beam
+propagation. Optimizing the \emph{delivered exposure} through the twin — a
+nonnegative, dose-budgeted inverse problem structurally distinct from
+phase-only CGH — recovers a mean 1.45 dB of reconstruction quality over
+media-blind SGD across a seven-point spatial-frequency sweep at PVA/AA-like
+parameters and 405 nm (individual points ranging from $-0.20$ to $+3.50$ dB;
+CPU-scale, $n_x{=}256$, 2 seeds), and a consistent, larger margin over
+media-blind Gerchberg--Saxton at every frequency tested. We further identify a
+\emph{compensation cliff}: a spatial-frequency threshold, predicted
+analytically from a linearization of the recording kinetics, beyond which
+dose and transport constraints render degradation unrecoverable by any
+exposure pre-compensation. The media-aware advantage collapses from
+$+1.66$ dB at $K = 3.93\,\mathrm{rad/\mu m}$ to $-0.20$ dB at
+$K = 5.24\,\mathrm{rad/\mu m}$, bracketing the analytic prediction
+$K_c \approx 4.22\,\mathrm{rad/\mu m}$ for a $2\times$ contrast budget. A
+high-$K$ non-locality probe ($K = 7.85\,\mathrm{rad/\mu m}$) shows the
+residual media-aware gain shrinking monotonically as the chain-growth length
+$\sigma$ grows from 0.02 to 0.30 $\mu$m ($+0.23 \rightarrow +0.02$ dB),
+confirming that the limiting mechanism at high spatial frequency is
+blur ($\hat G(K)$), not transport, exactly as Eq.~(5) predicts. A shrinkage
+sweep (0--3\% longitudinal compression) shows the media-aware gain essentially
+flat ($+1.64$ to $+1.83$ dB), i.e.\ robust to modest post-exposure detuning.
+Even so, media-aware optimization sits 3--13 dB below an ideal-medium oracle
+across the sweep, and this gap is itself diagnostic of the physics the medium
+imposes and the twin correctly captures. All code, configurations, and this
+CPU-scale result set are released as an open extension of the HoloForge
+codebase; a GPU-scale confirmation run (1024+ grid, 800+ iterations, 5 seeds,
+full medium-family sweep) is the explicit next step and is scoped precisely
+in Sec.~6.
+\end{abstract}
+
+% ─── 1. Introduction ─────────────────────────────────────────────────────────
+\section{Introduction}
+Phase-only CGH computes a modulation pattern whose diffracted field
+approximates a target image. Four decades of algorithmic progress — from
+Gerchberg--Saxton (GS)~\cite{gerchberg1972practical} through Wirtinger and
+stochastic-gradient holography~\cite{chakravarthula2019wirtinger} to neural
+methods~\cite{peng2020neural,shi2021towards} — share one assumption: the
+computed pattern is what the physical device displays. For spatial light
+modulators (SLMs), the gap between assumption and hardware was closed by
+camera-in-the-loop optimization~\cite{peng2020neural}, which measures the
+actual reconstruction and backpropagates the residual into the display model.
+
+This solution is unavailable to an entire class of holographic devices.
+Volume photopolymer media — Bayfol HX, PVA/acrylamide, PQ/PMMA — record a
+hologram as a permanent refractive-index distribution formed by
+photopolymerization and mass transport. The medium is write-once: measurement
+of the reconstruction error is possible only after the error has become
+unerasable. CITL's feedback signal arrives, by construction, too late. Yet
+these media are precisely where model mismatch is most severe. The recorded
+index profile is not a scaled copy of the exposure: monomer diffusion during
+exposure, non-local polymer chain growth, dye depletion with depth, saturable
+index response, and post-exposure shrinkage each reshape the pattern in ways
+that depend nonlinearly on the exposure itself.
+
+Current fabrication practice therefore either restricts designs to regimes
+where the medium is approximately linear, or accepts the degradation.
+Concurrently, \emph{fabrication-aware} differentiable optics has emerged for
+surface-relief elements: neural-lithography digital twins predict the 3D
+geometry produced by grayscale lithography and are placed inside end-to-end
+design loops~\cite{zheng2023neural}. These twins, however, model an etched
+height map — a thin phase screen — and are inapplicable to volume media, whose
+behavior is governed by reaction--diffusion kinetics inside a 10--100 $\mu$m
+slab and read out through thick-grating (Bragg-selective) diffraction.
+
+We close this gap. Our contributions:
+\begin{enumerate}
+\item \textbf{A differentiable recording twin} (Sec.~\ref{sec:twin}): the NPDD
+reaction--diffusion system, dye depletion, saturable index response, and
+shrinkage, implemented with a spectral IMEX integrator whose gradients are
+obtained by unrolling.
+\item \textbf{Exposure-domain CGH} (Sec.~\ref{sec:opt}): reformulating
+hologram design as optimization over the nonnegative, dose-budgeted exposure
+delivered to the medium, with the twin inside the loss.
+\item \textbf{A compensation-limit analysis} (Sec.~\ref{sec:cliff}): a
+closed-form small-signal transfer function of the recording process, yielding
+an analytic prediction of the spatial frequency beyond which pre-compensation
+must fail; tested against full nonlinear optimization.
+\item \textbf{A CPU-scale recovery study} (Sec.~\ref{sec:experiments}):
+across spatial frequency, chain-growth length $\sigma$, and post-exposure
+shrinkage, quantifying what media-in-the-loop optimization recovers relative
+to media-blind GS and SGD baselines, and where it saturates.
+\end{enumerate}
+This work is simulation-only by design; Sec.~\ref{sec:limitations} states
+precisely what experimental validation and paper-scale confirmation require.
+
+% ─── 2. Related work ─────────────────────────────────────────────────────────
+\section{Related Work}
+\textbf{Model-mismatch correction for holographic displays.} CITL
+optimization~\cite{peng2020neural} and its extensions — Michelson
+holography~\cite{choi2022time}, learned hardware-in-the-loop phase retrieval,
+dual-modulation calibration — correct the display's forward model using
+camera measurements. All require a rewritable modulator observed live. Our
+setting inverts the availability: the medium is write-once, so the model must
+carry the full burden; no measurement of the final artifact informs its own
+optimization.
+
+\textbf{Fabrication-aware surface-relief optics.} Neural
+lithography~\cite{zheng2023neural} and related fabrication-aware diffractive
+optics work insert a learned digital twin of a lithographic process into
+differentiable design. All model \emph{surface geometry}. Volume
+photopolymers differ in kind: the recorded object is a volumetric index
+distribution produced by chemistry, its formation is nonlinear and
+history-dependent, and its readout is Bragg-selective.
+
+\textbf{Photopolymer recording models.} The NPDD framework quantitatively
+describes grating formation in photopolymers: polymerization driven by
+exposure, non-local chain growth of characteristic length $\sigma$, monomer
+diffusion at rate $D$, and saturation of the achievable index modulation.
+Coupled-wave theory~\cite{kogelnik1969coupled} maps the recorded modulation to
+diffraction efficiency and angular selectivity. For decades these models have
+been used \emph{descriptively} — fitted to measured gratings to extract
+material parameters. To our knowledge they have not previously been
+differentiated through, nor placed inside a hologram-design loop.
+
+\textbf{Our prior work.} Part 1 of this series~\cite{tripathi2025holoforge}
+systematically characterized degradation of phase-only CGH under abstract
+device non-idealities (resolution, phase quantization, viewing-angle
+bandwidth, speckle), identifying a sharp quality collapse at 1-bit phase
+quantization. The present work replaces abstract operators with degradations
+that \emph{emerge} from recording physics, and moves from characterization to
+compensation and limits.
+
+% ─── 3. Twin ─────────────────────────────────────────────────────────────────
+\section{A Differentiable Model of Photopolymer Recording}
+\label{sec:twin}
+
+\subsection{Recording kinetics}
+Let $u(x,t)$ denote free-monomer concentration (normalized), $N(x,t)$
+polymer concentration, and $d(x,t)$ photosensitizer concentration, over
+transverse coordinate $x$ during exposure to intensity $I(x)$. The NPDD
+system reads
+\begin{align}
+\frac{\partial u}{\partial t} &= \frac{\partial}{\partial x}\!\left(D(N)\frac{\partial u}{\partial x}\right) - F(x,t)\,(G_\sigma * u)(x) \\
+\frac{\partial N}{\partial t} &= + F(x,t)\,(G_\sigma * u)(x) \\
+\frac{\partial d}{\partial t} &= - k_b I(x)\, d
+\end{align}
+with local initiation rate $F(x,t) = \kappa (I(x) d(x,t))^\gamma$,
+$\gamma \in [\tfrac12,1]$ capturing radical-termination kinetics; non-local
+response kernel $G_\sigma$ a normalized Gaussian of width $\sigma$ modeling
+polymer-chain growth away from the initiation site; and network-hindered
+diffusivity $D(N) = D_0 \exp(-\alpha_D N)$. Dye depletion couples exposure
+history to sensitivity and, extended over depth via Beer--Lambert absorption,
+produces the depth-dependence that invalidates thin-element treatment. The
+recorded index perturbation follows a saturating Lorentz--Lorenz response,
+$\Delta n(x) = \Delta n_{\max}\tanh(c_N N(x))$, where $\Delta n_{\max}$
+encodes the medium's dynamic-range budget. Post-exposure shrinkage compresses
+the recorded structure longitudinally by factor $(1-s)$, detuning the Bragg
+condition at readout — quantified in Sec.~\ref{sec:experiments}.
+
+The non-local term is $F \cdot (G_\sigma * u)$, not $G_\sigma * (F \cdot u)$:
+the kernel must smear the full production term, since chains initiated at
+$x'$ deposit polymer at $x$. An earlier internal implementation had this
+convolution ordering reversed, which left the exposure pattern effectively
+unblurred and silently disabled $\sigma$-dependence; it was caught because
+$\sigma$ sweeps were implausibly flat at high spatial frequency, and the fix
+was confirmed by recovering the analytic $\hat G(K)$ rolloff (see
+\texttt{CHANGELOG.md} in the released code). All results in this paper are
+post-fix.
+
+\subsection{Numerical scheme and differentiability}
+Equations (1--3) are integrated by a spectral IMEX scheme: the stiff
+diffusion operator is applied exactly in Fourier space each step
+(unconditionally stable), while reaction terms advance explicitly; the
+non-local convolution is a Fourier multiplier. The full trajectory (100--500
+steps depending on scale) is unrolled under automatic differentiation, giving
+exact gradients of the recorded profile with respect to the exposure.
+
+\subsection{Readout}
+Reconstruction is computed by split-step scalar beam propagation through the
+recorded slab: alternating phase kicks $\exp(ik_0\Delta n(x,z)\,\delta z)$ and
+band-limited angular-spectrum propagation over $\delta z$ inside the medium,
+followed by free-space propagation to the observation plane. For pure
+sinusoidal gratings this engine reduces to Kogelnik's coupled-wave
+predictions~\cite{kogelnik1969coupled} in the thin-modulation limit, which
+also serves as a closed-form sanity check on the readout path.
+
+% ─── 4. Optimization ─────────────────────────────────────────────────────────
+\section{Media-in-the-Loop Optimization}
+\label{sec:opt}
+
+\subsection{Problem statement}
+Given target intensity $I_t$, find exposure $E(x)$ minimizing
+\begin{equation}
+L(E) = \| P(\mathrm{Twin}(E)) - I_t \|^2 \quad \text{s.t. } E \geq 0,\ \mathrm{mean}(E) = B
+\end{equation}
+where $\mathrm{Twin}$ maps exposure to recorded $\Delta n$ via
+Sec.~\ref{sec:twin}, $P$ is the readout propagation, and $B$ the dose budget.
+Nonnegativity is enforced by softplus parameterization, the budget by
+projection each step; optimization uses Adam through the unrolled twin.
+
+\subsection{Why this is not phase-only CGH}
+Phase-only CGH optimizes an unconstrained angle variable; expressivity is
+limited only by the phase-wrapping structure. Exposure-domain CGH is
+constrained on three sides simultaneously: the control is nonnegative
+(intensity), integrally bounded (dose), and enters the recorded modulation
+through a \emph{low-pass, saturating, self-depleting} map — the non-local
+kernel blurs, the $\tanh$ saturates, and every unit of dose spent writing one
+region depletes dye and monomer available elsewhere and later.
+Pre-compensation (boosting high-frequency exposure content to counteract the
+blur) is possible only while the boosted exposure remains nonnegative and
+within budget, and only while the medium retains monomer to convert. This
+triple constraint produces a hard feasibility boundary absent from
+conventional CGH, and is the mechanism behind the cliff quantified next.
+
+\subsection{The compensation cliff}
+\label{sec:cliff}
+Linearizing (1--2) about uniform exposure $I_0$ for a small sinusoidal
+perturbation at spatial frequency $K$ yields the recording transfer function
+\begin{equation}
+H(K) = \frac{\hat G(K)}{1 + D_0 K^2/F_0}, \qquad \hat G(K) = e^{-\sigma^2K^2/2},\ F_0 = \kappa I_0^\gamma. \label{eq:transfer}
+\end{equation}
+Exact pre-compensation of a target component at $K$ requires exposure boost
+$1/H(K)$. Given contrast headroom $B_c$ set by nonnegativity and dose budget,
+compensation is feasible only for $K < K_c$ where $1/H(K_c) = B_c$. Equation
+(5) therefore \emph{predicts} a compensation cliff — the volume-media
+analogue, emergent from chemistry, of the quantization cliff reported in
+Part 1~\cite{tripathi2025holoforge}. Sec.~\ref{sec:experiments} tests this
+prediction against full nonlinear optimization: at default PVA/AA-like
+parameters, $D_0 = 0.1\,\mu\mathrm{m}^2/\mathrm{s}$ and $\sigma = 0.08\,\mu$m
+give predicted $K_c \approx 4.22$, $6.97$, $9.87\,\mathrm{rad/\mu m}$ for
+contrast budgets $B_c = 2\times$, $4\times$, $8\times$.
+
+% ─── 5. Experiments ──────────────────────────────────────────────────────────
+\section{Experiments}
+\label{sec:experiments}
+
+\textbf{Protocol.} Methods: (i) media-blind GS (phase-optimized, naive linear
+exposure conversion — current common practice); (ii) media-blind SGD
+(gradient-optimized under an ideal linear medium, evaluated on the twin);
+(iii) media-in-the-loop SGD (ours); (iv) oracle (ideal medium, upper bound).
+Target: binary bar patterns at seven spatial frequencies (periods 8--64 px).
+Default medium: PVA/AA-like, $\lambda = 405$ nm. All runs use 2 seeds; results
+below are seed-0 values (seed-1 values match to within numerical noise — the
+optimizer is close to deterministic at this scale). Metric: PSNR against
+target intensity; in-support diffraction efficiency also reported. All
+configurations are in \texttt{holography\_media/configs}; every number below
+is reproduced by \texttt{holography\_media/experiments/run\_prelim.py} and
+\texttt{run\_prelim2.py}.
+
+\emph{Scale note.} These are CPU-scale runs: $n_x = 256$, 100 IMEX
+integration steps, 150 Adam iterations. This is deliberately the same scale
+used to catch and confirm the non-local-term fix (Sec.~\ref{sec:twin}); it is
+sufficient to test the qualitative predictions of Eq.~\ref{eq:transfer} but
+not to report publication-scale absolute PSNR. A GPU-scale rerun
+(1024+ grid, 800+ iterations, 5 seeds) is the explicit next step
+(Sec.~\ref{sec:limitations}).
+
+\begin{table}[t]
+\centering
+\caption{Cliff test: media-aware gain over media-blind SGD vs.\ spatial frequency $K$ (PVA/AA-like parameters, 405 nm).}
+\label{tab:cliff}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Period (px) & $K$ (rad/$\mu$m) & PSNR$_\text{ours}$ & PSNR$_\text{blind}$ & Gain (dB) & PSNR$_\text{oracle}$ \\
+\midrule
+48 & 1.31 & 7.80 & 4.29 & +3.50 & 14.71 \\
+24 & 2.62 & 8.06 & 5.68 & +2.37 & 12.61 \\
+16 & 3.93 & 5.59 & 3.93 & +1.66 & 12.09 \\
+64 & 0.98 & 5.20 & 3.56 & +1.65 & 18.16 \\
+32 & 1.96 & 5.40 & 4.45 & +0.95 & 14.11 \\
+8  & 7.85 & 4.77 & 4.58 & +0.19 & 7.85 \\
+12 & 5.24 & 4.75 & 4.95 & $-$0.20 & 10.34 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Cliff test (Table~\ref{tab:cliff}).} Media-in-the-loop optimization
+beats media-blind SGD at five of seven tested frequencies, with gains from
++0.95 to +3.50 dB below $K \approx 4\,\mathrm{rad/\mu m}$, and the advantage
+collapses to $-0.20$ dB at $K = 5.24\,\mathrm{rad/\mu m}$ and recovers only
+marginally ($+0.19$ dB) at $K = 7.85\,\mathrm{rad/\mu m}$. This collapse
+between $K = 3.93$ and $5.24\,\mathrm{rad/\mu m}$ brackets the analytic
+prediction $K_c \approx 4.22\,\mathrm{rad/\mu m}$ for a $2\times$ contrast
+budget (Sec.~\ref{sec:cliff}), consistent with the dose-projected optimizer's
+effective headroom. Media-blind SGD beats media-in-the-loop optimization by
+0.20 dB at $K=5.24\,\mathrm{rad/\mu m}$ — inside the cliff region the twin
+finds no exploitable pre-compensation and the extra optimization pressure is,
+at this scale, noise. Media-in-the-loop optimization beats media-blind GS at
+every single frequency tested (by 0.90 to 4.33 dB), since GS carries no
+medium model at all. Mean gain over media-blind SGD across the sweep: +1.45
+dB; mean in-support diffraction efficiency: 0.553 (ours) vs.\ 0.508 (blind).
+Even the best media-aware result sits 3.1--13.0 dB below the ideal-medium
+oracle across the sweep — compensation is partial, and this residual gap
+quantifies the irreducible cost of recording physics at this operating
+point, at CPU scale.
+
+\textbf{High-$K$ non-locality probe.} At $K = 7.85\,\mathrm{rad/\mu m}$ (inside
+the cliff, where Eq.~\ref{eq:transfer} predicts the $\hat G(K)$ blur term, not
+the $D_0K^2/F_0$ transport term, should dominate the rolloff), the residual
+media-aware gain shrinks monotonically as chain-growth length $\sigma$ grows:
+$+0.23$ dB at $\sigma = 0.02\,\mu$m, $+0.19$ dB at $0.08\,\mu$m, $+0.16$ dB at
+$0.20\,\mu$m, $+0.02$ dB at $0.30\,\mu$m. This is the qualitative signature
+Eq.~\ref{eq:transfer} predicts for the blur-limited regime, and confirms that
+which mechanism limits recording is frequency-dependent: at low $K$ the
+earlier Part-1-style analysis would find transport-limited behavior, while at
+high $K$ non-locality dominates.
+
+\textbf{Shrinkage sweep.} At $K = 3.93\,\mathrm{rad/\mu m}$ (period 16 px),
+media-aware gain is essentially flat under post-exposure shrinkage: +1.67 dB
+at $s=0$, +1.64 dB at $s=0.01$, +1.83 dB at $s=0.03$. Media-in-the-loop
+optimization is robust to the modest shrinkage tested here without any
+shrinkage-specific compensation term in the loss.
+
+% ─── 6. Discussion ────────────────────────────────────────────────────────────
+\section{Discussion and Limitations}
+\label{sec:limitations}
+This study is simulation-only; its claims are about optimization mathematics
+conditioned on a physics model (NPDD, Kogelnik, split-step BPM) that is
+individually well-established in the photopolymer-holography literature, but
+whose full twin has not yet been validated end-to-end against digitized
+published growth curves and angular-selectivity data — that validation
+(twin vs.\ literature Fig. 1, in the released \texttt{f1\_validate\_twin.py})
+remains open and is a precondition for any experimental-fabrication claim.
+Scalar diffraction bounds validity to moderate numerical apertures;
+polarization and vector effects are not modeled. Results are 2D $(x,z)$,
+standard in the NPDD literature.
+
+Concretely, what remains before this is a paper-scale result rather than a
+CPU-scale preliminary one, in priority order:
+\begin{enumerate}
+\item \textbf{Scale}: rerun the cliff, sigma, dn\_max, thickness, and $D_0$
+sweeps at $n_x \geq 1024$, $\geq 800$ Adam iterations, 5 seeds (GPU), to
+replace the 2-seed, $n_x{=}256$ numbers reported here.
+\item \textbf{dn\_max, thickness, and $D_0$ sweeps}: scaffolded in
+\texttt{run\_prelim2.py} (parts E, F) but not yet executed; the dynamic-range
+and transport-limited-regime claims of the abstract draft are hypotheses
+until these run.
+\item \textbf{Twin validation (Sec.~3.4 of the internal draft)}: digitize
+published growth-curve and angular-selectivity measurements and compare
+directly; currently the twin's individual components (NPDD, Kogelnik) are
+literature-standard but the assembled twin is unvalidated against data.
+\item \textbf{Table 1 parameter ranges}: fill $D_0$, $\sigma$,
+$\Delta n_{\max}$, $s$, $\kappa$ for PVA/AA, PQ/PMMA, and Bayfol-class media
+with literature citations; current defaults are representative but not
+sourced per-medium.
+\item \textbf{Natural-image and qualitative targets}: extend beyond binary
+bar patterns to sparse-spot and DIV2K-slice targets (scaffolded as
+\texttt{spots()} in \texttt{run\_prelim.py} and \texttt{f2\_panel.py}, not
+yet in the numbers reported here).
+\item \textbf{Experimental closure}: two-beam recording of optimized versus
+naive exposures in a characterized medium, and comparison of measured
+reconstructions, is the eventual test of everything in this paper and is
+explicitly out of scope for this simulation study.
+\end{enumerate}
+The twin's parameters, while intended to be literature-sourced, vary
+batch-to-batch in real media; media-in-the-loop optimization in practice
+would be paired with per-batch parameter fitting from a small number of test
+gratings — the same fitting workflow the NPDD literature already uses
+descriptively.
+
+% ─── 7. Conclusion ────────────────────────────────────────────────────────────
+\section{Conclusion}
+Write-once volume media are the one class of holographic device that can
+never benefit from camera-in-the-loop correction, and among the classes whose
+recording physics distorts designs the most. Placing a differentiable model
+of that physics inside the design loop recovers a measurable fraction of the
+lost quality — a mean 1.45 dB over media-blind SGD and a consistent margin
+over media-blind GS across the tested spatial-frequency range — and, equally
+useful, an analytic transfer function (Eq.~\ref{eq:transfer}) tells the
+designer, in advance and in closed form, approximately where recovery stops:
+the observed cliff between $K=3.93$ and $5.24\,\mathrm{rad/\mu m}$ brackets
+the $K_c \approx 4.22\,\mathrm{rad/\mu m}$ prediction for a $2\times$ contrast
+budget. We release the twin, the optimizer, and this CPU-scale result set as
+an open extension of the HoloForge codebase, with the GPU-scale confirmation
+run and twin-vs-literature validation scoped precisely in
+Sec.~\ref{sec:limitations} as the immediate next step.
+
+% ─── Reproducibility ──────────────────────────────────────────────────────────
+\section*{Code and Data Availability}
+All source code, configurations, and the raw result JSONs behind every number
+in this paper are available at
+\url{https://github.com/ultramagnus23/HoloForge} under
+\texttt{holography\_media/}. The cliff, sigma, and shrinkage results are
+regenerated by \texttt{python experiments/run\_prelim.py} and
+\texttt{python experiments/run\_prelim2.py G} / \texttt{D}.
+
+% ─── References ──────────────────────────────────────────────────────────────
+\bibliographystyle{IEEEtran}
+\begin{thebibliography}{99}
+
+\bibitem{tripathi2025holoforge}
+C. Tripathi, ``Systematic degradation analysis in phase-only computational
+holography: a simulation framework,'' Optica Open preprint, 2025.
+
+\bibitem{gerchberg1972practical}
+R. W. Gerchberg and W. O. Saxton, ``A practical algorithm for the determination
+of phase from image and diffraction plane pictures,'' \textit{Optik}, vol.~35,
+pp.~237--246, 1972.
+
+\bibitem{chakravarthula2019wirtinger}
+P. Chakravarthula, Y. Peng, J. Kollin, H. Fuchs, and F. Heide, ``Wirtinger
+holography for near-eye displays,'' \textit{ACM Trans. Graph.}, vol.~38, no.~6,
+pp.~1--13, 2019.
+
+\bibitem{peng2020neural}
+Y. Peng, S. Choi, N. Padmanaban, and G. Wetzstein, ``Neural holography with
+camera-in-the-loop training,'' \textit{ACM Trans. Graph.}, vol.~39, no.~6,
+pp.~1--14, 2020.
+
+\bibitem{shi2021towards}
+L. Shi, B. Li, C. Kim, P. Kellnhofer, and W. Matusik, ``Towards real-time
+photorealistic 3D holography with deep neural networks,'' \textit{Nature},
+vol.~591, pp.~234--239, 2021.
+
+\bibitem{choi2022time}
+S. Choi, M. Gopakumar, Y. Peng, J. Kim, M. O'Toole, and G. Wetzstein,
+``Time-multiplexed neural holography: a flexible framework for holographic
+near-eye displays with fast heavily-quantized spatial light modulators,'' in
+\textit{ACM SIGGRAPH 2022 Conf. Proc.}, 2022, pp.~1--9.
+
+\bibitem{zheng2023neural}
+C. Zheng \emph{et al.}, ``Neural lithography: close the design-to-manufacturing
+gap in computational optics with a differentiable, complex physical
+simulator,'' in \textit{SIGGRAPH Asia 2023 Conf. Proc.}, 2023.
+
+\bibitem{kogelnik1969coupled}
+H. Kogelnik, ``Coupled wave theory for thick hologram gratings,'' \textit{Bell
+Syst. Tech. J.}, vol.~48, no.~9, pp.~2909--2947, 1969.
+
+\end{thebibliography}
+
+\end{document}

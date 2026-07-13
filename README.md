@@ -6,7 +6,7 @@ HoloForge models the full pipeline of a phase-only holographic display (Angular-
 
 > **Part 1 preprint published:** *"Systematic Degradation Analysis in Phase-Only Computational Holography: A Simulation Framework"* — [Optica Open](https://preprints.opticaopen.org/articles/preprint/Systematic_Degradation_Analysis_in_Phase-Only_Computational_Holography_A_Simulation_Framework/32874356?file=66233162).
 >
-> Part 2 (RGB + human perceptual study): in progress, targeting arXiv (cs.GR / eess.IV).
+> **Part 2 draft in this repo:** *"Media-in-the-Loop Holography: Computer-Generated Holography Through a Differentiable Model of Volume Photopolymer Recording"* — [paper/part2_media_main.tex](paper/part2_media_main.tex), code in [holography_media/](holography_media/). CPU-scale preliminary results; GPU-scale confirmation run scoped in the paper's Limitations section. (RGB + human perceptual study remains a separate, further Part 2 track — targeting arXiv cs.GR / eess.IV.)
 
 ---
 
@@ -56,7 +56,7 @@ jupyter notebook explore.ipynb
 ## Structure
 
 ```
-holography_sandbox/
+holography_sandbox/       # Part 1: phase-only CGH degradation study
 ├── core/
 │   ├── waveoptics.py    # Angular-Spectrum propagation + Gerchberg-Saxton
 │   ├── degradation.py   # all degradation knobs
@@ -65,6 +65,16 @@ holography_sandbox/
 ├── run_experiments.py   # full sweep runner → results/
 ├── explore.ipynb        # interactive exploration
 └── results/             # generated figures + metrics_summary.csv
+
+holography_media/          # Part 2: media-in-the-loop holography
+├── holomedia/            # differentiable NPDD recording twin + optimizer
+├── experiments/          # cliff/sigma/shrinkage sweeps, twin validation
+├── configs/, data/       # medium parameter files, digitized literature curves
+└── results_prelim*.json  # raw results backing paper/part2_media_main.tex
+
+paper/
+├── part1_main.tex
+└── part2_media_main.tex   # media-in-the-loop paper
 ```
 
 ## Stack
