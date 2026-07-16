@@ -12,13 +12,14 @@ Digitized literature curves (WebPlotDigitizer CSVs) go in data/literature/
 and are overlaid by plot_f1.py -- see paper Sec. 3.4 for sources to digitize
 (Sheridan NPDD growth curves; PVA/AA DE-vs-dose curves).
 """
-import math, sys, os
+import csv, glob, math, sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import torch
 from holomedia import NPDDRecorder, MediumParams, kogelnik_de
 
 torch.set_default_dtype(torch.float64)
 N_X, DX = 1024, 0.05  # 51.2 um window, 50 nm sampling
+LITERATURE_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "literature")
 
 
 def sinusoidal_exposure(K_um, visibility=0.9):
@@ -26,9 +27,35 @@ def sinusoidal_exposure(K_um, visibility=0.9):
     return 1.0 + visibility * torch.cos(K_um * x)
 
 
+def load_literature_curves():
+    """Load digitized (x, y) CSVs from data/literature/, if any exist.
+
+    Returns a dict {filename_stem: (xs, ys)}. Empty if the directory has no
+    CSVs yet -- see data/literature/README.md for why and how to add them.
+    """
+    curves = {}
+    for path in sorted(glob.glob(os.path.join(LITERATURE_DIR, "*.csv"))):
+        xs, ys = [], []
+        with open(path, newline="") as f:
+            for row in csv.reader(f):
+                if not row or not row[0].strip():
+                    continue
+                try:
+                    xs.append(float(row[0])); ys.append(float(row[1]))
+                except ValueError:
+                    continue  # header row
+        if xs:
+            curves[os.path.splitext(os.path.basename(path))[0]] = (xs, ys)
+    if not curves:
+        print("[f1] no digitized literature curves found in data/literature/ "
+              "-- twin-only validation (see data/literature/README.md).")
+    return curves
+
+
 def main():
     params = MediumParams()  # PVA/AA-like defaults; see configs/media/
-    out = {}
+    lit_curves = load_literature_curves()
+    out = {"literature": lit_curves}
     for K in [2.0, 6.0, 12.0, 20.0]:  # rad/um; K=2pi/Lambda
         des, ts = [], []
         for t_total in [1, 2, 4, 6, 8, 10, 14, 18]:

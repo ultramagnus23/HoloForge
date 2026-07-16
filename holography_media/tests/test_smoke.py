@@ -44,8 +44,36 @@ def test_optimization_improves():
     assert p_ours > p_gs, "media-in-the-loop did not beat blind GS"
 
 
+def test_checkpointed_forward_matches():
+    from holomedia.npdd import NPDDRecorder as _R
+    rec = _R(64, 0.1, t_total=3, n_steps=60)
+    torch.manual_seed(0)
+    E = torch.rand(64, dtype=torch.float64) * 0.5 + 0.75
+    dn1 = rec(E)
+    dn2 = rec.forward_checkpointed(E, block=15)
+    diff = (dn1 - dn2).abs().max()
+    assert diff < 1e-10, f"checkpointed forward diverged from forward(): {diff}"
+    print("checkpointed forward matches forward() OK, max diff =", float(diff))
+
+
+def test_3d_twin_runs():
+    from holomedia.npdd3d import NPDDRecorder3D
+    from holomedia.diffraction3d import SlabBPM3D
+    rec = NPDDRecorder3D(24, 24, 0.15, 0.15, t_total=4, n_steps=30)
+    bpm = SlabBPM3D(24, 24, 0.15, 0.15, 0.405, rec.p.thickness, n_z=6)
+    E = (torch.rand(24, 24, dtype=torch.float64) * 0.5 + 0.5).requires_grad_(True)
+    dn = rec(E)
+    recon = bpm(dn)
+    assert recon.shape == (24, 24) and torch.isfinite(recon).all()
+    recon.sum().backward()
+    assert torch.isfinite(E.grad).all() and E.grad.abs().sum() > 0
+    print("3D twin runs OK, recon sum =", float(recon.detach().sum()))
+
+
 if __name__ == "__main__":
     test_kogelnik_peak()
     test_gradients_flow()
     test_optimization_improves()
+    test_checkpointed_forward_matches()
+    test_3d_twin_runs()
     print("ALL SMOKE TESTS PASSED")

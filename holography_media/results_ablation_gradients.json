@@ -1,0 +1,26 @@
+{
+ "fidelity": {
+  "unrolled_time": 0.10314202308654785,
+  "checkpoint_time": 2.613339424133301,
+  "checkpoint_cossim": 0.9771272224546981,
+  "surrogate_time": 0.012899637222290039,
+  "surrogate_cossim": 0.8414229834967043,
+  "surrogate_train_time": 99.45117354393005,
+  "surrogate_fit_mse": 4.441534903695741e-07
+ },
+ "optimization": {
+  "unrolled": {
+   "psnr": 4.779489574959486,
+   "wall": 21.28094244003296
+  },
+  "checkpoint": {
+   "psnr": 4.779489574959486,
+   "wall": 42.27323818206787
+  },
+  "surrogate": {
+   "psnr": 5.083350840721216,
+   "wall": 1.3654272556304932,
+   "offline_train_wall": 99.45117354393005
+  }
+ }
+}
