@@ -1,2 +1,4 @@
 torch>=2.0
 numpy
+matplotlib
+torcwa  # optional: only needed for experiments/rcwa_crosscheck.py

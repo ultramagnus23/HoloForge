@@ -1,0 +1,13 @@
+# Bayfol HX-class at 405 nm -- see paper Table 1 for sources
+# Reference: Fomenko & Berneth, "The Chemistry and Physics of Bayfol HX Film
+# Holographic Photopolymer", Polymers 9(10):472 (2017), PMC6418958.
+D0: 0.025        # um^2/s, from D_ex = 2.5e-10 cm^2/s (Fomenko & Berneth 2017)
+sigma: 0.0092    # um, from sigma^2 = 85 nm^2 (Fomenko & Berneth 2017)
+kappa: 2.0       # calibration target, not a literature value -- see Table 1 caveat
+gamma: 1.0
+dn_max: 6.0e-3   # um, transmission low-f to reflection max range (4.5e-3 to 9e-3)
+k_bleach: 0.2
+alpha_D: 1.0
+shrinkage: 0.025 # "below 3%, depending on composition" (Fomenko & Berneth 2017)
+thickness: 50.0  # um, typical reflection-recording grade (Fomenko & Berneth 2017)
+n0: 1.5

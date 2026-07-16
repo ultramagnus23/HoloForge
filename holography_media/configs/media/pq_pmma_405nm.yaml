@@ -1,0 +1,18 @@
+# PQ/PMMA at 405 nm -- see paper Table 1 for sources
+# Reference: Jeong et al., ACS Omega (2022), solvent-cast PQ/PMMA film.
+# NOTE: PQ/PMMA has no separate "monomer" species (PMMA matrix is pre-polymerized);
+# the diffusing/non-local species is the PQ dye / photoproduct. D0 here stands in
+# for that transport coefficient, several orders of magnitude slower than PVA/AA's
+# monomer diffusion -- this is a real physical distinction, not a placeholder gap.
+# sigma is not separately reported for this system in the sources found; left at
+# the dataclass default order-of-magnitude as an unconfirmed placeholder (flagged).
+D0: 1.24e-6      # um^2/s, from D_PQ = 1.24e-18 m^2/s (Jeong et al. 2022)
+sigma: 0.08      # um -- NOT independently confirmed for PQ/PMMA, see caveat above
+kappa: 2.0       # calibration target, not a literature value -- see Table 1 caveat
+gamma: 1.0
+dn_max: 3.0e-4   # um range 1.5e-4 (two-step thermal) to 3.6e-4 (solvent-cast)
+k_bleach: 0.2
+alpha_D: 1.0
+shrinkage: 0.01  # NOT independently confirmed for this thin-film regime, see Table 1
+thickness: 0.12e3 # um (120 um solvent-cast film, Jeong et al. 2022)
+n0: 1.493        # PMMA bulk index (Jeong et al. 2022)
