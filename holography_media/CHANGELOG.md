@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.4
+- First GPU results for this project (Colab T4; prior passes had no GPU
+  access). Two solver-characterization sweeps, single seed each — NOT the
+  full 5-seed F2/F3 method-comparison rerun (`f2_f3_recovery.py` at paper
+  scale is still unrun; see README TODO).
+- Added a real convergence-threshold early-stop option (`converge_tol`) to
+  `media_in_the_loop` (`holomedia/optimize.py`) — previously the optimizer
+  had no such concept, so there was nothing to sweep. Non-breaking: default
+  `None` preserves the old fixed-iteration behavior exactly.
+- Fixed a GPU-readiness gap: `experiments/f2_f3_recovery.py` and
+  `run_confirm.py` never call `.to(device)` on the `NPDDRecorder`/`SlabBPM`
+  modules, so passing CUDA target tensors would previously not have moved
+  the actual computation to GPU. The new `experiments/gpu_*.py` scripts move
+  both modules explicitly.
+- `experiments/gpu_npdd_mesh_convergence_sweep.py`: mesh-density sweep
+  (n_x=512/1024/2048, fixed 51.2µm window) found PSNR mesh-independent
+  within 0.04dB and wall-clock flat (~450s) across the range — the GPU run
+  is overhead-bound, not compute-bound, at this problem size. Convergence-
+  threshold sweep (tol=1e-3/1e-4/1e-5) found tol=1e-4 (630 iters, 351s)
+  already matches tol=1e-5's PSNR (1350 iters, 749s) — diminishing returns
+  well before the 800-iter fixed budget used elsewhere.
+  Results: `results/gpu_reruns/npdd_mesh_sweep/results.json`.
+- `experiments/gpu_bpm_wavelength_sweep.py`: one recording at 405nm design,
+  read out at 400-450nm (brackets the paper's stated 405/450nm band). PSNR/DE
+  peak on-design and fall off non-monotonically moving away from it
+  (420nm worse than 435nm) -- consistent with Kogelnik's oscillatory
+  sin^2(nu) detuning response, reported as measured rather than smoothed.
+  Results: `results/gpu_reruns/bpm_wavelength_sweep/results.json`.
+
 ## v0.3
 - Table 1 filled with real literature-cited parameter ranges (PVA/AA, PQ/PMMA,
   Bayfol-class); added `configs/media/pq_pmma_405nm.yaml` and

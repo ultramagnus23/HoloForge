@@ -65,5 +65,35 @@ python experiments/f2_f3_recovery.py   # long; run on GPU, bump SEEDS/N_ITERS
       plus `results_ablation_gradients.json` / `results_rcwa.json` for Figs E/F.
 - [x] v0.2 corrected results (results_prelim*.json, figures/) — NPDD non-local bug fixed, see CHANGELOG
 - [~] GPU-scale rerun (1024+ grid, 800+ iters, 5 seeds) to replace [RESULT-FINAL]
-      markers — confirmation-scale (not full paper-scale) rerun done this pass;
-      see the bullet above for the exact full-scale command/runtime.
+      markers — confirmation-scale (not full paper-scale) rerun done in the
+      CPU-only pass; the FULL 5-seed method-comparison sweep (`f2_f3_recovery.py`
+      at paper scale, driving Figs 2/3's [RESULT-FINAL] markers) still has not
+      been run on GPU — see the bullet above for the exact command. **What HAS
+      been run on GPU** (single seed, solver-characterization scope, not the
+      F2/F3 method comparison): mesh-density + convergence-threshold sweep for
+      the NPDD solver, and a wavelength sweep for the BPM readout — see below.
+- [x] GPU-scale NPDD mesh-density + convergence-threshold sweep —
+      `experiments/gpu_npdd_mesh_convergence_sweep.py`, run on a Colab T4,
+      n_x=1024 paper-scale mesh, 51.2 µm fixed physical window.
+      Results: `results/gpu_reruns/npdd_mesh_sweep/results.json`.
+      - Mesh density (n_x = 512/1024/2048, dx scaled to keep the window fixed,
+        800-iter fixed budget): PSNR is mesh-independent within 0.04 dB
+        (6.65/6.63/6.61 dB) and wall-clock is essentially flat (459/452/445 s)
+        across a 4x resolution range — at this problem size the GPU run is
+        overhead-bound, not compute-bound, so finer mesh is close to free.
+      - Convergence threshold (new `converge_tol` early-stop option added to
+        `media_in_the_loop`; tol swept at fixed n_x=1024): tol=1e-3 stops at
+        iter 320 (174 s, 6.53 dB); tol=1e-4 stops at iter 630 (351 s, 6.63 dB);
+        tol=1e-5 runs to iter 1350 (749 s, 6.63 dB) — tol=1e-4 already matches
+        tol=1e-5's quality at under half the wall-clock, i.e. diminishing
+        returns set in well before the fixed 800-iter budget.
+- [x] GPU-scale BPM wavelength sweep — `experiments/gpu_bpm_wavelength_sweep.py`,
+      run on a Colab T4: one recording at the 405 nm design wavelength
+      (n_x=1024, 800 iters), then readout of the SAME recorded profile at
+      400/405/420/435/450 nm (brackets the paper's stated 405/450 nm band).
+      Results: `results/gpu_reruns/bpm_wavelength_sweep/results.json`.
+      PSNR/DE peak at the 405 nm design point (6.63 dB / 0.589) and fall off
+      away from it, but **non-monotonically** (420 nm: 3.28 dB/0.433 is worse
+      than 435 nm: 3.79 dB/0.516) — consistent with Kogelnik's oscillatory
+      sin²(ν) detuning response rather than a smooth rolloff; reported as
+      observed rather than smoothed into a monotonic story.
