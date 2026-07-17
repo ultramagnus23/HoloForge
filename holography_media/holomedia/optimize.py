@@ -46,8 +46,16 @@ def diffraction_efficiency(recon: torch.Tensor, target_mask: torch.Tensor) -> fl
 def media_in_the_loop(target: torch.Tensor, recorder: NPDDRecorder,
                       bpm: SlabBPM, n_iters: int = 400, lr: float = 5e-2,
                       dose_budget: float = 1.0, seed: int = 0,
-                      log_every: int = 50, verbose: bool = True):
-    """Optimize exposure through the differentiable recording twin (ours)."""
+                      log_every: int = 50, verbose: bool = True,
+                      converge_tol: float | None = None, patience: int = 3):
+    """Optimize exposure through the differentiable recording twin (ours).
+
+    converge_tol : if set, stop early once the relative change in loss
+        between successive `log_every`-spaced checks stays below
+        `converge_tol` for `patience` consecutive checks. Default None
+        preserves the original always-run-n_iters behavior exactly.
+        `history`'s final (it, loss) entry reports the stopping iteration.
+    """
     torch.manual_seed(seed)
     device = target.device
     # softplus-parameterized exposure, initialized near uniform dose
@@ -56,6 +64,8 @@ def media_in_the_loop(target: torch.Tensor, recorder: NPDDRecorder,
     opt = torch.optim.Adam([theta], lr=lr)
     t_norm = target / (target.sum() + 1e-12)
     history = []
+    prev_loss = None
+    stable_count = 0
 
     for it in range(n_iters):
         opt.zero_grad()
@@ -68,9 +78,16 @@ def media_in_the_loop(target: torch.Tensor, recorder: NPDDRecorder,
         loss.backward()
         opt.step()
         if it % log_every == 0:
-            history.append((it, float(loss.detach())))
+            cur = float(loss.detach())
+            history.append((it, cur))
             if verbose:
-                print(f"  [media-in-the-loop] iter {it:4d}  loss {float(loss):.4e}")
+                print(f"  [media-in-the-loop] iter {it:4d}  loss {cur:.4e}")
+            if converge_tol is not None and prev_loss is not None:
+                rel_change = abs(prev_loss - cur) / (abs(prev_loss) + 1e-12)
+                stable_count = stable_count + 1 if rel_change < converge_tol else 0
+                if stable_count >= patience:
+                    break
+            prev_loss = cur
 
     with torch.no_grad():
         E = dose_project(torch.nn.functional.softplus(theta) + 1e-6, dose_budget)
