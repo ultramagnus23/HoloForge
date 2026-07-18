@@ -91,8 +91,13 @@ class SlabBPM(torch.nn.Module):
         fringes (slant=0) shrinkage correctly has almost no effect -- the
         detuning is a slanted/reflection-geometry phenomenon (Kogelnik;
         photopolymer shrinkage literature).
+
+        dn_profile may carry leading batch dimensions (..., n_x); a plane
+        wave is then initialized per batch row via dn_profile.shape rather
+        than the fixed self.n_x, so many gratings can be propagated in one
+        vectorized call.
         """
-        E = (torch.ones(self.n_x, dtype=self.cdtype, device=dn_profile.device)
+        E = (torch.ones(dn_profile.shape, dtype=self.cdtype, device=dn_profile.device)
              if incident is None else incident.to(self.cdtype))
         dz_eff = self.dz * (1.0 - shrinkage)
         tan_phi = math.tan(math.radians(slant_deg))

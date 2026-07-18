@@ -112,8 +112,13 @@ class NPDDRecorder(torch.nn.Module):
         Uses the harmonic-mean effective D for stability; the spatial
         variation of D is second-order for the regimes studied and is
         ablated in experiments/ablation_variableD.py.
+
+        Mean is taken over the last (spatial) axis only, keepdim=True, so
+        a batched (B, n_x) input gets one D_bar per batch row rather than
+        one pooled across the whole batch -- for unbatched (n_x,) input
+        this reduces to the original scalar mean exactly.
         """
-        D_bar = D_eff.mean()
+        D_bar = D_eff.mean(dim=-1, keepdim=True)
         decay = torch.exp(-D_bar * self.k2 * self.dt)
         return torch.fft.ifft(torch.fft.fft(u) * decay).real
 
