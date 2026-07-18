@@ -10,7 +10,7 @@ checked against this at the bottom.
 |---|---|
 | `npdd.py` | 1D `NPDDRecorder`: differentiable NPDD reaction-diffusion twin (spectral IMEX, `forward` unrolled + `forward_checkpointed` discrete-adjoint), `MediumParams` dataclass, analytic `small_signal_mtf`/`predicted_cliff` (Eq. 5). Batching support (per-row `D_eff.mean(dim=-1)`) added this session. |
 | `diffraction.py` | `kogelnik_de` closed form + `SlabBPM` split-step scalar readout. Batching support (shape-derived plane-wave init) added this session. |
-| `optimize.py` | Method registry: `media_in_the_loop`, `media_blind_sgd`, `media_blind_gs`, `oracle_ideal` + batched counterparts (`*_batched`), `psnr`/`psnr_batch`, `diffraction_efficiency`/`_batch`. Seed-init bug fixed this session (`_seeded_init_theta`). **This is the file Phase 2's method registry (M1-M5b) will extend.** |
+| `optimize.py` | M1-M5b methods: `media_blind_gs`(M1), `media_blind_sgd`(M2), `linear_precomp`(M3, new), `media_in_the_loop`(M4), `oracle_ideal`(M5a), `oracle_unconstrained`(M5b, new) + batched counterparts of M1/M2/M4/M5a, `contrast_project` (new real contrast-headroom constraint), `psnr`/`psnr_batch`, `diffraction_efficiency`/`_batch`. Seed-init bug fixed (`_seeded_init_theta`). |
 | `npdd3d.py`, `diffraction3d.py` | 3D (x,y,z) showcase generalizations, kept as separate modules from the 1D pipeline by design (see file docstrings) so the tested 1D path is untouched. Used only by `experiments/showcase_3d.py`. Not part of the paper's main (2D x,z) results. |
 | `surrogate.py` | Small 1D CNN `DnSurrogate`, offline-trained cheap gradient source. Used only by `experiments/ablation_gradients.py`. |
 | `__init__.py` | Exports the 1D `optimize.py`/`npdd.py`/`diffraction.py` API only. 3D and surrogate modules are imported directly by their scripts, not re-exported. |
@@ -25,7 +25,10 @@ checked against this at the bottom.
 | `f1_validate_twin.py` | Twin-vs-literature validation scaffold (Fig. 1 panels a/b/c). Writes `results_f1.pt`. No literature overlay yet (paywalled figures, see `data/literature/README.md`). | n_x=1024, dx=50nm |
 | `f2_panel.py` | Qualitative reconstruction panel (Fig. D), one run, no seed sweep. | n_x=256 |
 | `f2_f3_recovery.py` | CPU-scale method-comparison sweep (5 axes x values x 4 targets x seeds). `SEEDS=[0,1,2]`, comment says "bump to 5 for the paper." | n_x=512 default |
-| `gpu_f2_f3_recovery.py` | Batched GPU version of the above at paper scale (`probe`/`full` modes). **Not yet run on GPU — only structurally smoke-tested on CPU at tiny scale.** | n_x=1024, n_iters=800, seeds=[0..4] |
+| `gpu_f2_f3_recovery.py` | Batched GPU version of the above at paper scale (`probe`/`full` modes). **Not yet run on GPU — only structurally smoke-tested on CPU at tiny scale.** Superseded by `run_manifest.py`/`manifest.py` for Phase 3's actual E1-E6 runs (this script predates the manifest system and is not resumable/checkpointed the same way). | n_x=1024, n_iters=800, seeds=[0..4] |
+| `manifest.py` | Phase 1.1 job-manifest builders: `build_E1_jobs`...`build_E6_jobs`, `build_all_jobs`. Each returns a list of `{experiment_id, method_id, seed, config, config_hash}` dicts. E5's natural-image-slice targets are NOT included until licensed image assets are added under `data/images/` (not fabricated/downloaded by this builder). |
+| `methods.py` | Phase 2 method registry: `run_method(method_id, ...)` uniform dispatch over M1-M5b, used by `run_manifest.py`. |
+| `run_manifest.py` | Phase 1.1/1.2/1.4 resumable CLI runner + unified result schema + `--probe` mode with Gate-1 (40 T4-hr) reporting. `python -m experiments.run_manifest --manifest E1 --max-minutes 170`. Writes `results/{experiment_id}/{config_hash}/{method_id}_seed{N}.json`, atomically, resumable (skips existing files). |
 | `gpu_npdd_mesh_convergence_sweep.py` | Mesh-density + convergence-threshold sweep. Run once on Colab T4, single seed. | n_x up to 2048 |
 | `gpu_bpm_wavelength_sweep.py` | Wavelength-detuning sweep of the BPM readout. Run once on Colab T4, single seed. | n_x=1024 |
 | `ablation_gradients.py` | Gradient-pathway ablation (unrolled/checkpointed-adjoint/surrogate). Run, CPU. | n_x=256, n_steps=150 |
