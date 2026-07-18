@@ -41,7 +41,7 @@ def run_cell(params, tgt):
     out = []
     for s in SEEDS:
         _, ro, _ = media_in_the_loop(tgt, rec, bpm, n_iters=N_ITERS, seed=s, verbose=False)
-        _, rb = media_blind_sgd(tgt, rec, bpm, n_iters=N_ITERS, seed=s)
+        _, rb, _ = media_blind_sgd(tgt, rec, bpm, n_iters=N_ITERS, seed=s)
         _, rg = media_blind_gs(tgt, rec, bpm)
         _, rc = oracle_ideal(tgt, rec, bpm, n_iters=N_ITERS, seed=s)
         out.append(dict(seed=s,

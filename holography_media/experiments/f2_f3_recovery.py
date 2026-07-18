@@ -50,7 +50,7 @@ def run_setting(params, device="cpu"):
         for seed in SEEDS:
             _, r_ours, _ = media_in_the_loop(tgt, rec, bpm, n_iters=N_ITERS,
                                              seed=seed, verbose=False)
-            _, r_blind = media_blind_sgd(tgt, rec, bpm, n_iters=N_ITERS, seed=seed)
+            _, r_blind, _ = media_blind_sgd(tgt, rec, bpm, n_iters=N_ITERS, seed=seed)
             _, r_gs = media_blind_gs(tgt, rec, bpm)
             _, r_orc = oracle_ideal(tgt, rec, bpm, n_iters=N_ITERS, seed=seed)
             rows.append(dict(

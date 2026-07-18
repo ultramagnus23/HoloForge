@@ -1,8 +1,41 @@
-# Pinned definitions (Phase 0.5)
+# Pinned definitions (Phase 0.5, extended in Phase 1.4 with the budget->headroom mapping)
 
 Extracted directly from code (`holomedia/optimize.py`, `npdd.py`,
 `diffraction.py`), not from the paper's prose, so the paper's prose can be
 checked against these rather than the other way around.
+
+## (d) Budget -> contrast-headroom mapping (Phase 1.4 audit finding)
+
+**Before this pass, no mapping existed because no contrast-headroom
+constraint existed at all.** Verified directly: `dose_project(E, budget)`
+rescales `E` so `mean(E) == budget`; since this is a uniform scale factor,
+`max(E)/mean(E)` ("contrast") is invariant to `budget`'s value (checked:
+`dose_project(E, 1.0)`, `dose_project(E, 2.0)`, `dose_project(E, 10.0)` all
+give identical peak/mean for the same `E`). Meanwhile
+`NPDDRecorder.predicted_cliff(budget=B_c)` treats `budget` as the Eq. 5
+contrast-boost ratio $B_c$ used purely analytically to predict $K_c$ — this
+`budget` and `dose_project`'s `budget` are different quantities that happen
+to share a name, and neither the optimizer nor any experiment script ever
+enforced $B_c$ as an actual constraint on the realized exposure. Every
+E1-predecessor run (`run_prelim.py`, `run_prelim2.py`, `run_confirm.py`)
+used `dose_budget=1.0` with **no contrast cap whatsoever** — the optimizer
+was free to produce any peak/mean ratio reachable within its iteration
+budget, silently.
+
+**Mechanism added this pass**: `contrast_project(E, budget, contrast_cap)`
+(`holomedia/optimize.py`) additionally clamps `max(E) <= contrast_cap *
+budget` via iterated clamp-then-renormalize (6 passes converge to the exact
+cap to ~1e-7, verified; differentiable, safe inside the unrolled
+optimization loop). Wired into `media_in_the_loop`, `media_blind_sgd`, and
+`oracle_ideal` as an optional `contrast_cap=None` parameter — `None`
+preserves the exact pre-existing behavior (confirmed: all existing tests
+pass unchanged).
+
+**Budget -> headroom mapping for E1**: `contrast_cap` IS $B_c$ directly —
+passing `contrast_cap=2.0/4.0/8.0` to the three methods above, together with
+`recorder.predicted_cliff(budget=2.0/4.0/8.0)` for the matching analytic
+$K_c$ prediction, is now a real, enforced correspondence rather than two
+unrelated numbers that happen to share a variable name.
 
 ## (a) In-support diffraction efficiency
 
