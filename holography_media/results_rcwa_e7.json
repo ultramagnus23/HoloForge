@@ -1,0 +1,961 @@
+{
+ "cases": [
+  {
+   "K": 2.0,
+   "dn": 0.001,
+   "geometry": "unslanted_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.05328028357779399,
+   "rcwa_t0": 0.9266758561134338,
+   "rcwa_t1": 0.06096940115094185,
+   "abs_deviation": 0.007689117573147858
+  },
+  {
+   "K": 2.0,
+   "dn": 0.001,
+   "geometry": "unslanted_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.05328028357779399,
+   "rcwa_t0": 0.9271776676177979,
+   "rcwa_t1": 0.06058431416749954,
+   "abs_deviation": 0.007304030589705551
+  },
+  {
+   "K": 2.0,
+   "dn": 0.001,
+   "geometry": "unslanted_normal",
+   "polarization": "ss",
+   "kogelnik": 0.029500674412189995,
+   "rcwa_t0": 0.8729706406593323,
+   "rcwa_t1": 0.026129769161343575,
+   "abs_deviation": 0.0033709052508464205
+  },
+  {
+   "K": 2.0,
+   "dn": 0.001,
+   "geometry": "unslanted_normal",
+   "polarization": "pp",
+   "kogelnik": 0.029500674412189995,
+   "rcwa_t0": 0.8733845949172974,
+   "rcwa_t1": 0.026051774621009827,
+   "abs_deviation": 0.0034488997911801683
+  },
+  {
+   "K": 2.0,
+   "dn": 0.001,
+   "geometry": "slanted20_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.05328028357779399,
+   "rcwa_t0": 0.9983668923377991,
+   "rcwa_t1": 0.0006987000815570354,
+   "abs_deviation": 0.052581583496236955
+  },
+  {
+   "K": 2.0,
+   "dn": 0.001,
+   "geometry": "slanted20_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.05328028357779399,
+   "rcwa_t0": 0.998410165309906,
+   "rcwa_t1": 0.0006924024783074856,
+   "abs_deviation": 0.052587881099486505
+  },
+  {
+   "K": 2.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.5298241573477606,
+   "rcwa_t0": 0.41161027550697327,
+   "rcwa_t1": 0.47113725543022156,
+   "abs_deviation": 0.058686901917539
+  },
+  {
+   "K": 2.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.5298241573477606,
+   "rcwa_t0": 0.41548606753349304,
+   "rcwa_t1": 0.4689384996891022,
+   "abs_deviation": 0.06088565765865839
+  },
+  {
+   "K": 2.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_normal",
+   "polarization": "ss",
+   "kogelnik": 0.28495996416113994,
+   "rcwa_t0": 0.47510358691215515,
+   "rcwa_t1": 0.1985546052455902,
+   "abs_deviation": 0.08640535891554973
+  },
+  {
+   "K": 2.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_normal",
+   "polarization": "pp",
+   "kogelnik": 0.28495996416113994,
+   "rcwa_t0": 0.4769321084022522,
+   "rcwa_t1": 0.19830621778964996,
+   "abs_deviation": 0.08665374637148998
+  },
+  {
+   "K": 2.0,
+   "dn": 0.0035,
+   "geometry": "slanted20_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.5298241573477606,
+   "rcwa_t0": 0.985784649848938,
+   "rcwa_t1": 0.00848358403891325,
+   "abs_deviation": 0.5213405733088473
+  },
+  {
+   "K": 2.0,
+   "dn": 0.0035,
+   "geometry": "slanted20_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.5298241573477606,
+   "rcwa_t0": 0.9859234690666199,
+   "rcwa_t1": 0.008403847925364971,
+   "abs_deviation": 0.5214203094223956
+  },
+  {
+   "K": 2.0,
+   "dn": 0.006,
+   "geometry": "unslanted_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.9702862724465928,
+   "rcwa_t0": 0.0798167884349823,
+   "rcwa_t1": 0.6896167993545532,
+   "abs_deviation": 0.2806694730920396
+  },
+  {
+   "K": 2.0,
+   "dn": 0.006,
+   "geometry": "unslanted_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.9702862724465928,
+   "rcwa_t0": 0.08151035010814667,
+   "rcwa_t1": 0.6903157830238342,
+   "abs_deviation": 0.2799704894227586
+  },
+  {
+   "K": 2.0,
+   "dn": 0.006,
+   "geometry": "unslanted_normal",
+   "polarization": "ss",
+   "kogelnik": 0.483144213078807,
+   "rcwa_t0": 0.48227864503860474,
+   "rcwa_t1": 0.19665317237377167,
+   "abs_deviation": 0.28649104070503534
+  },
+  {
+   "K": 2.0,
+   "dn": 0.006,
+   "geometry": "unslanted_normal",
+   "polarization": "pp",
+   "kogelnik": 0.483144213078807,
+   "rcwa_t0": 0.4803696572780609,
+   "rcwa_t1": 0.1979701966047287,
+   "abs_deviation": 0.2851740164740783
+  },
+  {
+   "K": 2.0,
+   "dn": 0.006,
+   "geometry": "slanted20_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.9702862724465928,
+   "rcwa_t0": 0.959633469581604,
+   "rcwa_t1": 0.02439090982079506,
+   "abs_deviation": 0.9458953626257978
+  },
+  {
+   "K": 2.0,
+   "dn": 0.006,
+   "geometry": "slanted20_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.9702862724465928,
+   "rcwa_t0": 0.9600087404251099,
+   "rcwa_t1": 0.02416973002254963,
+   "abs_deviation": 0.9461165424240432
+  },
+  {
+   "K": 4.0,
+   "dn": 0.001,
+   "geometry": "unslanted_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.053572211566424194,
+   "rcwa_t0": 0.8253830075263977,
+   "rcwa_t1": 0.041364844888448715,
+   "abs_deviation": 0.012207366677975479
+  },
+  {
+   "K": 4.0,
+   "dn": 0.001,
+   "geometry": "unslanted_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.053572211566424194,
+   "rcwa_t0": 0.8315318822860718,
+   "rcwa_t1": 0.040505826473236084,
+   "abs_deviation": 0.01306638509318811
+  },
+  {
+   "K": 4.0,
+   "dn": 0.001,
+   "geometry": "unslanted_normal",
+   "polarization": "ss",
+   "kogelnik": 0.0016466138031005946,
+   "rcwa_t0": 0.9281240701675415,
+   "rcwa_t1": 0.001467547845095396,
+   "abs_deviation": 0.00017906595800519856
+  },
+  {
+   "K": 4.0,
+   "dn": 0.001,
+   "geometry": "unslanted_normal",
+   "polarization": "pp",
+   "kogelnik": 0.0016466138031005946,
+   "rcwa_t0": 0.9281949400901794,
+   "rcwa_t1": 0.0014304292853921652,
+   "abs_deviation": 0.00021618451770842942
+  },
+  {
+   "K": 4.0,
+   "dn": 0.001,
+   "geometry": "slanted20_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.053572211566424194,
+   "rcwa_t0": 0.8608392477035522,
+   "rcwa_t1": 9.561796105117537e-06,
+   "abs_deviation": 0.053562649770319076
+  },
+  {
+   "K": 4.0,
+   "dn": 0.001,
+   "geometry": "slanted20_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.053572211566424194,
+   "rcwa_t0": 0.8665344715118408,
+   "rcwa_t1": 8.54207610245794e-06,
+   "abs_deviation": 0.053563669490321736
+  },
+  {
+   "K": 4.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.5320915419171842,
+   "rcwa_t0": 0.46083301305770874,
+   "rcwa_t1": 0.4591899514198303,
+   "abs_deviation": 0.0729015904973539
+  },
+  {
+   "K": 4.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.5320915419171842,
+   "rcwa_t0": 0.47158265113830566,
+   "rcwa_t1": 0.4503154754638672,
+   "abs_deviation": 0.08177606645331703
+  },
+  {
+   "K": 4.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_normal",
+   "polarization": "ss",
+   "kogelnik": 0.01852678581673954,
+   "rcwa_t0": 0.8835859894752502,
+   "rcwa_t1": 0.014649253338575363,
+   "abs_deviation": 0.003877532478164178
+  },
+  {
+   "K": 4.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_normal",
+   "polarization": "pp",
+   "kogelnik": 0.01852678581673954,
+   "rcwa_t0": 0.8847112655639648,
+   "rcwa_t1": 0.01436279620975256,
+   "abs_deviation": 0.004163989606986981
+  },
+  {
+   "K": 4.0,
+   "dn": 0.0035,
+   "geometry": "slanted20_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.5320915419171842,
+   "rcwa_t0": 0.8544086217880249,
+   "rcwa_t1": 9.459895227337256e-05,
+   "abs_deviation": 0.5319969429649108
+  },
+  {
+   "K": 4.0,
+   "dn": 0.0035,
+   "geometry": "slanted20_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.5320915419171842,
+   "rcwa_t0": 0.8596876263618469,
+   "rcwa_t1": 9.419659909326583e-05,
+   "abs_deviation": 0.531997345318091
+  },
+  {
+   "K": 4.0,
+   "dn": 0.006,
+   "geometry": "unslanted_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.9715945111284757,
+   "rcwa_t0": 0.03209671378135681,
+   "rcwa_t1": 0.9472808241844177,
+   "abs_deviation": 0.024313686944058
+  },
+  {
+   "K": 4.0,
+   "dn": 0.006,
+   "geometry": "unslanted_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.9715945111284757,
+   "rcwa_t0": 0.03987741097807884,
+   "rcwa_t1": 0.9388085007667542,
+   "abs_deviation": 0.032786010361721574
+  },
+  {
+   "K": 4.0,
+   "dn": 0.006,
+   "geometry": "unslanted_normal",
+   "polarization": "ss",
+   "kogelnik": 0.04431896975782209,
+   "rcwa_t0": 0.8314561247825623,
+   "rcwa_t1": 0.025216680020093918,
+   "abs_deviation": 0.01910228973772817
+  },
+  {
+   "K": 4.0,
+   "dn": 0.006,
+   "geometry": "unslanted_normal",
+   "polarization": "pp",
+   "kogelnik": 0.04431896975782209,
+   "rcwa_t0": 0.8323370814323425,
+   "rcwa_t1": 0.02538137137889862,
+   "abs_deviation": 0.01893759837892347
+  },
+  {
+   "K": 4.0,
+   "dn": 0.006,
+   "geometry": "slanted20_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.9715945111284757,
+   "rcwa_t0": 0.8426790833473206,
+   "rcwa_t1": 0.0002215568965766579,
+   "abs_deviation": 0.9713729542318991
+  },
+  {
+   "K": 4.0,
+   "dn": 0.006,
+   "geometry": "slanted20_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.9715945111284757,
+   "rcwa_t0": 0.8464605808258057,
+   "rcwa_t1": 0.0002179911098210141,
+   "abs_deviation": 0.9713765200186547
+  },
+  {
+   "K": 6.0,
+   "dn": 0.001,
+   "geometry": "unslanted_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.05406593111364291,
+   "rcwa_t0": 0.8292731642723083,
+   "rcwa_t1": 0.04266352951526642,
+   "abs_deviation": 0.011402401598376494
+  },
+  {
+   "K": 6.0,
+   "dn": 0.001,
+   "geometry": "unslanted_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.05406593111364291,
+   "rcwa_t0": 0.8427618145942688,
+   "rcwa_t1": 0.04079638049006462,
+   "abs_deviation": 0.013269550623578291
+  },
+  {
+   "K": 6.0,
+   "dn": 0.001,
+   "geometry": "unslanted_normal",
+   "polarization": "ss",
+   "kogelnik": 0.00026100875938379604,
+   "rcwa_t0": 0.9314317107200623,
+   "rcwa_t1": 0.00015774037456139922,
+   "abs_deviation": 0.00010326838482239682
+  },
+  {
+   "K": 6.0,
+   "dn": 0.001,
+   "geometry": "unslanted_normal",
+   "polarization": "pp",
+   "kogelnik": 0.00026100875938379604,
+   "rcwa_t0": 0.931647777557373,
+   "rcwa_t1": 0.0001542616228107363,
+   "abs_deviation": 0.00010674713657305975
+  },
+  {
+   "K": 6.0,
+   "dn": 0.001,
+   "geometry": "slanted20_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.05406593111364291,
+   "rcwa_t0": 0.8652276396751404,
+   "rcwa_t1": 0.0017296213191002607,
+   "abs_deviation": 0.05233630979454265
+  },
+  {
+   "K": 6.0,
+   "dn": 0.001,
+   "geometry": "slanted20_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.05406593111364291,
+   "rcwa_t0": 0.8775961399078369,
+   "rcwa_t1": 0.0016568165738135576,
+   "abs_deviation": 0.052409114539829355
+  },
+  {
+   "K": 6.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.5359114832697319,
+   "rcwa_t0": 0.453010231256485,
+   "rcwa_t1": 0.46939241886138916,
+   "abs_deviation": 0.06651906440834277
+  },
+  {
+   "K": 6.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.5359114832697319,
+   "rcwa_t0": 0.47808605432510376,
+   "rcwa_t1": 0.44891735911369324,
+   "abs_deviation": 0.08699412415603869
+  },
+  {
+   "K": 6.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_normal",
+   "polarization": "ss",
+   "kogelnik": 0.0030554348189863545,
+   "rcwa_t0": 0.9190018177032471,
+   "rcwa_t1": 0.001681940513662994,
+   "abs_deviation": 0.0013734943053233606
+  },
+  {
+   "K": 6.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_normal",
+   "polarization": "pp",
+   "kogelnik": 0.0030554348189863545,
+   "rcwa_t0": 0.9196190237998962,
+   "rcwa_t1": 0.0016648686723783612,
+   "abs_deviation": 0.0013905661466079933
+  },
+  {
+   "K": 6.0,
+   "dn": 0.0035,
+   "geometry": "slanted20_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.5359114832697319,
+   "rcwa_t0": 0.8479757905006409,
+   "rcwa_t1": 0.019941506907343864,
+   "abs_deviation": 0.5159699763623881
+  },
+  {
+   "K": 6.0,
+   "dn": 0.0035,
+   "geometry": "slanted20_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.5359114832697319,
+   "rcwa_t0": 0.8608558773994446,
+   "rcwa_t1": 0.01920701190829277,
+   "abs_deviation": 0.5167044713614392
+  },
+  {
+   "K": 6.0,
+   "dn": 0.006,
+   "geometry": "unslanted_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.9737346413138919,
+   "rcwa_t0": 0.027745557948946953,
+   "rcwa_t1": 0.9459874629974365,
+   "abs_deviation": 0.027747178316455345
+  },
+  {
+   "K": 6.0,
+   "dn": 0.006,
+   "geometry": "unslanted_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.9737346413138919,
+   "rcwa_t0": 0.04560434818267822,
+   "rcwa_t1": 0.9286755323410034,
+   "abs_deviation": 0.04505910897288845
+  },
+  {
+   "K": 6.0,
+   "dn": 0.006,
+   "geometry": "unslanted_normal",
+   "polarization": "ss",
+   "kogelnik": 0.00809965608875982,
+   "rcwa_t0": 0.8977041840553284,
+   "rcwa_t1": 0.0035765718203037977,
+   "abs_deviation": 0.0045230842684560214
+  },
+  {
+   "K": 6.0,
+   "dn": 0.006,
+   "geometry": "unslanted_normal",
+   "polarization": "pp",
+   "kogelnik": 0.00809965608875982,
+   "rcwa_t0": 0.8990028500556946,
+   "rcwa_t1": 0.0036525495816022158,
+   "abs_deviation": 0.004447106507157603
+  },
+  {
+   "K": 6.0,
+   "dn": 0.006,
+   "geometry": "slanted20_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.9737346413138919,
+   "rcwa_t0": 0.818536102771759,
+   "rcwa_t1": 0.05037742480635643,
+   "abs_deviation": 0.9233572165075354
+  },
+  {
+   "K": 6.0,
+   "dn": 0.006,
+   "geometry": "slanted20_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.9737346413138919,
+   "rcwa_t0": 0.8319584131240845,
+   "rcwa_t1": 0.049097735434770584,
+   "abs_deviation": 0.9246369058791213
+  },
+  {
+   "K": 8.0,
+   "dn": 0.001,
+   "geometry": "unslanted_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.054772623291762766,
+   "rcwa_t0": 0.9169727563858032,
+   "rcwa_t1": 0.06221789866685867,
+   "abs_deviation": 0.007445275375095907
+  },
+  {
+   "K": 8.0,
+   "dn": 0.001,
+   "geometry": "unslanted_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.054772623291762766,
+   "rcwa_t0": 0.9290955662727356,
+   "rcwa_t1": 0.05417493358254433,
+   "abs_deviation": 0.0005976897092184394
+  },
+  {
+   "K": 8.0,
+   "dn": 0.001,
+   "geometry": "unslanted_normal",
+   "polarization": "ss",
+   "kogelnik": 0.00011773018488852667,
+   "rcwa_t0": 0.9320062398910522,
+   "rcwa_t1": 4.3151583668077365e-05,
+   "abs_deviation": 7.457860122044931e-05
+  },
+  {
+   "K": 8.0,
+   "dn": 0.001,
+   "geometry": "unslanted_normal",
+   "polarization": "pp",
+   "kogelnik": 0.00011773018488852667,
+   "rcwa_t0": 0.9320072531700134,
+   "rcwa_t1": 4.2034091165987775e-05,
+   "abs_deviation": 7.56960937225389e-05
+  },
+  {
+   "K": 8.0,
+   "dn": 0.001,
+   "geometry": "slanted20_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.054772623291762766,
+   "rcwa_t0": 0.9866645932197571,
+   "rcwa_t1": 0.00016675218648742884,
+   "abs_deviation": 0.05460587110527534
+  },
+  {
+   "K": 8.0,
+   "dn": 0.001,
+   "geometry": "slanted20_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.054772623291762766,
+   "rcwa_t0": 0.9890681505203247,
+   "rcwa_t1": 0.00015005016757640988,
+   "abs_deviation": 0.054622573124186356
+  },
+  {
+   "K": 8.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.5413470227331263,
+   "rcwa_t0": 0.37877747416496277,
+   "rcwa_t1": 0.5289619565010071,
+   "abs_deviation": 0.012385066232119213
+  },
+  {
+   "K": 8.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.5413470227331263,
+   "rcwa_t0": 0.43905341625213623,
+   "rcwa_t1": 0.4899856448173523,
+   "abs_deviation": 0.051361377915774
+  },
+  {
+   "K": 8.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_normal",
+   "polarization": "ss",
+   "kogelnik": 0.0014258129180687179,
+   "rcwa_t0": 0.925284743309021,
+   "rcwa_t1": 0.0004865613882429898,
+   "abs_deviation": 0.0009392515298257281
+  },
+  {
+   "K": 8.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_normal",
+   "polarization": "pp",
+   "kogelnik": 0.0014258129180687179,
+   "rcwa_t0": 0.9257034659385681,
+   "rcwa_t1": 0.00048010077443905175,
+   "abs_deviation": 0.0009457121436296661
+  },
+  {
+   "K": 8.0,
+   "dn": 0.0035,
+   "geometry": "slanted20_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.5413470227331263,
+   "rcwa_t0": 0.985724151134491,
+   "rcwa_t1": 0.0014642730820924044,
+   "abs_deviation": 0.5398827496510339
+  },
+  {
+   "K": 8.0,
+   "dn": 0.0035,
+   "geometry": "slanted20_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.5413470227331263,
+   "rcwa_t0": 0.9880018830299377,
+   "rcwa_t1": 0.0013220711844041944,
+   "abs_deviation": 0.5400249515487221
+  },
+  {
+   "K": 8.0,
+   "dn": 0.006,
+   "geometry": "unslanted_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.9766410131529981,
+   "rcwa_t0": 0.015950890257954597,
+   "rcwa_t1": 0.8321495652198792,
+   "abs_deviation": 0.14449144793311897
+  },
+  {
+   "K": 8.0,
+   "dn": 0.006,
+   "geometry": "unslanted_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.9766410131529981,
+   "rcwa_t0": 0.04098355770111084,
+   "rcwa_t1": 0.835157036781311,
+   "abs_deviation": 0.14148397637168708
+  },
+  {
+   "K": 8.0,
+   "dn": 0.006,
+   "geometry": "unslanted_normal",
+   "polarization": "ss",
+   "kogelnik": 0.004083559855707667,
+   "rcwa_t0": 0.9126690030097961,
+   "rcwa_t1": 0.0011889974121004343,
+   "abs_deviation": 0.0028945624436072324
+  },
+  {
+   "K": 8.0,
+   "dn": 0.006,
+   "geometry": "unslanted_normal",
+   "polarization": "pp",
+   "kogelnik": 0.004083559855707667,
+   "rcwa_t0": 0.9145681262016296,
+   "rcwa_t1": 0.001209585927426815,
+   "abs_deviation": 0.0028739739282808516
+  },
+  {
+   "K": 8.0,
+   "dn": 0.006,
+   "geometry": "slanted20_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.9766410131529981,
+   "rcwa_t0": 0.9865485429763794,
+   "rcwa_t1": 0.0014435939956456423,
+   "abs_deviation": 0.9751974191573525
+  },
+  {
+   "K": 8.0,
+   "dn": 0.006,
+   "geometry": "slanted20_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.9766410131529981,
+   "rcwa_t0": 0.9881352186203003,
+   "rcwa_t1": 0.001568805892020464,
+   "abs_deviation": 0.9750722072609777
+  },
+  {
+   "K": 12.0,
+   "dn": 0.001,
+   "geometry": "unslanted_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.056897465029803376,
+   "rcwa_t0": 0.8355962038040161,
+   "rcwa_t1": 0.048229798674583435,
+   "abs_deviation": 0.008667666355219941
+  },
+  {
+   "K": 12.0,
+   "dn": 0.001,
+   "geometry": "unslanted_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.056897465029803376,
+   "rcwa_t0": 0.8854591846466064,
+   "rcwa_t1": 0.038926392793655396,
+   "abs_deviation": 0.01797107223614798
+  },
+  {
+   "K": 12.0,
+   "dn": 0.001,
+   "geometry": "unslanted_normal",
+   "polarization": "ss",
+   "kogelnik": 8.763939946050025e-07,
+   "rcwa_t0": 0.932094156742096,
+   "rcwa_t1": 1.127882910623157e-06,
+   "abs_deviation": 2.5148891601815443e-07
+  },
+  {
+   "K": 12.0,
+   "dn": 0.001,
+   "geometry": "unslanted_normal",
+   "polarization": "pp",
+   "kogelnik": 8.763939946050025e-07,
+   "rcwa_t0": 0.9319140315055847,
+   "rcwa_t1": 1.2321308986429358e-06,
+   "abs_deviation": 3.557369040379333e-07
+  },
+  {
+   "K": 12.0,
+   "dn": 0.001,
+   "geometry": "slanted20_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.056897465029803376,
+   "rcwa_t0": 0.8792555332183838,
+   "rcwa_t1": 0.0001190198672702536,
+   "abs_deviation": 0.05677844516253312
+  },
+  {
+   "K": 12.0,
+   "dn": 0.001,
+   "geometry": "slanted20_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.056897465029803376,
+   "rcwa_t0": 0.9221484661102295,
+   "rcwa_t1": 9.718323417473584e-05,
+   "abs_deviation": 0.05680028179562864
+  },
+  {
+   "K": 12.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.5574629817127298,
+   "rcwa_t0": 0.4113168716430664,
+   "rcwa_t1": 0.5013132095336914,
+   "abs_deviation": 0.05614977217903838
+  },
+  {
+   "K": 12.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.5574629817127298,
+   "rcwa_t0": 0.525022566318512,
+   "rcwa_t1": 0.41431725025177,
+   "abs_deviation": 0.14314573146095977
+  },
+  {
+   "K": 12.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_normal",
+   "polarization": "ss",
+   "kogelnik": 9.943146084620938e-06,
+   "rcwa_t0": 0.9283950328826904,
+   "rcwa_t1": 1.2219157724757679e-05,
+   "abs_deviation": 2.2760116401367405e-06
+  },
+  {
+   "K": 12.0,
+   "dn": 0.0035,
+   "geometry": "unslanted_normal",
+   "polarization": "pp",
+   "kogelnik": 9.943146084620938e-06,
+   "rcwa_t0": 0.9300537705421448,
+   "rcwa_t1": 1.3911570931668393e-05,
+   "abs_deviation": 3.968424847047455e-06
+  },
+  {
+   "K": 12.0,
+   "dn": 0.0035,
+   "geometry": "slanted20_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.5574629817127298,
+   "rcwa_t0": 0.878629207611084,
+   "rcwa_t1": 0.0016891186824068427,
+   "abs_deviation": 0.555773863030323
+  },
+  {
+   "K": 12.0,
+   "dn": 0.0035,
+   "geometry": "slanted20_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.5574629817127298,
+   "rcwa_t0": 0.9214483499526978,
+   "rcwa_t1": 0.0013100712094455957,
+   "abs_deviation": 0.5561529105032842
+  },
+  {
+   "K": 12.0,
+   "dn": 0.006,
+   "geometry": "unslanted_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.984289179900284,
+   "rcwa_t0": 0.013594930991530418,
+   "rcwa_t1": 0.9052262306213379,
+   "abs_deviation": 0.07906294927894608
+  },
+  {
+   "K": 12.0,
+   "dn": 0.006,
+   "geometry": "unslanted_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.984289179900284,
+   "rcwa_t0": 0.09221618622541428,
+   "rcwa_t1": 0.8555618524551392,
+   "abs_deviation": 0.1287273274451448
+  },
+  {
+   "K": 12.0,
+   "dn": 0.006,
+   "geometry": "unslanted_normal",
+   "polarization": "ss",
+   "kogelnik": 2.459085058201872e-05,
+   "rcwa_t0": 0.9227889180183411,
+   "rcwa_t1": 2.8298709366936237e-05,
+   "abs_deviation": 3.707858784917518e-06
+  },
+  {
+   "K": 12.0,
+   "dn": 0.006,
+   "geometry": "unslanted_normal",
+   "polarization": "pp",
+   "kogelnik": 2.459085058201872e-05,
+   "rcwa_t0": 0.9246138334274292,
+   "rcwa_t1": 3.460356674622744e-05,
+   "abs_deviation": 1.0012716164208725e-05
+  },
+  {
+   "K": 12.0,
+   "dn": 0.006,
+   "geometry": "slanted20_bragg",
+   "polarization": "ss",
+   "kogelnik": 0.984289179900284,
+   "rcwa_t0": 0.8765599727630615,
+   "rcwa_t1": 0.0058328392915427685,
+   "abs_deviation": 0.9784563406087412
+  },
+  {
+   "K": 12.0,
+   "dn": 0.006,
+   "geometry": "slanted20_bragg",
+   "polarization": "pp",
+   "kogelnik": 0.984289179900284,
+   "rcwa_t0": 0.9192508459091187,
+   "rcwa_t1": 0.004442139528691769,
+   "abs_deviation": 0.9798470403715922
+  }
+ ],
+ "max_abs_deviation": 0.9798470403715922,
+ "n_cases": 90,
+ "n_valid": 90,
+ "by_geometry": {
+  "unslanted_bragg": {
+   "mean": 0.06582458522832045,
+   "max": 0.2806694730920396,
+   "min": 0.0005976897092184394,
+   "n": 30
+  },
+  "unslanted_normal": {
+   "mean": 0.027259641397072654,
+   "max": 0.28649104070503534,
+   "min": 2.5148891601815443e-07,
+   "n": 30
+  },
+  "slanted20_bragg": {
+   "mean": 0.5154146993978503,
+   "max": 0.9798470403715922,
+   "min": 0.05233630979454265,
+   "n": 30
+  }
+ },
+ "K_values": [
+  2.0,
+  4.0,
+  6.0,
+  8.0,
+  12.0
+ ],
+ "dn_values": [
+  0.001,
+  0.0035,
+  0.006
+ ],
+ "geometries": [
+  {
+   "name": "unslanted_bragg",
+   "slant_deg": 0.0,
+   "incidence": "bragg"
+  },
+  {
+   "name": "unslanted_normal",
+   "slant_deg": 0.0,
+   "incidence": "normal"
+  },
+  {
+   "name": "slanted20_bragg",
+   "slant_deg": 20.0,
+   "incidence": "bragg"
+  }
+ ],
+ "polarizations": [
+  "ss",
+  "pp"
+ ],
+ "caveat": "E7 characterizes READOUT-side scalar-vs-vector error; the cliff (E1) is a RECORDING-side phenomenon (Eq. 5). Readout error moves absolute PSNRs more than paired (M4-M2) gains -- this grid scopes validity, it does not itself validate/invalidate the cliff-vs-budget result."
+}
