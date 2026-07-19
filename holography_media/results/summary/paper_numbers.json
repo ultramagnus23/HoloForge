@@ -1,0 +1,28 @@
+{
+ "n_result_files": 0,
+ "experiments_present": [],
+ "per_config": {},
+ "e1_headroom_closure": [
+  {
+   "budget": 2.0,
+   "status": "no_data"
+  },
+  {
+   "budget": 4.0,
+   "status": "no_data"
+  },
+  {
+   "budget": 8.0,
+   "status": "no_data"
+  }
+ ],
+ "sub_cliff_non_monotonicity": {
+  "status": "blocked_pending_phase3",
+  "reason": "Old values (results_prelim.json) were produced under the seed-init bug -- every 'seed' was one bit-identical trajectory, so no error bars can be computed retroactively. This question needs real multi-seed E1 data at K=0.98/1.96/2.62, which does not exist yet.",
+  "old_values_no_error_bars": {
+   "0.98": 1.6458,
+   "1.96": 0.9481,
+   "2.62": 2.374
+  }
+ }
+}
