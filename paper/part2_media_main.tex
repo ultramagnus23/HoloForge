@@ -6,16 +6,38 @@
 %
 % Build:  pdflatex part2_media_main.tex  (x2 for references)
 %
-% NOTE ON NUMBERS: every quantitative value in this draft is taken verbatim
-% from ../holography_media/results_prelim.json (Exp A, cliff test, rerun
-% after the NPDD non-local-term fix, see ../holography_media/CHANGELOG.md
-% v0.2) and ../holography_media/results_prelim2.json (high-K sigma probe and
-% shrinkage sweep). These are CPU-scale preliminary runs (n_x=256, 100 IMEX
-% steps, 150 Adam iterations, 2 seeds) — see Sec. 5 and the Limitations
-% section for exactly what a GPU-scale confirmation run still owes.
+% NOTE ON NUMBERS: the cliff-test table and CPU-scale headline numbers in
+% Sec. 5 are taken verbatim from ../holography_media/results_prelim.json
+% (Exp A, cliff test, rerun after the NPDD non-local-term fix, see
+% ../holography_media/CHANGELOG.md v0.2) and results_prelim2.json (high-K
+% sigma probe and shrinkage sweep). These are CPU-scale preliminary runs
+% (n_x=256, 100 IMEX steps, 150 Adam iterations, "2 seeds").
+%
+% SEED CAVEAT (added when syncing this draft, see CHANGELOG v0.4-in-progress):
+% the "2 seeds" above were NOT actually independent runs. media_in_the_loop's
+% exposure variable was initialized to exact zeros, so torch.manual_seed(seed)
+% had nothing random left to affect -- every seed produced a bit-identical
+% trajectory. The "seed-1 values match to within numerical noise" language
+% in Sec. 5's protocol paragraph (written before this was discovered)
+% attributed this to near-determinism at small scale; the real cause was a
+% bug. Fixed in holomedia/optimize.py (seeded random perturbation on init).
+% The single-seed CPU-scale numbers in this draft are NOT invalidated by the
+% fix (a single deterministic run is still a real, reproducible run) but the
+% "matches across seeds" framing is retracted -- there was only ever one
+% trajectory to match. A genuine multi-seed confirmation is queued, not yet
+% run (see Sec. 6).
+%
+% Since the v0.2 CPU-scale pass, the following were added to the released
+% code and are integrated into this draft where noted: Table 1 (physical
+% parameter citations), an RCWA cross-check of the scalar readout engine
+% (Sec. 3.3), a gradient-pathway ablation (Sec. 3.2), and single-seed
+% GPU-scale (Colab T4) checks of mesh-independence, optimizer convergence
+% behavior, and readout wavelength-detuning (Sec. 3.2/3.3). None of these
+% replace the still-outstanding paper-scale, multi-seed F2/F3 recovery
+% sweep -- see Sec. 6 for exactly what remains.
 
 \documentclass[conference]{IEEEtran}
-\usepackage{amsmath,amssymb,graphicx,booktabs,hyperref,cite,xcolor}
+\usepackage{amsmath,amssymb,graphicx,booktabs,hyperref,cite,xcolor,array}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \graphicspath{{figures/}{../holography_media/figures/}}
@@ -207,6 +229,55 @@ was confirmed by recovering the analytic $\hat G(K)$ rolloff (see
 \texttt{CHANGELOG.md} in the released code). All results in this paper are
 post-fix.
 
+\begin{table*}[t]
+\centering
+\footnotesize
+\caption{Physical parameter ranges and sources (see caveat paragraph below).}
+\label{tab:params}
+\begin{tabular}{@{}p{2.3cm}cp{3.6cm}p{3.6cm}p{3.3cm}p{4.0cm}@{}}
+\toprule
+Parameter & Sym. & PVA/AA & PQ/PMMA & Bayfol-class & Source \\
+\midrule
+Monomer/species diffusivity ($\mu\mathrm{m}^2$/s) & $D_0$ &
+$\approx 1\times10^{-2}$ ($10^{-10}\,\mathrm{cm^2/s}$, low spatial freq.) &
+$\approx 1.2\times10^{-6}$ (dye/photoproduct diffusion; no separate monomer species) &
+$\approx 2.5\times10^{-2}$ ($D_{ex}=2.5\times10^{-10}\,\mathrm{cm^2/s}$) &
+Kelly \& Sheridan 2011~\cite{kelly2011reply} [PVA/AA]; Jeong et al.\ 2022~\cite{jeong2022pqpmma} [PQ/PMMA]; Fomenko \& Berneth 2017~\cite{fomenko2017bayfol} [Bayfol] \\
+Non-locality length ($\mu$m) & $\sigma$ &
+order $0.01$--$0.04$ (order-of-magnitude only, no single isolated figure) &
+not separately reported; inherited from dye/photoproduct transport, not chain growth &
+$\approx 9.2\times10^{-3}$ ($\sigma^2=85\,\mathrm{nm}^2$) &
+Gleeson et al.\ 2008~\cite{gleeson2008chain} [PVA/AA trend]; Fomenko \& Berneth 2017~\cite{fomenko2017bayfol} [Bayfol] \\
+Index budget & $\Delta n_{\max}$ &
+$1.5$--$5\times10^{-3}$ ($5\times10^{-3}$ in 40 $\mu$m layers) &
+$1.5$--$3.6\times10^{-4}$ (thermal vs.\ solvent-cast) &
+$4.5$--$9\times10^{-3}$ (per Kogelnik fit); up to $0.03$--$0.04$ for specialized high-$\Delta n$ formulations &
+Various acrylamide/PVA studies; Jeong et al.\ 2022~\cite{jeong2022pqpmma}; Fomenko \& Berneth 2017~\cite{fomenko2017bayfol} \\
+Shrinkage (fraction) & $s$ &
+$0.01$--$0.019$ (1.9\% at 1 mW/cm$^2$, $\sim$1\% at 10 mW/cm$^2$) &
+\textbf{not independently confirmed} -- treated as $\lesssim 0.01$ by analogy, flagged for follow-up &
+$<0.03$ (``below 3\%, depending on composition'') &
+Gallego et al.~\cite{gallego2008shrinkage}; Fomenko \& Berneth 2017~\cite{fomenko2017bayfol} \\
+Dose sensitivity @405\,nm & $\kappa$ &
+not directly reported in absolute units; NPDD papers calibrate via DE-growth onset dose, not $\kappa$ itself &
+same caveat &
+anchor: $\approx$20 mJ/cm$^2$ saturation fluence at 532\,nm, 100 mW/cm$^2$/200\,ms &
+\textit{model-calibration target, not a literature constant} -- \texttt{configs/media/*.yaml} calibrates $\kappa$ so the twin's growth-curve onset matches this anchor scaled to 405\,nm~\cite{fomenko2017bayfol} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\textit{Caveat on precision.} Several cells above are order-of-magnitude
+anchors extracted from abstracts/full-text search rather than a controlled
+from-source reading pass across the primary NPDD parameter-fitting papers
+(Sheridan/Gleeson/Kelly series, and the PQ/PMMA pair by Li et al., \textit{J.
+Opt. Soc. Am. B} 30(12), which state fitted $D$, $\sigma$, $\kappa$ values
+directly in tables not fetchable behind the Optica paywall in this pass).
+Rows marked ``not independently confirmed'' should be re-verified against
+those primary tables before submission; $\kappa$ throughout remains a
+model-calibration target rather than a literature constant, stated as such
+rather than assigned a fabricated precision.
+
 \subsection{Numerical scheme and differentiability}
 Equations (1--3) are integrated by a spectral IMEX scheme: the stiff
 diffusion operator is applied exactly in Fourier space each step
@@ -214,6 +285,44 @@ diffusion operator is applied exactly in Fourier space each step
 non-local convolution is a Fourier multiplier. The full trajectory (100--500
 steps depending on scale) is unrolled under automatic differentiation, giving
 exact gradients of the recorded profile with respect to the exposure.
+Memory is bounded by gradient checkpointing every 25 steps.
+
+\textbf{Gradient-pathway ablation} (\texttt{experiments/ablation\_gradients.py},
+CPU, $n_x{=}256$, $n_\text{steps}{=}150$): checkpointed discrete-adjoint
+gradients (block=25) match unrolled-autodiff gradients to cosine similarity
+0.977 on a realistic reconstruction-loss probe (not bit-exact, since FFT
+recomputation inside \texttt{torch.utils.checkpoint}'s backward does not
+take an identical floating-point path); a 200-iteration downstream
+optimization run reaches the same PSNR (4.78 dB) via both pathways, at
+$\sim2\times$ wall-clock cost for the checkpointed version (46.8 s vs.\
+22.5 s) in exchange for $O(n_\text{steps}/\text{block})$ rather than
+$O(n_\text{steps})$ memory. A neural surrogate (small 1D CNN, offline-trained
+on 300 random exposures, 102 s one-time cost) gives lower gradient cosine
+similarity (0.84) yet reaches slightly \emph{higher} downstream PSNR (5.08 dB)
+at 1.4 s optimization wall-clock -- evidence that this low-iteration-budget
+regime does not require high-fidelity gradients to make progress, not that
+the surrogate gradient is intrinsically better. All three pathways are real,
+measured runs (\texttt{results\_ablation\_gradients.json}).
+
+\textbf{GPU-scale mesh and convergence check}
+(\texttt{experiments/gpu\_npdd\_mesh\_convergence\_sweep.py}, single Colab T4
+GPU, single seed): to check the results above are not an artifact of the
+specific grid used, the optimizer was rerun at $n_x = 512, 1024, 2048$
+holding the physical window fixed (51.2 $\mu$m) and the iteration budget
+fixed (800). Reconstruction PSNR was mesh-independent to within 0.04 dB
+(6.65 / 6.63 / 6.61 dB) across a $4\times$ resolution range, and wall-clock
+was essentially flat ($\sim$450--459 s) -- at this problem size (1D field,
+small FFTs) the GPU run is overhead- rather than compute-bound, so a finer
+grid costs nothing in practice. A relative-loss-change early-stopping option
+(\texttt{converge\_tol}, not previously in the optimizer) was separately
+swept at the paper-scale mesh: tol $=10^{-3}$ stops at iteration 320 (174 s,
+6.53 dB), tol $=10^{-4}$ at iteration 630 (351 s, 6.63 dB), and tol
+$=10^{-5}$ runs to iteration 1350 (749 s, 6.63 dB) -- tol $=10^{-4}$ already
+matches the tightest tolerance's quality at under half its wall-clock, i.e.\
+the fixed 800-iteration budget used elsewhere in this paper is comfortably
+past the point of diminishing returns. Single seed; not a substitute for the
+multi-seed recovery curves of Sec.~\ref{sec:experiments}
+(\texttt{results/gpu\_reruns/npdd\_mesh\_sweep/results.json}).
 
 \subsection{Readout}
 Reconstruction is computed by split-step scalar beam propagation through the
@@ -223,6 +332,35 @@ followed by free-space propagation to the observation plane. For pure
 sinusoidal gratings this engine reduces to Kogelnik's coupled-wave
 predictions~\cite{kogelnik1969coupled} in the thin-modulation limit, which
 also serves as a closed-form sanity check on the readout path.
+
+\textbf{RCWA cross-check.} Scalar validity is bounded by comparing against a
+full-vector Rigorous Coupled-Wave Analysis (\texttt{experiments/rcwa\_crosscheck.py},
+via the \texttt{torcwa} package) on 3 unslanted transmission volume gratings
+at $K = 2, 6, 12\,\mathrm{rad}/\mu\mathrm{m}$ (405 nm, 30 $\mu$m thick,
+Bragg-matched incidence via Snell-refracted angle, TE polarization). The
+scalar Kogelnik prediction and full-vector RCWA first-order diffraction
+efficiency agree to within 0.012, 0.038, and 0.009 absolute DE respectively
+-- max deviation 0.038 over the tested cases, i.e.\ scalar theory is accurate
+to a few percentage points of DE across this $K$ range at these parameters.
+This is a spot-check of the regime at one polarization and near-normal
+incidence, not an exhaustive vector-optics validation.
+
+\textbf{Wavelength detuning of the readout}
+(\texttt{experiments/gpu\_bpm\_wavelength\_sweep.py}, single Colab T4 GPU,
+single seed): a hologram was recorded once at the 405 nm design wavelength
+($n_x{=}1024$, 800 iterations), then the \emph{same} recorded profile was
+read out at 400, 405, 420, 435, and 450 nm -- bracketing the 405/450 nm
+operating band claimed elsewhere in this paper. PSNR and in-support
+diffraction efficiency peak at the on-design point (6.63 dB / 0.589) and
+fall off moving away from it, but \emph{not monotonically}: 420 nm
+(3.28 dB / 0.433) is worse than 435 nm (3.79 dB / 0.516), which is farther
+from the design wavelength. This is consistent with Kogelnik's diffraction
+efficiency having an oscillatory $\sin^2(\nu)$ dependence on detuning rather
+than a smooth rolloff, so a non-monotonic wavelength response is physically
+expected here and is reported as observed rather than smoothed into a
+cleaner-looking curve. Single seed, one grating target; not a full
+media-family $\times$ wavelength design chart, which remains unbuilt (see
+Sec.~\ref{sec:limitations}).
 
 % ─── 4. Optimization ─────────────────────────────────────────────────────────
 \section{Media-in-the-Loop Optimization}
@@ -279,9 +417,17 @@ exposure conversion — current common practice); (ii) media-blind SGD
 (gradient-optimized under an ideal linear medium, evaluated on the twin);
 (iii) media-in-the-loop SGD (ours); (iv) oracle (ideal medium, upper bound).
 Target: binary bar patterns at seven spatial frequencies (periods 8--64 px).
-Default medium: PVA/AA-like, $\lambda = 405$ nm. All runs use 2 seeds; results
-below are seed-0 values (seed-1 values match to within numerical noise — the
-optimizer is close to deterministic at this scale). Metric: PSNR against
+Default medium: PVA/AA-like, $\lambda = 405$ nm. Results below are single-run
+(seed-0) values. \emph{Correction from an earlier version of this draft}: a
+prior pass reported ``2 seeds, matching to within numerical noise,'' and
+attributed the match to near-determinism at this scale -- that explanation
+was wrong. The exposure variable was initialized to exact zeros, so
+\texttt{torch.manual\_seed(seed)} had nothing random left to affect: every
+seed produced a bit-identical optimization trajectory. This has been fixed
+(seeded random perturbation on init, holomedia/optimize.py) but the numbers
+in this section predate the fix and are reported as the single deterministic
+runs they actually were, not as seed-confirmed. A genuine multi-seed
+confirmation is queued (Sec.~\ref{sec:limitations}). Metric: PSNR against
 target intensity; in-support diffraction efficiency also reported. All
 configurations are in \texttt{holography\_media/configs}; every number below
 is reproduced by \texttt{holography\_media/experiments/run\_prelim.py} and
@@ -366,27 +512,49 @@ polarization and vector effects are not modeled. Results are 2D $(x,z)$,
 standard in the NPDD literature.
 
 Concretely, what remains before this is a paper-scale result rather than a
-CPU-scale preliminary one, in priority order:
+CPU-scale preliminary one, in priority order. Items marked \textbf{(done)}
+were completed after the CPU-scale numbers above were first written and are
+integrated into this draft where cited; they do not retroactively validate
+those CPU-scale numbers, which still need the paper-scale rerun below.
 \begin{enumerate}
-\item \textbf{Scale}: rerun the cliff, sigma, dn\_max, thickness, and $D_0$
-sweeps at $n_x \geq 1024$, $\geq 800$ Adam iterations, 5 seeds (GPU), to
-replace the 2-seed, $n_x{=}256$ numbers reported here.
+\item \textbf{Scale, multi-seed}: the un-batched form of this sweep was
+estimated at $\sim$195 GPU-hours (a mesh-independence check on a Colab T4
+showed the un-batched optimizer is overhead-bound, not compute-bound, at
+this problem size --Sec.~\ref{sec:twin}). A batched implementation
+(\texttt{holomedia/optimize.py}'s \texttt{*\_batched} functions, verified
+bit-identical to the un-batched loop to $\sim10^{-14}$) and a checkpointed
+driver script (\texttt{experiments/gpu\_f2\_f3\_recovery.py}) exist to rerun
+the cliff, sigma, dn\_max, thickness, and $D_0$ sweeps at $n_x = 1024$,
+800 Adam iterations, 5 \emph{genuinely independent} seeds (the seed
+mechanism itself was bugged until this pass -- see Sec.~\ref{sec:experiments}'s
+protocol paragraph) on GPU, but the batched sweep's actual GPU wall-clock has
+not yet been measured (the script's own \texttt{probe} mode must run first).
+This remains the single largest gap before submission.
 \item \textbf{dn\_max, thickness, and $D_0$ sweeps}: scaffolded in
-\texttt{run\_prelim2.py} (parts E, F) but not yet executed; the dynamic-range
-and transport-limited-regime claims of the abstract draft are hypotheses
-until these run.
+\texttt{run\_prelim2.py} (parts E, F) but not yet executed at scale; the
+dynamic-range and transport-limited-regime claims of the abstract draft are
+hypotheses until these run.
 \item \textbf{Twin validation (Sec.~3.4 of the internal draft)}: digitize
 published growth-curve and angular-selectivity measurements and compare
 directly; currently the twin's individual components (NPDD, Kogelnik) are
-literature-standard but the assembled twin is unvalidated against data.
-\item \textbf{Table 1 parameter ranges}: fill $D_0$, $\sigma$,
-$\Delta n_{\max}$, $s$, $\kappa$ for PVA/AA, PQ/PMMA, and Bayfol-class media
-with literature citations; current defaults are representative but not
-sourced per-medium.
+literature-standard and the readout engine is bounded against RCWA
+(Sec.~\ref{sec:twin}, \textbf{done}), but the assembled twin is still
+unvalidated against digitized literature curves -- the identified figures sit
+behind paywalls this pass could not fetch (\texttt{data/literature/README.md}
+documents the exact papers and a ready digitization protocol).
+\item \textbf{Table 1 parameter ranges} (\textbf{done}, Sec.~\ref{sec:twin}):
+$D_0$, $\sigma$, $\Delta n_{\max}$, $s$ filled for PVA/AA, PQ/PMMA, and
+Bayfol-class media with literature citations; several cells remain
+order-of-magnitude anchors rather than from-source table reads (flagged
+individually in the table), and $\kappa$ remains a model-calibration target,
+not a literature constant, throughout.
 \item \textbf{Natural-image and qualitative targets}: extend beyond binary
 bar patterns to sparse-spot and DIV2K-slice targets (scaffolded as
 \texttt{spots()} in \texttt{run\_prelim.py} and \texttt{f2\_panel.py}, not
 yet in the numbers reported here).
+\item \textbf{Gradient-pathway and RCWA validation} (\textbf{done},
+Sec.~\ref{sec:twin}): checkpointed-adjoint and neural-surrogate gradient
+ablation, and scalar-vs-RCWA readout cross-check, both real measured runs.
 \item \textbf{Experimental closure}: two-beam recording of optimized versus
 naive exposures in a characterized medium, and comparison of measured
 reconstructions, is the eventual test of everything in this paper and is
@@ -466,6 +634,32 @@ simulator,'' in \textit{SIGGRAPH Asia 2023 Conf. Proc.}, 2023.
 \bibitem{kogelnik1969coupled}
 H. Kogelnik, ``Coupled wave theory for thick hologram gratings,'' \textit{Bell
 Syst. Tech. J.}, vol.~48, no.~9, pp.~2909--2947, 1969.
+
+\bibitem{kelly2011reply}
+D. Kelly and J. T. Sheridan, reply/diffusion-rate discussion, \textit{J. Opt.
+Soc. Am. B}, vol.~28, no.~4, p.~658, 2011 -- \textbf{exact article title not
+independently verified in this pass}; identified via search-result text only.
+
+\bibitem{gleeson2008chain}
+M. R. Gleeson, S. Liu, R. Guo, and J. T. Sheridan, chain-transfer-agent /
+spatial-frequency-response study, \textit{J. Opt. Soc. Am. B}, vol.~25, no.~3,
+p.~396, 2008 -- \textbf{exact article title not independently verified in
+this pass}; identified via search-result text only.
+
+\bibitem{fomenko2017bayfol}
+D. Fomenko and F.-K. Berneth, ``The chemistry and physics of Bayfol HX film
+holographic photopolymer,'' \textit{Polymers}, vol.~9, no.~10, p.~472, 2017.
+
+\bibitem{jeong2022pqpmma}
+Jeong \emph{et al.}, PQ/PMMA solvent-cast film study, \textit{ACS Omega},
+2022 -- \textbf{exact article title not independently verified in this
+pass}; identified via search-result text only.
+
+\bibitem{gallego2008shrinkage}
+Gallego \emph{et al.}, shrinkage-vs-intensity study, \textit{Appl. Phys. A}
+(PubMed ID 21747495) -- \textbf{exact title/year not independently verified
+in this pass}; identified via abstract/search-result text only, not a fetched
+full-text reading. Re-verify against the primary record before submission.
 
 \end{thebibliography}
 

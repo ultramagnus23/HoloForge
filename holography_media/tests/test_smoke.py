@@ -3,7 +3,8 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import torch
 from holomedia import (NPDDRecorder, MediumParams, SlabBPM, kogelnik_de,
-                       media_in_the_loop, media_blind_gs, psnr)
+                       media_in_the_loop, media_blind_gs, psnr,
+                       media_in_the_loop_batched)
 
 torch.set_default_dtype(torch.float64)
 
@@ -44,6 +45,28 @@ def test_optimization_improves():
     assert p_ours > p_gs, "media-in-the-loop did not beat blind GS"
 
 
+def test_batched_matches_unbatched():
+    """Batched optimization (one (B,n_x) theta) must match B separate
+    unbatched calls bit-for-bit -- batching must change wall-clock only,
+    never the numbers (see optimize.py's batched-methods docstring)."""
+    n = 64
+    rec = NPDDRecorder(n, 0.1, t_total=5, n_steps=20)
+    bpm = SlabBPM(n, 0.1, 0.405, rec.p.thickness, n_z=6)
+    x = torch.arange(n)
+    targets = torch.stack([((x // 8) % 2).double(), ((x // 16) % 2).double()])
+    seeds = [0, 1]
+    n_iters = 15
+
+    E_loop = torch.stack([media_in_the_loop(targets[i], rec, bpm, n_iters=n_iters,
+                                            seed=seeds[i], verbose=False)[0]
+                          for i in range(2)])
+    E_batch, _, _ = media_in_the_loop_batched(targets, rec, bpm, seeds,
+                                              n_iters=n_iters, verbose=False)
+    diff = (E_loop - E_batch).abs().max()
+    assert diff < 1e-10, f"batched diverged from unbatched loop: {diff}"
+    print("batched matches unbatched OK, max diff =", float(diff))
+
+
 def test_checkpointed_forward_matches():
     from holomedia.npdd import NPDDRecorder as _R
     rec = _R(64, 0.1, t_total=3, n_steps=60)
@@ -74,6 +97,7 @@ if __name__ == "__main__":
     test_kogelnik_peak()
     test_gradients_flow()
     test_optimization_improves()
+    test_batched_matches_unbatched()
     test_checkpointed_forward_matches()
     test_3d_twin_runs()
     print("ALL SMOKE TESTS PASSED")

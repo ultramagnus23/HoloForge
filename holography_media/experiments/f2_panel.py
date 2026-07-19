@@ -18,7 +18,7 @@ p=MediumParams()
 rec=NPDDRecorder(N,DX,t_total=10,n_steps=100,params=p)
 bpm=SlabBPM(N,DX,0.405,p.thickness,n_z=12)
 _,ro,_=media_in_the_loop(t,rec,bpm,n_iters=200,verbose=False)
-_,rb=media_blind_sgd(t,rec,bpm,n_iters=200)
+_,rb,_=media_blind_sgd(t,rec,bpm,n_iters=200)
 _,rg=media_blind_gs(t,rec,bpm)
 _,rc=oracle_ideal(t,rec,bpm,n_iters=200)
 x=np.arange(N)*DX
