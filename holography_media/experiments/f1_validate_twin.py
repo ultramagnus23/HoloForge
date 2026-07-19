@@ -27,23 +27,35 @@ def sinusoidal_exposure(K_um, visibility=0.9):
     return 1.0 + visibility * torch.cos(K_um * x)
 
 
+CSV_SCHEMA_COLUMNS = ["x", "y", "source_doi", "figure_id", "digitized_by", "date"]
+
+
 def load_literature_curves():
     """Load digitized (x, y) CSVs from data/literature/, if any exist.
+
+    Phase 6 schema (header row required): x, y, source_doi, figure_id,
+    digitized_by, date -- see data/literature/README.md. Only x, y are
+    used for plotting/fitting here; the other 4 columns are provenance,
+    read and kept alongside but not consumed by this function (the fitting
+    script in fit_literature_curves.py surfaces them).
 
     Returns a dict {filename_stem: (xs, ys)}. Empty if the directory has no
     CSVs yet -- see data/literature/README.md for why and how to add them.
     """
     curves = {}
     for path in sorted(glob.glob(os.path.join(LITERATURE_DIR, "*.csv"))):
-        xs, ys = [], []
         with open(path, newline="") as f:
-            for row in csv.reader(f):
-                if not row or not row[0].strip():
-                    continue
+            reader = csv.DictReader(f)
+            if reader.fieldnames is None or "x" not in reader.fieldnames or "y" not in reader.fieldnames:
+                print(f"[f1] WARNING: {path} does not have the required header "
+                      f"({CSV_SCHEMA_COLUMNS}) -- skipping.")
+                continue
+            xs, ys = [], []
+            for row in reader:
                 try:
-                    xs.append(float(row[0])); ys.append(float(row[1]))
-                except ValueError:
-                    continue  # header row
+                    xs.append(float(row["x"])); ys.append(float(row["y"]))
+                except (ValueError, TypeError):
+                    continue
         if xs:
             curves[os.path.splitext(os.path.basename(path))[0]] = (xs, ys)
     if not curves:
