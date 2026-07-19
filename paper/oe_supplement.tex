@@ -1,0 +1,78 @@
+% paper/oe_supplement.tex -- Phase 7.4 supplement.
+% Same template-pending status as oe_main.tex (see that file's header).
+% Uses numbers.tex macros throughout, same as the main manuscript.
+
+\documentclass[10pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,graphicx,booktabs,hyperref}
+\input{numbers}
+
+\title{Supplement: Media-in-the-Loop Holography}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Gradient-Pathway Ablation}
+Checkpointed discrete-adjoint gradients match unrolled-autodiff gradients
+to cosine similarity \AblationCheckpointCosSim\ on a realistic
+reconstruction-loss probe; a neural surrogate reaches
+\AblationSurrogateCosSim. See \texttt{experiments/ablation\_gradients.py},
+\texttt{results\_ablation\_gradients.json}, Fig.~F8a.
+
+\section{RCWA Validity Envelope}
+The original 3-case scalar-vs-vector cross-check (TE, unslanted,
+near-Bragg incidence) agrees to \RCWAMaxDevThreeCase\ maximum absolute
+diffraction-efficiency deviation. The E7 extension (TE+TM, 3
+incidence/slant geometries, 3 $\Delta n$ levels, 5 $K$ values --
+\RCWAE7NCases\ cases total) finds \RCWAE7MaxDev\ maximum deviation,
+concentrated in the slanted-grating geometry at high $\Delta n$: a
+20-degree slant detunes the Bragg condition at the nominal (unslanted-
+Bragg) incidence angle, so RCWA correctly shows near-zero diffraction
+while the \emph{unslanted} Kogelnik formula (no slant term) predicts
+near-peak efficiency. This is a genuine finding about the unslanted
+formula's validity envelope, not a numerical artifact -- see
+\texttt{results\_rcwa\_e7.json}'s \texttt{by\_geometry} breakdown and
+Fig.~F8b. Readout caveat: the compensation cliff (main text, Eq.~5) is a
+\emph{recording}-side phenomenon; this grid characterizes
+\emph{readout}-side scalar-vs-vector error, which moves absolute PSNRs
+more than paired (M4$-$M2) gains -- E7 scopes the readout engine's
+validity envelope, it does not itself validate or invalidate the
+cliff-vs-budget result.
+
+\section{GPU Mesh-Density Convergence}
+Reconstruction PSNR is mesh-independent to within \MeshPSNRSpread~dB
+across a $4\times$ resolution range ($n_x=512/1024/2048$, fixed 51.2\,$\mu$m
+physical window); wall-clock was essentially flat across the same range on
+a single Colab T4 (single seed) -- the optimizer is overhead-bound, not
+compute-bound, at this problem size, which motivated the batched
+implementation used for all Phase 3 manifests. See Fig.~F8c,
+\texttt{results/gpu\_reruns/npdd\_mesh\_sweep/results.json}.
+
+\section{Wavelength-Detuning Readout Sweep}
+A hologram recorded at the 405\,nm design wavelength reaches
+\WavelengthDesignPSNR~dB at that wavelength; reading the same recorded
+profile out at 400--450\,nm shows a \emph{non-monotonic} falloff away
+from the design point, consistent with Kogelnik's oscillatory
+$\sin^2(\nu)$ angular/wavelength detuning response rather than a smooth
+rolloff (single seed, single Colab T4 run). See Fig.~F8d,
+\texttt{results/gpu\_reruns/bpm\_wavelength\_sweep/results.json}.
+
+\section{Full Result Tables}
+\textbf{[TODO, blocked on Phase 3: full E1-E6 result tables, pending
+manifest runs. Regenerate this section from
+\texttt{results/summary/paper\_numbers.json} once populated --
+\texttt{analysis/aggregate.py}'s \texttt{per\_config} dict has every
+(experiment, config, method) cell needed.]}
+
+\section{Provenance Appendix}
+Every number in the main text and this supplement traces to a committed
+results JSON via \texttt{results/summary/paper\_numbers.json}
+(\texttt{analysis/aggregate.py}) or, for the supplement-only quantities
+above, directly to the named JSON file in each section. No number in
+either document is hand-typed -- both are built exclusively from
+\texttt{numbers.tex} (\texttt{scripts/make\_numbers\_tex.py}), and
+\texttt{scripts/check\_consistency.py} fails the build on any violation
+of that rule.
+
+\end{document}
