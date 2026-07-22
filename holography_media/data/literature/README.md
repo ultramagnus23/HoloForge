@@ -39,18 +39,43 @@ access (via institutional login or by pasting the figure image to me).
    data points — the actual angular-selectivity plot in that paper (Fig. ~7-9
    region per the text's Table 3 discussion) still needs manual digitizing.
 
+## CSV schema (Phase 6)
+
+Every digitized CSV MUST have this exact header row (required columns, in
+any order, but `x` and `y` must be present or the loader skips the file
+with a warning rather than guessing):
+
+```
+x,y,source_doi,figure_id,digitized_by,date
+```
+
+| Column | Meaning |
+|---|---|
+| `x` | horizontal axis value, in the paper's own units (exposure time/dose, or angular detuning in degrees for panel (c) -- state which in the filename, see below) |
+| `y` | vertical axis value (DE, or Δn, or normalized DE for angular selectivity) |
+| `source_doi` | DOI (or arXiv ID if no DOI) of the source paper, same value repeated on every row of a given curve |
+| `figure_id` | e.g. `Fig3a`, `Fig7` -- which figure/panel this curve was digitized from |
+| `digitized_by` | who ran WebPlotDigitizer (name/initials) |
+| `date` | ISO date (YYYY-MM-DD) the digitization was done |
+
+One CSV per curve/series (not per figure -- a figure with 3 spatial-
+frequency series becomes 3 CSVs). `experiments/f1_validate_twin.py`'s
+`load_literature_curves()` reads `x,y` for plotting/overlay;
+`experiments/fit_literature_curves.py` (Phase 6 fitting script) reads the
+full schema including provenance.
+
 ## Digitization protocol (WebPlotDigitizer)
 
 1. Open the figure image in https://apps.automeris.io/wpd/ (or equivalent).
 2. Calibrate axes using two known tick values on each axis.
 3. Pick points along each curve/series.
-4. Export CSV with columns `x,y` per series; save as
+4. Export CSV with the header above; save as
    `data/literature/<short_name>_<panel>.csv`, e.g.
    `sheridan2011_growth_K6.csv`, `gleeson2008_mtf.csv`,
    `fomenko2017_angular_selectivity.csv`.
-5. Add one line to `data/literature/sources.json` (create it) recording
-   `{"file": ..., "citation": ..., "figure": ..., "axes_units": ...}` so
-   provenance travels with the data.
+5. Fill in `source_doi`/`figure_id`/`digitized_by`/`date` on every row --
+   this is the provenance the paper's Phase-6 validation section cites
+   directly, not a separate sources.json.
 
 ## What IS real in this pass
 

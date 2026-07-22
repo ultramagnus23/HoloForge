@@ -163,11 +163,13 @@ def run_manifest(name: str, max_minutes: float | None, n_x=1024, n_iters=800,
             n_done_already += 1
             continue
         if max_minutes is not None and (time.time() - t_start) / 60.0 >= max_minutes:
+            n_remaining = len(jobs) - n_run - n_done_already
             print(f"[run_manifest] --max-minutes={max_minutes} reached, "
                   f"exiting cleanly before starting a new job "
                   f"({n_run} run this session, {n_done_already} already done, "
-                  f"{len(jobs) - n_run - n_done_already} remaining).")
-            return
+                  f"{n_remaining} remaining).")
+            return dict(complete=False, n_run=n_run, n_done_already=n_done_already,
+                       n_total=len(jobs), n_remaining=n_remaining)
         print(f"[run_manifest] {job['experiment_id']}/{job['method_id']}/"
               f"seed{job['seed']}/{job['config_hash']} ...", flush=True)
         try:
@@ -182,6 +184,8 @@ def run_manifest(name: str, max_minutes: float | None, n_x=1024, n_iters=800,
 
     print(f"[run_manifest] manifest {name!r} complete: {n_run} run this "
           f"session, {n_done_already} already done, {len(jobs)} total.")
+    return dict(complete=True, n_run=n_run, n_done_already=n_done_already,
+               n_total=len(jobs), n_remaining=0)
 
 
 def probe(name: str, n_x=1024, n_iters=800, converge_tol=1e-4):
@@ -219,16 +223,17 @@ def probe(name: str, n_x=1024, n_iters=800, converge_tol=1e-4):
     if grand_total > GATE1_HOURS:
         e1_row = next((r for r in rows if r["experiment"] == "E1"), None)
         e1_hours = e1_row["total_hours"] if e1_row else 0.0
-        print(f"\nGATE 1: projected {grand_total:.1f}h exceeds the {GATE1_HOURS:.0f}h "
-              f"threshold. Per the master prompt, this requires a decision, not a "
-              f"unilateral reduction:\n"
+        print(f"\nGATE 1: FAILED -- projected {grand_total:.1f}h exceeds the "
+              f"{GATE1_HOURS:.0f}h threshold. Per the master prompt, this requires "
+              f"a decision, not a unilateral reduction:\n"
               f"  (a) 3 seeds instead of 5 for E1 (would cut E1's ~{e1_hours:.1f}h by ~40%)\n"
               f"  (b) coarser K/sweep grids\n"
               f"  (c) drop E6 (wavelength rerun; already have a single-seed supplement result)\n"
               f"Report this table back and choose a combination before running 'full'.")
     else:
-        print(f"\nGATE 1: projected {grand_total:.1f}h is within the {GATE1_HOURS:.0f}h "
-              f"threshold -- no reduction needed.")
+        print(f"\nGATE 1: PASSED -- projected {grand_total:.1f}h is within the "
+              f"{GATE1_HOURS:.0f}h threshold -- no reduction needed.")
+    return grand_total
 
 
 def main():
@@ -247,8 +252,13 @@ def main():
         set_results_root(args.results_dir)
 
     if args.probe:
-        probe(args.manifest, n_x=args.n_x, n_iters=args.n_iters,
-             converge_tol=args.converge_tol)
+        grand_total = probe(args.manifest, n_x=args.n_x, n_iters=args.n_iters,
+                           converge_tol=args.converge_tol)
+        # Exit code distinguishes Gate-1 pass/fail so calling scripts (the
+        # Colab one-click cell) can act on it without parsing printed text.
+        # 0 = under budget, 2 = over budget (needs your reduction decision),
+        # matching the master prompt's "do not decide unilaterally."
+        sys.exit(2 if grand_total > GATE1_HOURS else 0)
     else:
         run_manifest(args.manifest, args.max_minutes, n_x=args.n_x,
                     n_iters=args.n_iters, converge_tol=args.converge_tol)

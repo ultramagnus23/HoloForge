@@ -1,0 +1,197 @@
+% paper/oe_main.tex -- Phase 7.2 manuscript skeleton for Optics Express.
+%
+% ============================================================================
+% STATUS: SKELETON, NOT SUBMITTABLE. Read this block before editing further.
+% ============================================================================
+% 1. TEMPLATE: this uses a generic article-like structure, NOT Optica's
+%    actual class file. Per the master prompt's own instruction ("the user
+%    downloads the template and confirms the current class file and
+%    abstract word limit from the author guidelines -- do not guess
+%    these"), I have not fetched or guessed Optica's template (no web
+%    access in this environment). Once you've downloaded the real
+%    opticajnl.cls (or current equivalent) and confirmed the abstract word
+%    limit, swap \documentclass and re-flow content into its required
+%    structure.
+% 2. NUMBERS: every quantitative claim below is a \macro from numbers.tex
+%    (scripts/make_numbers_tex.py, generated from
+%    results/summary/paper_numbers.json). Never hand-type a number here --
+%    scripts/check_consistency.py fails the build if you do. As of this
+%    pass, Phase 3 (E1-E6 GPU runs) has not happened, so most macros
+%    render as [PENDING] -- this file is correct-but-incomplete by
+%    construction until real data lands, not broken.
+% 3. UNVERIFIED CITATION FLAGGED: Sec. 2's "concurrent work" paragraph
+%    names arXiv:2601.16330 per the master prompt's Related Work spec (a).
+%    This environment has no web access to confirm that ID resolves to
+%    the described paper (differentiable wave-optics + photochemistry for
+%    holographic volumetric 3D printing) -- verify it exists and matches
+%    before using it; a fabricated or mismatched citation is worse than
+%    an admitted gap. Left as an explicit TODO, not asserted as fact.
+% 4. check_refs.py currently FAILS (4 bibliography entries -- more than
+%    the master prompt's estimate of 3 -- still need title verification;
+%    see paper/refs.bib). This file will not have a clean build until
+%    that's resolved, by design.
+% ============================================================================
+
+\documentclass[10pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,graphicx,booktabs,hyperref,cite}
+\input{numbers}  % scripts/make_numbers_tex.py output -- all quantitative macros
+
+\title{Media-in-the-Loop Holography: Computer-Generated Holography\\
+Through a Differentiable Model of Volume Photopolymer Recording}
+\author{Chaitanya Tripathi$^1$, [Co-author]$^2$\\
+\small $^1$Ashoka University, Sonipat, India \quad $^2$BITS Pilani, India}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+% TODO (blocked on Phase 3): master prompt spec is "<=~100 words (pending
+% guideline check), leading with the budget-controlled cliff finding."
+% The budget-controlled cliff finding does not exist yet -- E1 (the
+% experiment that tests whether the cliff location tracks budget, per
+% Eq. 5) has not run. Writing a lead sentence asserting an outcome before
+% the experiment exists would be exactly the "future work described as
+% done" the master prompt's Definition of Done forbids. Structural
+% skeleton below uses macros; fill in the actual finding once E1's
+% headroom-closure table (analysis/aggregate.py) has real numbers.
+Computer-generated holography algorithms overwhelmingly assume an ideal
+phase modulator; camera-in-the-loop correction is structurally unavailable
+for write-once volume photopolymer recording media. We introduce
+media-in-the-loop holography: a differentiable digital twin of the NPDD
+recording chemistry placed inside the hologram-design loop. Across
+\SeedCount\ seeds and three contrast-headroom budgets, media-in-the-loop
+optimization recovers \MeanGainTwoX{}/\MeanGainFourX{}/\MeanGainEightX{}~dB
+over media-blind SGD at $2\times/4\times/8\times$ budget respectively
+[PENDING E1], and the observed compensation-cliff location
+$K^*=\KstarTwoXInterp$ [PENDING] tracks the analytic prediction
+$K_c(\text{measured } C)=\KcPredTwoX$ [PENDING] as the budget moves. All
+code, manifests, and result archives are released.
+\end{abstract}
+
+\section{Introduction}
+Phase-only CGH computes a modulation pattern whose diffracted field
+approximates a target image. Camera-in-the-loop (CITL) optimization
+closed the gap between the computed pattern and physical spatial light
+modulator hardware by measuring the actual reconstruction and
+backpropagating the residual into the display model~\cite{peng2020neural}.
+
+This solution is structurally unavailable to an entire class of
+holographic devices. Volume photopolymer media -- Bayfol HX,
+PVA/acrylamide, PQ/PMMA -- record a hologram as a permanent
+refractive-index distribution formed by photopolymerization and mass
+transport. The medium is write-once: measurement of the reconstruction
+error is possible only after the error has become unerasable. CITL's
+feedback signal arrives, by construction, too late. Yet these media are
+precisely where model mismatch is most severe: the recorded index
+profile is not a scaled copy of the exposure, but the product of monomer
+diffusion, non-local polymer chain growth, dye depletion, saturable index
+response, and post-exposure shrinkage, each depending nonlinearly on the
+exposure itself.
+
+We close this gap by placing a differentiable model of the recording
+chemistry -- not just the readout optics -- inside the design loop.
+
+\section{Related Work}
+
+\textbf{Model-mismatch correction for holographic displays.} CITL
+optimization~\cite{peng2020neural} and its extensions correct the
+display's forward model using camera measurements; all require a
+rewritable modulator observed live. Our setting inverts the
+availability: the medium is write-once, so the model must carry the
+full burden.
+
+\textbf{Fabrication-aware surface-relief optics.} Neural
+lithography~\cite{zheng2023neural} inserts a learned digital twin of a
+lithographic process into differentiable design, but models surface
+geometry -- an etched height map. Volume photopolymers differ in kind:
+the recorded object is a volumetric index distribution produced by
+chemistry, and readout is Bragg-selective.
+
+% TODO (UNVERIFIED, do not use until confirmed -- see file header note 3):
+% Concurrent work, arXiv:2601.16330, reportedly couples differentiable
+% wave optics with photochemistry for holographic volumetric 3D printing.
+% Differentiators per the master prompt: printed geometry vs. a recorded
+% index grating; threshold conversion vs. Bragg-selective volume readout;
+% no NPDD non-locality/transport term; no compensation-limit theory. I
+% cannot confirm this arXiv ID resolves to this paper from this
+% environment -- verify before citing.
+\textbf{[TODO: concurrent-work paragraph, arXiv:2601.16330 -- verify the ID first.]}
+
+% TODO: (b) adjoint/PDE-constrained inverse design in photonics -- add
+% citations once selected (not fabricated here).
+% TODO: (c) proximity-effect correction in e-beam lithography as the
+% conceptual cousin of the compensation cliff -- add citation.
+% TODO: (d) NPDD primary sources Sheridan & Lawrence 2000, Zhao &
+% Mouroulis 1994 -- exact records to be verified by the user (per the
+% master prompt's own instruction), not fabricated here.
+
+Our novelty claim is scoped precisely: the first differentiable
+\emph{recording} model for volume holographic media placed inside a
+hologram-design loop -- not the first differentiable photochemistry
+model in any loop.
+
+\section{Model}
+The twin couples the non-local polymerization-driven diffusion (NPDD)
+reaction-diffusion system to volume diffraction via split-step beam
+propagation, with gradients obtained by unrolling a spectral IMEX
+integrator. One modeling note: the non-local term is
+$F\cdot(G_\sigma * u)$, not $G_\sigma * (F\cdot u)$ -- the kernel must
+smear the full production term, since chains initiated at $x'$ deposit
+polymer at $x$ (Sheridan NPDD formulation).
+
+\section{Media-in-the-Loop Optimization}
+Given target intensity $I_t$, we optimize the nonnegative, dose-budgeted
+exposure $E(x)$ delivered to the medium, with the twin inside the loss.
+Contrast headroom is enforced as a hard constraint
+(\texttt{holomedia.optimize.contrast\_project}), not merely a nominal
+dose level -- see docs/definitions.md (d) for the audit that found no
+such constraint existed prior to this pass.
+
+\section{Results}
+% TODO (blocked on Phase 3): "multi-seed numbers only" per the master
+% prompt. Cliff table, method comparison (M1-M5b), and the K*-vs-Kc
+% headroom-closure table all require E1 to have actually run. Structural
+% placeholders below.
+\textbf{[TODO: cliff table sorted by K, GS and linear-precomp columns, mean $\pm$ std -- pending E1.]}
+
+\textbf{[TODO: Figs. F4 (headline gain vs K) and F5 (K* vs Kc scatter) -- pending E1; see figures/make\_all.py, currently emitting placeholders for these.]}
+
+\section{Twin Validation}
+% TODO (blocked on Phase 6): pending digitized literature CSVs and
+% experiments/fit_literature_curves.py's fit-quality report. Report the
+% ACTUAL fit quality (good or bad) once real data exists -- do not assert
+% agreement here.
+\textbf{[TODO: twin-vs-literature overlay and fit quality -- pending Phase 6 (data/literature/*.csv).]}
+
+\section{Discussion and Limitations}
+This study is simulation-only; its claims are conditioned on a physics
+model (NPDD, Kogelnik, split-step BPM) validated component-wise
+(Sec.~\ref{sec:twin-validation-ref}) but not yet against a completed
+literature overlay. Scalar diffraction bounds validity to moderate
+numerical apertures; the RCWA validity-envelope grid (E7) bounds this
+quantitatively for the K/$\Delta n$/polarization/slant range tested --
+readout-side error moves absolute PSNRs more than paired gains, since the
+compensation cliff is a recording-side phenomenon (Eq.~5). Recording
+kinetics are 1D in transverse $x$; depth ($z$) enters only at readout via
+the split-step propagation, not as depth-resolved chemistry -- see
+docs/definitions.md (c) for the precise statement of this geometry, which
+an earlier draft left ambiguous. Experimental two-beam closure (recording
+optimized vs. naive exposures in a characterized medium and comparing
+measured reconstructions) is explicitly future work.
+
+\section{Code and Data Availability}
+All source code, experiment manifests, and raw result JSONs are available
+at \url{https://github.com/ultramagnus23/HoloForge} under
+\texttt{holography\_media/}, released under the Apache 2.0 license.
+% TODO (Phase 7.5, blocked on results freeze): a versioned Zenodo DOI
+% archive is prepared at results freeze -- not yet cut, since Phase 3
+% results don't exist yet to freeze. See REPRODUCE.md for the exact
+% regeneration commands once results land.
+\textbf{[TODO: Zenodo DOI -- pending results freeze, see REPRODUCE.md.]}
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}

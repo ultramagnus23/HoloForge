@@ -84,8 +84,49 @@ def test_schema_fields_present():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_run_manifest_returns_completion_status():
+    """Regression test for the Colab notebook resume bug: run_manifest()
+    used to return None in both the timed-out and fully-complete cases,
+    so nothing calling it (e.g. the notebook's auto-resume loop) could
+    tell whether to loop again. Now returns a status dict."""
+    tmp = tempfile.mkdtemp(prefix="manifest_status_test_")
+    try:
+        rm.set_results_root(tmp)
+        cut_short = rm.run_manifest("E3", max_minutes=0, n_x=32, n_iters=3)
+        assert cut_short == dict(complete=False, n_run=0, n_done_already=0,
+                                 n_total=40, n_remaining=40), cut_short
+
+        full = rm.run_manifest("E3", max_minutes=None, n_x=32, n_iters=3)
+        assert full["complete"] is True and full["n_run"] == 40 and full["n_remaining"] == 0
+
+        resumed = rm.run_manifest("E3", max_minutes=None, n_x=32, n_iters=3)
+        assert resumed == dict(complete=True, n_run=0, n_done_already=40,
+                               n_total=40, n_remaining=0), resumed
+        print("run_manifest completion-status dict OK:", cut_short, full, resumed)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_probe_exit_code_reflects_gate1():
+    """The Colab notebook's Gate-1 check now reads probe()'s return value
+    directly (in-process) rather than parsing printed text or an exit
+    code -- but the CLI's exit code (used by anyone running run_manifest.py
+    from a shell) must also reflect Gate 1 correctly: 0 under budget, 2
+    over. Exercised via subprocess against the real CLI entrypoint."""
+    import subprocess
+    env_ok = subprocess.run(
+        [sys.executable, "-m", "experiments.run_manifest", "--manifest", "E3",
+         "--probe", "--n-x", "32", "--n-iters", "3"],
+        cwd=os.path.join(os.path.dirname(__file__), ".."),
+        capture_output=True)
+    assert env_ok.returncode == 0, env_ok.returncode
+    print("probe CLI exit code under budget OK: 0")
+
+
 if __name__ == "__main__":
     test_config_hash_is_method_independent_but_path_is_not()
     test_manifest_end_to_end_and_resume()
     test_schema_fields_present()
+    test_run_manifest_returns_completion_status()
+    test_probe_exit_code_reflects_gate1()
     print("PASSED")
