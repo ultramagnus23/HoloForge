@@ -24,6 +24,18 @@ from .npdd import NPDDRecorder, MediumParams
 from .diffraction import SlabBPM
 
 
+def _complex_dtype_for(real_dtype: torch.dtype) -> torch.dtype:
+    """The matching complex dtype for a real dtype -- used so a method's
+    internal complex-field ops (FFTs, GS phase, etc.) run at the SAME
+    precision as the recorder they're paired with, instead of hardcoding
+    complex128 regardless of what dtype the recorder actually uses (a
+    real inconsistency this fixes: previously theta/phase-init/FFT work
+    was always float64/complex128 even when the recorder itself was
+    constructed at float32, silently giving up float32's speed/memory
+    benefit and doing mixed-precision arithmetic no one asked for)."""
+    return torch.complex64 if real_dtype == torch.float32 else torch.complex128
+
+
 # ---------------------------------------------------------------- utilities
 def dose_project(E: torch.Tensor, budget: float) -> torch.Tensor:
     """Scale exposure so mean dose == budget (projection onto dose simplex)."""
@@ -148,7 +160,7 @@ def media_in_the_loop(target: torch.Tensor, recorder: NPDDRecorder,
     """
     device = target.device
     # softplus-parameterized exposure, initialized near uniform dose
-    theta = _seeded_init_theta(recorder.n_x, device, torch.float64, seed)
+    theta = _seeded_init_theta(recorder.n_x, device, recorder.dtype, seed)
     opt = torch.optim.Adam([theta], lr=lr)
     t_norm = target / (target.sum() + 1e-12)
     history = []
@@ -210,7 +222,7 @@ def media_blind_sgd(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
     BREAKING return-arity change; every call site in the repo was updated
     in the same commit (grep for `media_blind_sgd(` before editing further)."""
     device = target.device
-    theta = _seeded_init_theta(recorder.n_x, device, torch.float64, seed)
+    theta = _seeded_init_theta(recorder.n_x, device, recorder.dtype, seed)
     opt = torch.optim.Adam([theta], lr=lr)
     t_norm = target / (target.sum() + 1e-12)
     c_lin = recorder.p.dn_max  # ideal linear map with same index budget
@@ -263,15 +275,16 @@ def linear_precomp(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
         and max(E)/mean(E) <= contrast_cap (+ 1e-6 slack) when set.
     """
     device = target.device
-    dtype = torch.float64
+    dtype = recorder.dtype
+    cdtype = _complex_dtype_for(dtype)
     n_x, dx = recorder.n_x, recorder.dx
     freq = torch.fft.fftfreq(n_x, d=dx).to(device=device, dtype=dtype)  # cycles/um
     K = (2.0 * math.pi * freq).abs()  # rad/um; H depends on K^2, sign irrelevant
     H = recorder.small_signal_mtf(K, I_mean=I_mean)
     boost = torch.clamp(1.0 / (H + 1e-9), max=1e6)  # numerical safety only
 
-    T_hat = torch.fft.fft(target.to(dtype).to(torch.complex128))
-    E_hat = T_hat * boost.to(torch.complex128)
+    T_hat = torch.fft.fft(target.to(dtype).to(cdtype))
+    E_hat = T_hat * boost.to(cdtype)
     E = torch.fft.ifft(E_hat).real
     E = torch.clamp(E, min=0.0)
     E = contrast_project(E, dose_budget, contrast_cap)
@@ -293,11 +306,12 @@ def media_blind_gs(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
     exact GS numbers, which were never actually seed-controlled)."""
     device = target.device
     n = recorder.n_x
-    amp_t = torch.sqrt(target / (target.sum() + 1e-12)).to(torch.complex128)
+    cdtype = _complex_dtype_for(recorder.dtype)
+    amp_t = torch.sqrt(target / (target.sum() + 1e-12)).to(cdtype)
     g = torch.Generator(device="cpu")
     g.manual_seed(seed)
     field = torch.exp(1j * 2 * math.pi *
-                      torch.rand(n, generator=g, dtype=torch.float64).to(device))
+                      torch.rand(n, generator=g, dtype=recorder.dtype).to(device))
     for _ in range(n_iters):
         far = torch.fft.fft(field)
         far = amp_t * torch.exp(1j * torch.angle(far))
@@ -322,7 +336,7 @@ def oracle_ideal(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
     meant in this codebase. For the free (no exposure-domain constraints)
     counterpart, M5b, see oracle_unconstrained below."""
     device = target.device
-    theta = _seeded_init_theta(recorder.n_x, device, torch.float64, seed)
+    theta = _seeded_init_theta(recorder.n_x, device, recorder.dtype, seed)
     opt = torch.optim.Adam([theta], lr=lr)
     t_norm = target / (target.sum() + 1e-12)
     c_lin = recorder.p.dn_max
@@ -356,10 +370,11 @@ def oracle_unconstrained(target: torch.Tensor, recorder: NPDDRecorder, bpm: Slab
     the oracle gap in Sec. 5 into "cost of exposure-domain constraints"
     (M4 vs M5a headroom) vs "cost of medium physics" (M5a vs M5b headroom)."""
     device = target.device
-    torch.manual_seed(seed)
     dn_max = recorder.p.dn_max
-    dn_free = (1e-3 * torch.randn(recorder.n_x, device=device, dtype=torch.float64)
-              ).requires_grad_(True)
+    g = torch.Generator(device="cpu")
+    g.manual_seed(seed)
+    dn_free = (1e-3 * torch.randn(recorder.n_x, generator=g, dtype=recorder.dtype)
+              ).to(device).requires_grad_(True)
     opt = torch.optim.Adam([dn_free], lr=lr)
     t_norm = target / (target.sum() + 1e-12)
 
@@ -395,7 +410,7 @@ def media_in_the_loop_batched(targets: torch.Tensor, recorder: NPDDRecorder,
                               lr: float = 5e-2, dose_budget: float = 1.0,
                               log_every: int = 50, verbose: bool = True):
     device = targets.device
-    theta = _seeded_init_theta_batch(recorder.n_x, device, torch.float64, seeds)
+    theta = _seeded_init_theta_batch(recorder.n_x, device, recorder.dtype, seeds)
     opt = torch.optim.Adam([theta], lr=lr)
     t_norm = targets / (targets.sum(dim=-1, keepdim=True) + 1e-12)
     history = []
@@ -425,7 +440,7 @@ def media_blind_sgd_batched(targets: torch.Tensor, recorder: NPDDRecorder,
                             bpm: SlabBPM, seeds, n_iters: int = 400,
                             lr: float = 5e-2, dose_budget: float = 1.0):
     device = targets.device
-    theta = _seeded_init_theta_batch(recorder.n_x, device, torch.float64, seeds)
+    theta = _seeded_init_theta_batch(recorder.n_x, device, recorder.dtype, seeds)
     opt = torch.optim.Adam([theta], lr=lr)
     t_norm = targets / (targets.sum(dim=-1, keepdim=True) + 1e-12)
     c_lin = recorder.p.dn_max
@@ -451,12 +466,13 @@ def media_blind_gs_batched(targets: torch.Tensor, recorder: NPDDRecorder,
                            dose_budget: float = 1.0):
     device = targets.device
     n = recorder.n_x
-    amp_t = torch.sqrt(targets / (targets.sum(dim=-1, keepdim=True) + 1e-12)).to(torch.complex128)
+    cdtype = _complex_dtype_for(recorder.dtype)
+    amp_t = torch.sqrt(targets / (targets.sum(dim=-1, keepdim=True) + 1e-12)).to(cdtype)
     rows = []
     for s in seeds:
         g = torch.Generator(device="cpu")
         g.manual_seed(s)
-        rows.append(torch.rand(n, generator=g, dtype=torch.float64))
+        rows.append(torch.rand(n, generator=g, dtype=recorder.dtype))
     phase0 = torch.stack(rows).to(device)
     field = torch.exp(1j * 2 * math.pi * phase0)
     for _ in range(n_iters):
@@ -475,7 +491,7 @@ def oracle_ideal_batched(targets: torch.Tensor, recorder: NPDDRecorder,
                          bpm: SlabBPM, seeds, n_iters: int = 400,
                          lr: float = 5e-2, dose_budget: float = 1.0):
     device = targets.device
-    theta = _seeded_init_theta_batch(recorder.n_x, device, torch.float64, seeds)
+    theta = _seeded_init_theta_batch(recorder.n_x, device, recorder.dtype, seeds)
     opt = torch.optim.Adam([theta], lr=lr)
     t_norm = targets / (targets.sum(dim=-1, keepdim=True) + 1e-12)
     c_lin = recorder.p.dn_max
