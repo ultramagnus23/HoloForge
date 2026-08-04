@@ -365,7 +365,7 @@ def probe(name: str, n_x=1024, n_iters=800, converge_tol=1e-4):
         jobs = BUILDERS[exp_name](n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
         # pick a representative iterative job (not a closed-form M1/M3, so
         # the timing reflects the actual compute-heavy path)
-        rep = next((j for j in jobs if j["method_id"] in ("M2", "M4", "M5a", "M5b")), jobs[0])
+        rep = next((j for j in jobs if j["method_id"] in ("BSGD", "MIL", "ORC", "ORU")), jobs[0])
         print(f"[probe] {exp_name}: running representative job "
               f"({rep['method_id']}, {len(jobs)} total jobs in this manifest) ...")
         result = run_job(rep, device, commit)
@@ -385,12 +385,12 @@ def probe(name: str, n_x=1024, n_iters=800, converge_tol=1e-4):
     print(f"{'TOTAL':12s} {'':8s} {'':10s} {grand_total:12.2f}")
     print("=" * 60)
     if grand_total > GATE1_HOURS:
-        e1_row = next((r for r in rows if r["experiment"] == "E1"), None)
-        e1_hours = e1_row["total_hours"] if e1_row else 0.0
+        m1_row = next((r for r in rows if r["experiment"] == "M1"), None)
+        m1_hours = m1_row["total_hours"] if m1_row else 0.0
         print(f"\nGATE 1: FAILED -- projected {grand_total:.1f}h exceeds the "
-              f"{GATE1_HOURS:.0f}h threshold. Per the master prompt, this requires "
+              f"{GATE1_HOURS:.0f}h threshold. This requires "
               f"a decision, not a unilateral reduction:\n"
-              f"  (a) 3 seeds instead of 5 for E1 (would cut E1's ~{e1_hours:.1f}h by ~40%)\n"
+              f"  (a) 3 seeds instead of 5 for M1/M2 (would cut M1's ~{m1_hours:.1f}h by ~40%)\n"
               f"  (b) coarser K/sweep grids\n"
               f"  (c) drop E6 (wavelength rerun; already have a single-seed supplement result)\n"
               f"Report this table back and choose a combination before running 'full'.")

@@ -4,16 +4,24 @@ Phase 4: analysis and statistics over experiments/run_manifest.py results.
 Reads every results/{experiment_id}/{config_hash}/{method_id}_seed{N}.json
 (Phase 1.2 schema), aggregates per (experiment_id, config_hash, method_id)
 across seeds (mean/std/median/95% CI, t-distribution), computes paired
-per-seed M4-M2 gains, E1's two cliff-location estimators, the empirical
-headroom-closure table, and emits results/summary/paper_numbers.json.
+per-seed MIL-BSGD gains, the two cliff-location estimators, the empirical
+headroom-closure table (for M1 and, separately, M2), the M3 statistic
+(cliff-location shift between the M1/M2 arms, with seed uncertainty), and
+emits results/summary/paper_numbers.json.
+
+Renamed from an earlier E1-centric version: M1 (iteration-matched arm) and
+M2 (compute-matched arm) share the SAME analysis functions (parameterized
+by experiment_id) rather than duplicating an "M2 version" of everything --
+M3 is not a new data-collection tier, it's the comparison between M1 and
+M2's results, computed here.
 
 Honest scope: as of this pass, results/ contains only the single-seed
-gpu_reruns/ sweeps from an earlier session -- no E1-E6 manifest output
-exists yet (Phase 3 needs a real GPU run, gated behind --probe + your
-Gate-1 review). Every function here is written and tested against
-tests/test_aggregate.py's real (tiny, CPU-scale, clearly-labeled) manifest
-data so the pipeline is verified correct and ready to run the moment real
-E1-E6 results land -- this script does NOT fabricate E1 numbers to fill
+gpu_reruns/ sweeps and V3's RCWA data from earlier sessions -- no M1/M2/
+S1/S2 manifest output exists yet (needs a real GPU run, gated behind
+--probe + your Gate-1 review). Every function here is written and tested
+against tests/test_aggregate.py's real (tiny, CPU-scale, clearly-labeled)
+manifest data so the pipeline is verified correct and ready to run the
+moment real data lands -- this script does NOT fabricate numbers to fill
 paper_numbers.json in the meantime; missing data produces explicit
 "status": "no_data" entries, not invented ones (ground rule 1).
 """
@@ -33,7 +41,7 @@ from holomedia import NPDDRecorder, MediumParams
 RESULTS_ROOT = os.path.join(os.path.dirname(__file__), "..", "results")
 SUMMARY_PATH = os.path.join(RESULTS_ROOT, "summary", "paper_numbers.json")
 
-E1_BUDGETS = (2.0, 4.0, 8.0)
+BUDGETS = (2.0, 4.0, 8.0)
 CI_FLATNESS_THRESHOLD_DB = 0.25
 
 
@@ -132,12 +140,14 @@ def find_ci_includes_zero_K(K_gain_ci: list[tuple],
     return None
 
 
-def e1_gain_curve(grouped: dict, budget: float) -> list[tuple]:
-    """[(K, mean_gain, ci_lo, ci_hi), ...] sorted by K, for one E1 budget,
-    M4-M2 paired gain in PSNR."""
+def gain_curve(grouped: dict, experiment_id: str, budget: float) -> list[tuple]:
+    """[(K, mean_gain, ci_lo, ci_hi), ...] sorted by K, for one
+    (experiment_id, budget) -- MIL-BSGD paired gain in PSNR. Works for M1
+    (iteration-matched) or M2 (compute-matched) identically; which arm
+    you're looking at is just which experiment_id you pass."""
     entries = []
     for (exp_id, config_hash), by_method in grouped.items():
-        if exp_id != "E1":
+        if exp_id != experiment_id:
             continue
         any_rows = next(iter(by_method.values()), None)
         if not any_rows:
@@ -145,8 +155,8 @@ def e1_gain_curve(grouped: dict, budget: float) -> list[tuple]:
         cfg = any_rows[0]["config"]
         if cfg.get("contrast_cap") != budget:
             continue
-        m4, m2 = by_method.get("M4", []), by_method.get("M2", [])
-        pairs = paired_gain(m4, m2, key="psnr")
+        mil, bsgd = by_method.get("MIL", []), by_method.get("BSGD", [])
+        pairs = paired_gain(mil, bsgd, key="psnr")
         gains = [g for _, g in pairs]
         stat = mean_std_median_ci95(gains)
         if stat["mean"] is not None:
@@ -154,12 +164,33 @@ def e1_gain_curve(grouped: dict, budget: float) -> list[tuple]:
     return sorted(entries, key=lambda e: e[0])
 
 
-def _e1_configs_for_budget(grouped: dict, budget: float) -> list[tuple]:
-    """[(config, by_method), ...] for every E1 (experiment,config) group
+def _per_seed_gain_by_K(grouped: dict, experiment_id: str, budget: float) -> dict:
+    """{seed: [(K, gain), ...]} for one (experiment_id, budget) -- the
+    PER-SEED (not seed-averaged) paired gain curve, needed for M3's
+    "uncertainty over seeds" on the cliff-location SHIFT specifically
+    (as opposed to gain_curve's seed-averaged CI on the gain itself)."""
+    by_seed = defaultdict(list)
+    for (exp_id, config_hash), by_method in grouped.items():
+        if exp_id != experiment_id:
+            continue
+        any_rows = next(iter(by_method.values()), None)
+        if not any_rows:
+            continue
+        cfg = any_rows[0]["config"]
+        if cfg.get("contrast_cap") != budget:
+            continue
+        mil, bsgd = by_method.get("MIL", []), by_method.get("BSGD", [])
+        for seed, g in paired_gain(mil, bsgd, key="psnr"):
+            by_seed[seed].append((cfg["K_nominal"], g))
+    return {s: sorted(pts, key=lambda e: e[0]) for s, pts in by_seed.items()}
+
+
+def _configs_for_budget(grouped: dict, experiment_id: str, budget: float) -> list[tuple]:
+    """[(config, by_method), ...] for every (experiment_id, config) group
     whose config has this contrast_cap budget."""
     out = []
     for (exp_id, config_hash), by_method in grouped.items():
-        if exp_id != "E1":
+        if exp_id != experiment_id:
             continue
         any_rows = next(iter(by_method.values()), None)
         if not any_rows:
@@ -170,21 +201,24 @@ def _e1_configs_for_budget(grouped: dict, budget: float) -> list[tuple]:
     return out
 
 
-def headroom_closure(grouped: dict, budgets=E1_BUDGETS) -> list[dict]:
-    """The paper's central table: budget -> measured contrast C (from M4's
-    logged realized-contrast stats) -> predicted Kc(C) (Eq. 5, using
+def headroom_closure(grouped: dict, experiment_id: str = "M1", budgets=BUDGETS) -> list[dict]:
+    """The paper's central table: budget -> measured contrast C (from
+    MIL's logged realized-contrast stats) -> predicted Kc(C) (Eq. 5, using
     MEASURED C, not the nominal budget) -> observed K* (both estimators).
+    Call once with experiment_id="M1" (iteration-matched) and once with
+    "M2" (compute-matched) -- see m3_cliff_shift for the comparison
+    between the two.
     """
     table = []
     for budget in budgets:
-        curve = e1_gain_curve(grouped, budget)
-        configs_and_methods = _e1_configs_for_budget(grouped, budget)
+        curve = gain_curve(grouped, experiment_id, budget)
+        configs_and_methods = _configs_for_budget(grouped, experiment_id, budget)
 
-        # measured contrast C: mean of M4's realized max/mean across all
+        # measured contrast C: mean of MIL's realized max/mean across all
         # (K, seed) for this budget
         contrasts = [r["contrast"]["max_over_mean"]
                     for _, by_method in configs_and_methods
-                    for r in by_method.get("M4", [])
+                    for r in by_method.get("MIL", [])
                     if r["contrast"]["max_over_mean"] is not None]
 
         if not curve or not contrasts:
@@ -193,9 +227,10 @@ def headroom_closure(grouped: dict, budgets=E1_BUDGETS) -> list[dict]:
 
         measured_C = statistics.fmean(contrasts)
         # predicted Kc(measured_C): rebuild a recorder from ANY matching
-        # E1 config's medium/grid to evaluate the analytic Eq. 5 inversion
+        # config's medium/grid to evaluate the analytic Eq. 5 inversion
         # (grid/medium are the same across every job in a budget group by
-        # construction of build_E1_jobs, so any one config is representative)
+        # construction of build_M1_jobs/build_M2_jobs, so any one config
+        # is representative)
         any_cfg = configs_and_methods[0][0]
         medium = MediumParams(**any_cfg["medium"])
         rec = NPDDRecorder(any_cfg["n_x"], any_cfg["dx"], params=medium)
@@ -212,6 +247,53 @@ def headroom_closure(grouped: dict, budgets=E1_BUDGETS) -> list[dict]:
     return table
 
 
+def m3_cliff_shift(grouped: dict, budgets=BUDGETS) -> list[dict]:
+    """M3 (per your instruction, not a data-collection tier): the shift in
+    cliff location between the M1 (iteration-matched) and M2 (compute-
+    matched) arms, with uncertainty over seeds.
+
+    Two views are reported per budget:
+      - point-estimate shift: K*(M2, seed-averaged) - K*(M1, seed-averaged),
+        via the zero-crossing-interp estimator on each arm's aggregate curve.
+      - per-seed shift distribution: K* is ALSO estimated separately from
+        EACH seed's own (non-averaged) gain-vs-K curve in both arms, paired
+        by seed, giving a real mean/std of the shift across seeds -- this
+        is the "with uncertainty over seeds" part specifically, not just
+        two point estimates compared.
+    """
+    out = []
+    for budget in budgets:
+        m1_curve = gain_curve(grouped, "M1", budget)
+        m2_curve = gain_curve(grouped, "M2", budget)
+        if not m1_curve or not m2_curve:
+            out.append(dict(budget=budget, status="no_data"))
+            continue
+
+        kstar_m1 = find_zero_crossing_K([(k, g) for k, g, _, _ in m1_curve])
+        kstar_m2 = find_zero_crossing_K([(k, g) for k, g, _, _ in m2_curve])
+        point_shift = (kstar_m2 - kstar_m1
+                      if kstar_m1 is not None and kstar_m2 is not None else None)
+
+        m1_by_seed = _per_seed_gain_by_K(grouped, "M1", budget)
+        m2_by_seed = _per_seed_gain_by_K(grouped, "M2", budget)
+        common_seeds = sorted(set(m1_by_seed) & set(m2_by_seed))
+        per_seed_shifts = []
+        for seed in common_seeds:
+            k1 = find_zero_crossing_K(m1_by_seed[seed])
+            k2 = find_zero_crossing_K(m2_by_seed[seed])
+            if k1 is not None and k2 is not None:
+                per_seed_shifts.append(k2 - k1)
+
+        shift_stats = mean_std_median_ci95(per_seed_shifts) if per_seed_shifts else None
+        out.append(dict(
+            budget=budget, Kstar_M1=kstar_m1, Kstar_M2=kstar_m2,
+            point_estimate_shift=point_shift,
+            n_seeds_with_valid_shift=len(per_seed_shifts),
+            per_seed_shift_stats=shift_stats,
+        ))
+    return out
+
+
 # ----------------------------------------------------------- sub-cliff check
 SUB_CLIFF_OLD_VALUES = {  # from results_prelim.json, single effective seed (bug)
     0.98: 1.6458, 1.96: 0.9481, 2.62: 2.3740,
@@ -219,19 +301,19 @@ SUB_CLIFF_OLD_VALUES = {  # from results_prelim.json, single effective seed (bug
 
 
 def sub_cliff_non_monotonicity_status(grouped: dict) -> dict:
-    """The master prompt asks whether the old data's sub-cliff non-
-    monotonicity (+1.65 at K=0.98, +0.95 at K=1.96, +2.37 at K=2.62) is
-    noise or structure, 'with error bars.' Those old numbers are from
-    results_prelim.json, produced under the (now-fixed) seed bug -- every
-    'seed' there was one bit-identical trajectory, so NO error bars can
-    be computed for them; the question is genuinely unanswerable from
-    that data, not just unanswered. Checks whether real multi-seed E1
-    data now exists at those K values and answers for real if so;
-    otherwise states the blocker honestly instead of guessing."""
+    """Whether the old data's sub-cliff non-monotonicity (+1.65 at
+    K=0.98, +0.95 at K=1.96, +2.37 at K=2.62) is noise or structure,
+    'with error bars.' Those old numbers are from results_prelim.json,
+    produced under the (now-fixed) seed bug -- every 'seed' there was one
+    bit-identical trajectory, so NO error bars can be computed for them;
+    the question is genuinely unanswerable from that data, not just
+    unanswered. Checks whether real multi-seed M1 data now exists at
+    those K values and answers for real if so; otherwise states the
+    blocker honestly instead of guessing."""
     found = {}
     for K in SUB_CLIFF_OLD_VALUES:
-        for budget in E1_BUDGETS:
-            curve = e1_gain_curve(grouped, budget)
+        for budget in BUDGETS:
+            curve = gain_curve(grouped, "M1", budget)
             match = next((e for e in curve if abs(e[0] - K) < 1e-3), None)
             if match:
                 found.setdefault(K, {})[budget] = match
@@ -241,7 +323,7 @@ def sub_cliff_non_monotonicity_status(grouped: dict) -> dict:
             reason="Old values (results_prelim.json) were produced under the "
                    "seed-init bug -- every 'seed' was one bit-identical "
                    "trajectory, so no error bars can be computed retroactively. "
-                   "This question needs real multi-seed E1 data at K=0.98/1.96/2.62, "
+                   "This question needs real multi-seed M1 data at K=0.98/1.96/2.62, "
                    "which does not exist yet.",
             old_values_no_error_bars=SUB_CLIFF_OLD_VALUES,
         )
@@ -258,13 +340,18 @@ def build_paper_numbers(results_root: str = RESULTS_ROOT) -> dict:
         key = f"{exp_id}/{config_hash}"
         per_config[key] = {m: aggregate_method(rows) for m, rows in by_method.items()}
 
-    e1_present = any(exp_id == "E1" for exp_id, _ in grouped)
+    present = set(exp_id for exp_id, _ in grouped)
+    m1_present, m2_present = "M1" in present, "M2" in present
     out = dict(
         n_result_files=len(results),
-        experiments_present=sorted(set(exp_id for exp_id, _ in grouped)),
+        experiments_present=sorted(present),
         per_config=per_config,
-        e1_headroom_closure=headroom_closure(grouped) if e1_present else
-            [dict(budget=b, status="no_data") for b in E1_BUDGETS],
+        m1_headroom_closure=headroom_closure(grouped, "M1") if m1_present else
+            [dict(budget=b, status="no_data") for b in BUDGETS],
+        m2_headroom_closure=headroom_closure(grouped, "M2") if m2_present else
+            [dict(budget=b, status="no_data") for b in BUDGETS],
+        m3_cliff_shift=m3_cliff_shift(grouped) if (m1_present and m2_present) else
+            [dict(budget=b, status="no_data") for b in BUDGETS],
         sub_cliff_non_monotonicity=sub_cliff_non_monotonicity_status(grouped),
     )
     return out
@@ -278,8 +365,11 @@ def main():
     print(f"wrote {SUMMARY_PATH}")
     print(f"  {out['n_result_files']} result files, experiments present: "
           f"{out['experiments_present']}")
-    for row in out["e1_headroom_closure"]:
-        print(f"  E1 budget={row['budget']}: {row.get('status', 'ok')} "
+    for row in out["m1_headroom_closure"]:
+        print(f"  M1 budget={row['budget']}: {row.get('status', 'ok')} "
+              f"{'' if row.get('status') else row}")
+    for row in out["m3_cliff_shift"]:
+        print(f"  M3 (cliff shift) budget={row['budget']}: {row.get('status', 'ok')} "
               f"{'' if row.get('status') else row}")
 
 

@@ -1,21 +1,28 @@
 """
-Phase 2 method registry: uniform dispatch over M1-M5b for the manifest
-runner (experiments/run_manifest.py). Each entry point takes the same
-config-shaped arguments and returns the same shape of result, so the
-runner can compute PSNR/DE/contrast-stats and write the Phase-1.2 schema
-generically without a per-method special case.
+Phase 2 method registry: uniform dispatch over GS/BSGD/LPC/MIL/ORC/ORU for
+the manifest runner (experiments/run_manifest.py). Each entry point takes
+the same config-shaped arguments and returns the same shape of result, so
+the runner can compute PSNR/DE/contrast-stats and write the Phase-1.2
+schema generically without a per-method special case.
 
 Registry
 --------
-M1  media_blind_gs           -- phase-optimized, naive linear exposure map
-M2  media_blind_sgd          -- SGD on an ideal linear medium, eval on twin
-M3  linear_precomp           -- NEW: closed-form 1/H(K) pre-compensation
-M4  media_in_the_loop        -- ours
-M5a oracle_ideal             -- constrained oracle (E>=0, dose+contrast)
-M5b oracle_unconstrained     -- NEW: free dn optimization, only dn_max-bounded
+GS   media_blind_gs           -- phase-optimized, naive linear exposure map
+BSGD media_blind_sgd          -- SGD on an ideal linear medium, eval on twin
+LPC  linear_precomp           -- closed-form 1/H(K) pre-compensation
+MIL  media_in_the_loop        -- ours
+ORC  oracle_ideal             -- constrained oracle (E>=0, dose+contrast)
+ORU  oracle_unconstrained     -- free dn optimization, only dn_max-bounded
 
-M1 and M3 have no optimization loop (`iterations_run: 0`, empty loss
-history) -- this is intentional per Phase 2's spec, not a missing feature.
+Originally named M1-M5b; renamed to avoid colliding with the experiment-
+tier names M1-M3 (main cliff/budget comparison, see experiments/manifest.py)
+introduced by the V1-V3/M1-M3/S1-S2 restructure -- "M1" meaning both a
+method and an experiment tier in the same job dict was a real ambiguity,
+not just a style choice.
+
+GS and LPC have no optimization loop (`iterations_run: 0`, empty loss
+history) -- this is intentional (closed-form methods), not a missing
+feature.
 """
 from __future__ import annotations
 import sys, os
@@ -27,15 +34,15 @@ from holomedia import (NPDDRecorder, SlabBPM,
                        oracle_ideal, oracle_unconstrained, linear_precomp,
                        psnr, diffraction_efficiency)
 
-METHOD_IDS = ["M1", "M2", "M3", "M4", "M5a", "M5b"]
+METHOD_IDS = ["GS", "BSGD", "LPC", "MIL", "ORC", "ORU"]
 
 METHOD_NAMES = {
-    "M1": "media_blind_gs",
-    "M2": "media_blind_sgd",
-    "M3": "linear_precomp",
-    "M4": "media_in_the_loop",
-    "M5a": "oracle_ideal",
-    "M5b": "oracle_unconstrained",
+    "GS": "media_blind_gs",
+    "BSGD": "media_blind_sgd",
+    "LPC": "linear_precomp",
+    "MIL": "media_in_the_loop",
+    "ORC": "oracle_ideal",
+    "ORU": "oracle_unconstrained",
 }
 
 
@@ -64,24 +71,24 @@ def run_method(method_id: str, target: torch.Tensor, recorder: NPDDRecorder,
     early_stop_reason = "n/a"
     iterations_run = n_iters
 
-    if method_id == "M1":
+    if method_id == "GS":
         E, recon = media_blind_gs(target, recorder, bpm, dose_budget=dose_budget, seed=seed)
         iterations_run = 0
         early_stop_reason = "closed_form_no_optimization"
 
-    elif method_id == "M2":
+    elif method_id == "BSGD":
         E, recon, history = media_blind_sgd(target, recorder, bpm, n_iters=n_iters,
                                             lr=lr, dose_budget=dose_budget, seed=seed,
                                             contrast_cap=contrast_cap, log_every=log_every)
         early_stop_reason = "n_iters_exhausted"
 
-    elif method_id == "M3":
+    elif method_id == "LPC":
         E, recon = linear_precomp(target, recorder, bpm, dose_budget=dose_budget,
                                   contrast_cap=contrast_cap)
         iterations_run = 0
         early_stop_reason = "closed_form_no_optimization"
 
-    elif method_id == "M4":
+    elif method_id == "MIL":
         E, recon, history = media_in_the_loop(target, recorder, bpm, n_iters=n_iters,
                                               lr=lr, dose_budget=dose_budget, seed=seed,
                                               log_every=log_every, verbose=False,
@@ -91,13 +98,13 @@ def run_method(method_id: str, target: torch.Tensor, recorder: NPDDRecorder,
         early_stop_reason = ("converge_tol" if (converge_tol is not None and
                              iterations_run < n_iters - 1) else "n_iters_exhausted")
 
-    elif method_id == "M5a":
+    elif method_id == "ORC":
         E, recon = oracle_ideal(target, recorder, bpm, n_iters=n_iters, lr=lr,
                                 dose_budget=dose_budget, seed=seed,
                                 contrast_cap=contrast_cap)
         early_stop_reason = "n_iters_exhausted"
 
-    elif method_id == "M5b":
+    elif method_id == "ORU":
         E, recon = oracle_unconstrained(target, recorder, bpm, n_iters=n_iters,
                                         lr=lr, seed=seed)
         early_stop_reason = "n_iters_exhausted"

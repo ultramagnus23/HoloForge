@@ -78,7 +78,7 @@ def test_F4_renders_real_content_when_E1_data_present():
         n_x = 48
         dx = 51.2 / n_x
         for K, period_px in [(2.0, 16), (6.0, 5)]:
-            for method_id in ["M2", "M4"]:
+            for method_id in ["BSGD", "MIL"]:
                 for seed in [0, 1]:
                     config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=3,
                                  converge_tol=None, contrast_cap=4.0, dose_budget=1.0,
