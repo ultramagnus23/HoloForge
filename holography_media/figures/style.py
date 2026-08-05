@@ -18,14 +18,14 @@ COLORS = dict(
     vermillion="#D55E00", reddish_purple="#CC79A7",
 )
 METHOD_COLORS = {
-    "M1": COLORS["reddish_purple"], "M2": COLORS["vermillion"],
-    "M3": COLORS["yellow"], "M4": COLORS["blue"],
-    "M5a": COLORS["bluish_green"], "M5b": COLORS["sky_blue"],
+    "GS": COLORS["reddish_purple"], "BSGD": COLORS["vermillion"],
+    "LPC": COLORS["yellow"], "MIL": COLORS["blue"],
+    "ORC": COLORS["bluish_green"], "ORU": COLORS["sky_blue"],
 }
 METHOD_LABELS = {
-    "M1": "media-blind GS", "M2": "media-blind SGD", "M3": "linear pre-comp",
-    "M4": "ours (media-in-the-loop)", "M5a": "oracle (constrained)",
-    "M5b": "oracle (unconstrained)",
+    "GS": "media-blind GS", "BSGD": "media-blind SGD", "LPC": "linear pre-comp",
+    "MIL": "ours (media-in-the-loop)", "ORC": "oracle (constrained)",
+    "ORU": "oracle (unconstrained)",
 }
 
 plt.rcParams.update({

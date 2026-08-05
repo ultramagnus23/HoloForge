@@ -32,7 +32,7 @@ import matplotlib.patches as mpatches
 from style import (new_fig, savefig, no_data_placeholder, COLORS,
                    METHOD_COLORS, METHOD_LABELS, SINGLE_COL_IN, DOUBLE_COL_IN)
 from analysis.aggregate import (load_all_results, group_by_config,
-                                headroom_closure, e1_gain_curve, E1_BUDGETS,
+                                headroom_closure, gain_curve, BUDGETS,
                                 mean_std_median_ci95, paired_gain)
 
 HERE = os.path.dirname(__file__)
@@ -116,7 +116,7 @@ def make_F3_reconstruction_panels(K_values=(1.31, 3.93, 5.24)):
 # --------------------------------------------------------------------- F4/F5
 def make_F4_headline_gain_vs_K():
     grouped = group_by_config(load_all_results())
-    closure = headroom_closure(grouped, budgets=E1_BUDGETS)
+    closure = headroom_closure(grouped, "M1", budgets=BUDGETS)
     if all(r.get("status") == "no_data" for r in closure):
         no_data_placeholder(
             os.path.join(OUT_DIR, "F4_headline_gain_vs_K.pdf"),
@@ -128,7 +128,7 @@ def make_F4_headline_gain_vs_K():
 
 def _render_F4(closure):
     fig, ax = new_fig(width="single")
-    for row, budget in zip(closure, E1_BUDGETS):
+    for row, budget in zip(closure, BUDGETS):
         if row.get("status") == "no_data":
             continue
         curve = row["gain_curve"]
@@ -149,7 +149,7 @@ def _render_F4(closure):
 
 def make_F5_Kstar_vs_Kc_scatter():
     grouped = group_by_config(load_all_results())
-    closure = headroom_closure(grouped, budgets=E1_BUDGETS)
+    closure = headroom_closure(grouped, "M1", budgets=BUDGETS)
     valid = [r for r in closure if r.get("status") != "no_data"]
     if not valid:
         no_data_placeholder(

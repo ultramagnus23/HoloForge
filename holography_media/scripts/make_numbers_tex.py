@@ -51,7 +51,7 @@ def build_macros(paper_numbers: dict) -> str:
             "\\usepackage{xcolor}  % for the [PENDING] flag color, harmless if already loaded\n",
             "\n"]
 
-    closure = paper_numbers.get("e1_headroom_closure", [])
+    closure = paper_numbers.get("m1_headroom_closure", [])
     seed_counts = set()
     for row in closure:
         label = BUDGET_LABELS.get(row.get("budget"))
@@ -72,12 +72,12 @@ def build_macros(paper_numbers: dict) -> str:
         mean_gain = statistics.fmean(g for _, g, _, _ in curve) if curve else None
         lines.append(macro(f"MeanGain{label}", fmt(mean_gain)))
 
-    # seed count: consistent across all logged E1 rows, or PENDING if absent/inconsistent
+    # seed count: consistent across all logged M1 rows, or PENDING if absent/inconsistent
     per_config = paper_numbers.get("per_config", {})
-    e1_seed_counts = {v["n_seeds"] for k, methods in per_config.items()
-                      if k.startswith("E1/") for v in methods.values()}
-    if len(e1_seed_counts) == 1:
-        lines.append(macro("SeedCount", str(next(iter(e1_seed_counts)))))
+    m1_seed_counts = {v["n_seeds"] for k, methods in per_config.items()
+                      if k.startswith("M1/") for v in methods.values()}
+    if len(m1_seed_counts) == 1:
+        lines.append(macro("SeedCount", str(next(iter(m1_seed_counts)))))
     else:
         lines.append(macro("SeedCount", None))
 

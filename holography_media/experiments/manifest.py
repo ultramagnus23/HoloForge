@@ -1,5 +1,30 @@
 """
-Phase 1.1: job manifest builders for E1-E7.
+Job manifest builders: V1-V3 (validation, blocking), M1-M2 (main cliff/
+budget comparison, two arms), S1-S2 (supporting: physics ablation,
+parameter sensitivity). Renamed from the earlier E1-E7 scheme per the
+execution spec's explicit instruction to avoid collision and restructure
+into three tiers -- see docs/legacy_results_audit.md for what the old E1-E7
+data maps to under this structure.
+
+Execution-readiness by tier (see each builder's docstring for detail):
+  M1, M2, S1, S2 -- fully execution-ready NOW. They reuse the SAME method
+    registry (experiments/methods.py: GS/BSGD/LPC/MIL/ORC/ORU) and the
+    same run_job() path as the old E1-E4 did; only the job CONFIGS differ
+    (different medium-param sweeps / iteration-matching rules). No new
+    runner code needed.
+  V3 -- already execution-ready, but via a DIFFERENT script
+    (experiments/rcwa_crosscheck.py), not this manifest/run_job path at
+    all (RCWA cross-checks have no seed/method-registry structure -- see
+    that script's own docstring). Real data already exists:
+    results_rcwa.json (3-case) + results_rcwa_e7.json (90-case grid).
+  V1, V2 -- job CONFIGS are defined below (real, not placeholders), but
+    NEITHER has an execution path through run_job()/methods.run_method()
+    yet -- both are solver/regime characterizations, not optimizer-method
+    comparisons, and need new runner code. V1 overlaps substantially with
+    the existing (already-written) experiments/f1_validate_twin.py; V2
+    needs a genuine 3-way Kogelnik/BPM/RCWA comparison that does not exist
+    yet (rcwa_crosscheck.py's E7 grid only compares Kogelnik vs RCWA, not
+    BPM). Flagged, not silently faked.
 
 A manifest is a flat list of job dicts:
     {experiment_id, method_id, seed, config, config_hash}
@@ -9,12 +34,6 @@ MediumParams, NPDDRecorder, and SlabBPM for that job -- nothing implicit.
 `config`, used as the results-directory key so two configs that differ in
 any field never collide and identical configs always resolve to the same
 path (resume = same command -> same hashes -> same skip set).
-
-Paper-scale defaults (master prompt Phase 3): n_x=1024, 800 Adam iters,
-converge_tol=1e-4 (hard cap 1500), 5 seeds, PVA/AA-like defaults at 405nm
-unless swept. These are DEFAULTS on the builder functions, not hardcoded,
-so a smoke pass at n_x=256 (or smaller) is one keyword away for local
-CPU verification before anything goes to Colab.
 """
 from __future__ import annotations
 import hashlib
@@ -29,8 +48,22 @@ DEFAULT_MEDIUM = dict(D0=0.1, sigma=0.08, kappa=2.0, gamma=1.0, dn_max=3.5e-3,
                       k_bleach=0.2, alpha_D=1.0, shrinkage=0.005,
                       thickness=30.0, n0=1.5)
 
-ALL_METHODS = ["M1", "M2", "M3", "M4", "M5a", "M5b"]
+# GS/LPC (media_blind_gs, linear_precomp) are closed-form, no optimization
+# loop -- see experiments/methods.py for the full registry and why these
+# short codes replaced the earlier M1-M5b naming (collision with these
+# new experiment-tier names).
+ALL_METHODS = ["GS", "BSGD", "LPC", "MIL", "ORC", "ORU"]
 PAPER_SEEDS = [0, 1, 2, 3, 4]
+
+# Measured (not assumed) on CPU at n_x=1024: MIL (media_in_the_loop, full
+# NPDD forward per iteration) costs ~21.7x more wall-clock per iteration
+# than BSGD (media_blind_sgd, a single linear multiply + BPM readout) --
+# see the commit introducing M2 for the measurement script. PROVISIONAL:
+# re-measure on the actual GPU before relying on this for real M2 runs:
+# relative FFT-vs-elementwise cost can differ meaningfully between CPU and
+# GPU (and between GPU models), so this default should be treated as a
+# starting point, not a settled constant.
+COMPUTE_MATCH_RATIO = 21.7
 
 
 def config_hash(config: dict) -> str:
@@ -55,26 +88,37 @@ def period_from_K(K: float, dx: float) -> int:
     return max(2, round(2.0 * math.pi / (K * dx)))
 
 
-# ---------------------------------------------------------------- E1: cliff x budget
-def build_E1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
-                  seeds=None, methods=None) -> list[dict]:
-    """Cliff x budget grid, the headline experiment.
+# The 14-point K grid from the original cliff/budget design (7 historical
+# period-px values union a dense insert across the collapse region) --
+# unchanged science, just the experiment_id it feeds is renamed below.
+def _cliff_K_grid(dx: float) -> list[float]:
+    existing_periods = [8, 12, 16, 24, 32, 48, 64]
+    existing_K = sorted(K_from_period(p, dx) for p in existing_periods)
+    dense_insert_K = [3.5, 4.25, 4.6, 5.0, 5.6, 6.0, 6.5]
+    return sorted(set(round(k, 6) for k in existing_K + dense_insert_K))
 
-    K grid: the existing 7 points union a dense insert across the collapse
-    region, per master prompt Phase 3 exactly:
-        {0.98, 1.31, 1.96, 2.62, 3.5, 3.93, 4.25, 4.6, 5.0, 5.24, 5.6, 6.0,
-         6.5, 7.85} -- 14 unique K values (union of the 7 existing period-px
-        values' K's and the 7 new dense-insert K values in rad/um, sorted).
-    Budgets: contrast_cap in {2.0, 4.0, 8.0}, matching predicted_cliff's
-    B_c exactly per docs/definitions.md (d).
+
+# =====================================================================
+# M1/M2: main cliff x budget comparison, two arms (per your instruction:
+# "matched on scenes, seeds, optimizer, iteration budget, and separately
+# on compute"). M3 is NOT a third manifest -- it's the derived statistic
+# (shift in cliff location between the M1/M2 arms, with seed uncertainty),
+# computed by analysis/aggregate.py from M1+M2's data. See the PR/commit
+# message for the explicit interpretation call this rests on.
+# =====================================================================
+def build_M1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
+                  seeds=None, methods=None) -> list[dict]:
+    """Cliff x budget grid, ITERATION-matched arms: BSGD (media-unaware)
+    and MIL (media-aware) both get the same n_iters budget. This is the
+    original cliff/budget design (formerly build_E1_jobs), unchanged
+    science -- only the experiment_id changed (E1 -> M1) and the method
+    registry codes changed (M2/M4 -> BSGD/MIL) to avoid the tier-name
+    collision.
     """
     seeds = seeds if seeds is not None else PAPER_SEEDS
     methods = methods if methods is not None else ALL_METHODS
     dx = 51.2 / n_x  # fixed physical window, matches gpu_npdd_mesh_convergence_sweep.py convention
-    existing_periods = [8, 12, 16, 24, 32, 48, 64]
-    existing_K = sorted(K_from_period(p, dx) for p in existing_periods)
-    dense_insert_K = [3.5, 4.25, 4.6, 5.0, 5.6, 6.0, 6.5]
-    all_K = sorted(set(round(k, 6) for k in existing_K + dense_insert_K))
+    all_K = _cliff_K_grid(dx)
     budgets = [2.0, 4.0, 8.0]
 
     jobs = []
@@ -87,190 +131,244 @@ def build_E1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
                     converge_tol=converge_tol, contrast_cap=budget,
                     dose_budget=1.0, medium=DEFAULT_MEDIUM,
                     target=_bars_target_spec(period_px), K_nominal=K,
+                    arm="iteration_matched",
                 )
-                if method_id in ("M1", "M3"):
+                if method_id in ("GS", "LPC"):
                     for_seeds = [0]  # closed-form, no seed dependence worth repeating
                 else:
                     for_seeds = seeds
                 for seed in for_seeds:
-                    jobs.append(_job("E1", method_id, seed, base_config))
+                    jobs.append(_job("M1", method_id, seed, base_config))
     return jobs
 
 
-# ---------------------------------------------------------------- E2: sigma probe
-def build_E2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
-                  seeds=None) -> list[dict]:
-    """Sigma probe at K=7.85 rad/um, methods M2+M4, 5 seeds."""
-    seeds = seeds if seeds is not None else PAPER_SEEDS
-    dx = 51.2 / n_x
-    K_target = 7.853981633974483  # period8 at this window convention
-    period_px = period_from_K(K_target, dx)
-    sigmas = [0.02, 0.05, 0.08, 0.12, 0.20, 0.30]
+def build_M2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
+                  seeds=None, compute_match_ratio: float = COMPUTE_MATCH_RATIO) -> list[dict]:
+    """Same cliff x budget grid, COMPUTE-matched arms: BSGD gets
+    n_iters * compute_match_ratio iterations so its total wall-clock/FLOP
+    cost approximately matches MIL's (which does a full NPDD forward pass
+    per iteration; BSGD does one linear multiply). Only BSGD and MIL are
+    compared here (GS/LPC/ORC/ORU aren't part of the arm-matching question
+    -- they don't have a "budget" to match in the same sense).
 
-    jobs = []
-    for sigma in sigmas:
-        medium = dict(DEFAULT_MEDIUM, sigma=sigma)
-        config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=n_iters,
-                     converge_tol=converge_tol, contrast_cap=None,
-                     dose_budget=1.0, medium=medium,
-                     target=_bars_target_spec(period_px), K_nominal=K_target)
-        for method_id in ["M2", "M4"]:
-            for seed in seeds:
-                jobs.append(_job("E2", method_id, seed, config))
-    return jobs
-
-
-# ---------------------------------------------------------------- E3: shrinkage
-def build_E3_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
-                  seeds=None) -> list[dict]:
-    """Shrinkage sweep at K=3.93 rad/um, methods M2+M4, 5 seeds."""
-    seeds = seeds if seeds is not None else PAPER_SEEDS
-    dx = 51.2 / n_x
-    K_target = 3.9269908169872414  # period16
-    period_px = period_from_K(K_target, dx)
-    shrinkages = [0.0, 0.01, 0.02, 0.03]
-
-    jobs = []
-    for s in shrinkages:
-        medium = dict(DEFAULT_MEDIUM, shrinkage=s)
-        config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=n_iters,
-                     converge_tol=converge_tol, contrast_cap=None,
-                     dose_budget=1.0, medium=medium,
-                     target=_bars_target_spec(period_px), K_nominal=K_target)
-        for method_id in ["M2", "M4"]:
-            for seed in seeds:
-                jobs.append(_job("E3", method_id, seed, config))
-    return jobs
-
-
-# ---------------------------------------------------------------- E4: material sweeps
-def build_E4_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
-                  seeds=None) -> list[dict]:
-    """Delta_n_max / thickness / D0 sweeps, methods M2+M4, 3 seeds (labeled)."""
-    seeds = seeds if seeds is not None else [0, 1, 2]
-    dx = 51.2 / n_x
-    K_target = 3.9269908169872414
-    period_px = period_from_K(K_target, dx)
-
-    axes = {
-        "dn_max": [1e-3, 3.5e-3, 6e-3],
-        "thickness": [10.0, 30.0, 100.0],
-        "D0": [0.01, 0.1, 1.0],
-    }
-    jobs = []
-    for field, values in axes.items():
-        for v in values:
-            medium = dict(DEFAULT_MEDIUM, **{field: v})
-            config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=n_iters,
-                         converge_tol=converge_tol, contrast_cap=None,
-                         dose_budget=1.0, medium=medium,
-                         target=_bars_target_spec(period_px), K_nominal=K_target,
-                         swept_field=field)
-            for method_id in ["M2", "M4"]:
-                for seed in seeds:
-                    jobs.append(_job("E4", method_id, seed, config))
-    return jobs
-
-
-# ---------------------------------------------------------------- E5: targets beyond bars
-def build_E5_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
-                  seeds=None, image_slice_paths=None) -> list[dict]:
-    """Sparse-spot + natural-image-slice targets, all 6 methods, 3 seeds.
-
-    image_slice_paths: list of paths to 1D-sliceable image assets. NOT
-    fetched or fabricated by this builder -- per the master prompt, an
-    actual CC-licensed (or DIV2K-if-licensing-permits) image must be added
-    to the repo by the user first, with its source/license documented
-    (data/images/README.md, not yet created). Called with image_slice_paths
-    unset, this returns ONLY the sparse-spot jobs and prints a warning
-    rather than silently fabricating image data or downloading anything
-    (downloading files requires explicit user approval, out of scope for
-    an unattended builder function).
+    compute_match_ratio defaults to a CPU-measured value (see
+    COMPUTE_MATCH_RATIO's docstring) -- pass a GPU-measured ratio once
+    available; this parameter exists specifically so that re-measurement
+    doesn't require editing this function.
     """
-    seeds = seeds if seeds is not None else [0, 1, 2]
+    seeds = seeds if seeds is not None else PAPER_SEEDS
     dx = 51.2 / n_x
-    budgets_by_operating_point = {"below_cliff": 8.0, "at_cliff": 2.0, "above_cliff": 1.0}
+    all_K = _cliff_K_grid(dx)
+    budgets = [2.0, 4.0, 8.0]
+    bsgd_n_iters = round(n_iters * compute_match_ratio)
 
     jobs = []
-    for op_name, budget in budgets_by_operating_point.items():
-        config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=n_iters,
-                     converge_tol=converge_tol, contrast_cap=budget,
-                     dose_budget=1.0, medium=DEFAULT_MEDIUM,
-                     target=dict(kind="spots", n_spots=5, seed=7),
-                     operating_point=op_name)
-        for method_id in ALL_METHODS:
-            for seed in seeds:
-                jobs.append(_job("E5", method_id, seed, config))
-
-    if not image_slice_paths:
-        print("[build_E5_jobs] WARNING: no image_slice_paths supplied -- "
-              "natural-image-slice targets NOT included. Add licensed image "
-              "assets under data/images/ (with data/images/README.md "
-              "documenting source+license) and pass their paths before "
-              "this experiment is complete per the master prompt.")
-    else:
-        for img_path in image_slice_paths:
-            for op_name, budget in budgets_by_operating_point.items():
-                config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=n_iters,
+    for K in all_K:
+        period_px = period_from_K(K, dx)
+        for budget in budgets:
+            target = _bars_target_spec(period_px)
+            mil_config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=n_iters,
                              converge_tol=converge_tol, contrast_cap=budget,
                              dose_budget=1.0, medium=DEFAULT_MEDIUM,
-                             target=dict(kind="image_slice", path=img_path, row=None),
-                             operating_point=op_name)
-                for method_id in ALL_METHODS:
-                    for seed in seeds:
-                        jobs.append(_job("E5", method_id, seed, config))
+                             target=target, K_nominal=K, arm="compute_matched")
+            bsgd_config = dict(mil_config, n_iters=bsgd_n_iters)
+            for seed in seeds:
+                jobs.append(_job("M2", "MIL", seed, mil_config))
+                jobs.append(_job("M2", "BSGD", seed, bsgd_config))
     return jobs
 
 
-# ---------------------------------------------------------------- E6: wavelength (optional)
-def build_E6_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
+# =====================================================================
+# S1: physics-component ablation (NOT the same as the pre-existing
+# experiments/ablation_gradients.py, which ablates GRADIENT COMPUTATION
+# PATHWAYS -- an engineering question. This ablates NPDD MODEL TERMS -- a
+# physics question. See docs/legacy_results_audit.md's flagged naming
+# collision.) Each condition is implemented via existing MediumParams
+# fields alone (no new holomedia code): setting a parameter to its
+# limiting value approximates removing that physical mechanism.
+# =====================================================================
+S1_K_POINTS = [1.308996938995747, 3.9269908169872414, 5.235987755982988]  # sub/near/post-cliff
+S1_BUDGET = 2.0
+
+S1_CONDITIONS = {
+    "baseline": {},
+    "no_nonlocality": dict(sigma=0.0),  # Ghat(K) = exp(-0.5 K^2 sigma^2) -> 1: no blur
+    "no_diffusion": dict(D0=0.0),  # D_eff = D0 exp(-alpha_D N) -> 0: no transport
+    "no_dye_depletion": dict(k_bleach=0.0),  # d(t) stays 1: no sensitivity falloff
+    # dn_max -> 100x default: tanh(1.5 N) stays in its linear regime for
+    # realistic N, approximating an unsaturating (linear) index response.
+    # This is an APPROXIMATION of removing saturation (tanh is still
+    # technically present), not an exact ablation -- documented as such,
+    # not silently treated as exact.
+    "no_saturation_approx": dict(dn_max=DEFAULT_MEDIUM["dn_max"] * 100),
+}
+
+
+def build_S1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
                   seeds=None) -> list[dict]:
-    """Wavelength-detuning rerun at 3 seeds -- ONLY if Gate 1 budget allows.
-    Not included in build_all_jobs() by default; call explicitly."""
     seeds = seeds if seeds is not None else [0, 1, 2]
     dx = 51.2 / n_x
-    K_target = 3.9269908169872414
-    period_px = period_from_K(K_target, dx)
-    wavelengths = [0.400, 0.405, 0.420, 0.435, 0.450]
-
     jobs = []
-    for lam in wavelengths:
-        config = dict(n_x=n_x, dx=dx, lam_um=lam, n_iters=n_iters,
-                     converge_tol=converge_tol, contrast_cap=None,
-                     dose_budget=1.0, medium=DEFAULT_MEDIUM,
-                     target=_bars_target_spec(period_px), K_nominal=K_target)
-        for seed in seeds:
-            jobs.append(_job("E6", "M4", seed, config))
+    for K in S1_K_POINTS:
+        period_px = period_from_K(K, dx)
+        for cond_name, overrides in S1_CONDITIONS.items():
+            medium = dict(DEFAULT_MEDIUM, **overrides)
+            config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=n_iters,
+                         converge_tol=converge_tol, contrast_cap=S1_BUDGET,
+                         dose_budget=1.0, medium=medium,
+                         target=_bars_target_spec(period_px), K_nominal=K,
+                         ablation_condition=cond_name)
+            for method_id in ["BSGD", "MIL"]:
+                for seed in seeds:
+                    jobs.append(_job("S1", method_id, seed, config))
     return jobs
 
 
-# E7 (RCWA validity envelope) is NOT an optimizer manifest -- it extends
-# experiments/rcwa_crosscheck.py's own grid (K x polarization x incidence x
-# Delta-n), which has no seed/method-registry structure. Left as a
-# standalone script extension, not a manifest job type; see repo_map.md.
+# =====================================================================
+# S2: parameter sensitivity applied to cliff location specifically.
+# Perturbs each of the 3 key NPDD parameters (D0, sigma, kappa) by
+# +/-10/25/50%, across a K range spanning the collapse region (so K* can
+# be re-estimated per perturbation and an uncertainty band on cliff
+# position assembled by analysis/aggregate.py). Scoped to ONE budget
+# (2x) to keep job count bounded for a "supporting" tier -- extend to
+# all 3 budgets if compute allows.
+# =====================================================================
+S2_PARAMS = ["D0", "sigma", "kappa"]
+S2_PERTURBATIONS_PCT = [-50, -25, -10, 0, 10, 25, 50]
+S2_BUDGET = 2.0
+# Collapse-region K's from the M1 grid -- where a shift in K* is actually
+# observable; the same rationale as M1's "dense insert" for this range.
+S2_K_POINTS = [3.5, 4.25, 4.6, 5.0, 5.24, 5.6, 6.0, 6.5]
 
 
-def build_all_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
-                   include_E6: bool = False) -> list[dict]:
+def build_S2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
+                  seeds=None) -> list[dict]:
+    seeds = seeds if seeds is not None else [0, 1, 2]
+    dx = 51.2 / n_x
     jobs = []
-    jobs += build_E1_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
-    jobs += build_E2_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
-    jobs += build_E3_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
-    jobs += build_E4_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
-    jobs += build_E5_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
-    if include_E6:
-        jobs += build_E6_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
+    for param in S2_PARAMS:
+        base_value = DEFAULT_MEDIUM[param]
+        for pct in S2_PERTURBATIONS_PCT:
+            if pct == 0 and param != S2_PARAMS[0]:
+                continue  # baseline (0%) is param-independent; only emit it once
+            value = base_value * (1.0 + pct / 100.0)
+            medium = dict(DEFAULT_MEDIUM, **{param: value})
+            for K in S2_K_POINTS:
+                period_px = period_from_K(K, dx)
+                config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=n_iters,
+                             converge_tol=converge_tol, contrast_cap=S2_BUDGET,
+                             dose_budget=1.0, medium=medium,
+                             target=_bars_target_spec(period_px), K_nominal=K,
+                             sensitivity_param=param, sensitivity_pct=pct)
+                for method_id in ["BSGD", "MIL"]:
+                    for seed in seeds:
+                        jobs.append(_job("S2", method_id, seed, config))
+    return jobs
+
+
+# =====================================================================
+# V1: NPDD solver validation vs. published data. JOB CONFIGS ONLY --
+# NOT execution-ready through run_job()/methods.run_method() (no
+# optimizer/method-registry concept applies; this characterizes the
+# forward solver directly, matching experiments/f1_validate_twin.py's
+# existing approach). Needs a dedicated validation runner (follow-up).
+# Still blocked, independent of this restructure, on you digitizing the
+# published curves (data/literature/README.md) to compare against.
+# =====================================================================
+V1_K_GRID = [2.0, 6.0, 12.0, 20.0]  # rad/um, matches f1_validate_twin.py
+V1_T_GRID = [1, 2, 4, 6, 8, 10, 14, 18]  # exposure times, matches f1_validate_twin.py
+
+
+def build_V1_jobs(n_x: int = 1024, dx: float = 0.05) -> list[dict]:
+    """K x exposure-time grid for DE-growth-curve validation. method_id
+    is the fixed sentinel "TWIN" (deterministic forward simulation, not
+    an optimizer method) so these jobs still fit the schema's
+    {experiment_id}/{config_hash}/{method_id}_seed{N}.json path without
+    a parallel path-naming scheme; seed is fixed at 0 (no randomness in
+    a forward-only growth-curve simulation)."""
+    jobs = []
+    for K in V1_K_GRID:
+        for t in V1_T_GRID:
+            config = dict(n_x=n_x, dx=dx, lam_um=0.405, medium=DEFAULT_MEDIUM,
+                         K_nominal=K, t_total=t, kind="validation_growth")
+            jobs.append(_job("V1", "TWIN", 0, config))
+    return jobs
+
+
+# =====================================================================
+# V2: Kogelnik / BPM / RCWA regime map. JOB CONFIGS ONLY -- NOT
+# execution-ready: needs a genuine 3-way comparison (Kogelnik closed-form
+# vs. SlabBPM split-step vs. RCWA) that does not exist yet.
+# rcwa_crosscheck.py's E7 grid only compares Kogelnik vs. RCWA (2-way);
+# adding BPM is real new code (follow-up), not a config change. Job
+# configs mirror E7's grid (same K/dn/geometry values) for continuity
+# with data already collected under that grid.
+# =====================================================================
+V2_K_GRID = [2.0, 4.0, 6.0, 8.0, 12.0]  # matches results_rcwa_e7.json's grid
+V2_DN_GRID = [1.0e-3, 3.5e-3, 6.0e-3]  # matches E4's dn_max sweep values
+V2_GEOMETRIES = ["unslanted_bragg", "unslanted_normal", "slanted20_bragg"]
+
+
+def build_V2_jobs(n_x: int = 1024, dx: float = 0.05) -> list[dict]:
+    jobs = []
+    for K in V2_K_GRID:
+        for dn in V2_DN_GRID:
+            for geom in V2_GEOMETRIES:
+                config = dict(n_x=n_x, dx=dx, lam_um=0.405, K_nominal=K, dn=dn,
+                             geometry=geom, kind="validation_regime_map")
+                jobs.append(_job("V2", "TWIN", 0, config))
+    return jobs
+
+
+# V3 (RCWA cross-check) is NOT a run_job()-shaped manifest -- see
+# experiments/rcwa_crosscheck.py's own docstring. Real data already
+# exists: results_rcwa.json (3-case) + results_rcwa_e7.json (90-case
+# grid, formerly labeled "E7" -- same data, relabeled V3 in prose/docs
+# going forward, file names unchanged since raw results are append-only
+# and renaming a committed file isn't a "new run").
+def build_V3_jobs() -> list[dict]:
+    """No manifest jobs -- returns []. V3's real execution path is
+    `python experiments/rcwa_crosscheck.py` (3-case) and
+    `python experiments/rcwa_crosscheck.py e7` (90-case grid), both
+    already run. This function exists only so V3 has an entry in
+    BUILDERS for uniform tooling (probe/build_all_jobs iterate over
+    BUILDERS); it contributes 0 jobs and 0 compute to those.
+    """
+    return []
+
+
+def build_all_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4) -> list[dict]:
+    """M1/M2/S1/S2 only -- the execution-ready tiers. V1/V2/V3 are
+    excluded (V1/V2 have no runner yet; V3 runs via a separate script)."""
+    jobs = []
+    jobs += build_M1_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
+    jobs += build_M2_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
+    jobs += build_S1_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
+    jobs += build_S2_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
     return jobs
 
 
 BUILDERS = {
-    "E1": build_E1_jobs, "E2": build_E2_jobs, "E3": build_E3_jobs,
-    "E4": build_E4_jobs, "E5": build_E5_jobs, "E6": build_E6_jobs,
+    "M1": build_M1_jobs, "M2": build_M2_jobs,
+    "S1": build_S1_jobs, "S2": build_S2_jobs,
 }
+
+# V1/V2/V3 deliberately NOT in BUILDERS: BUILDERS feeds run_manifest.py's
+# --manifest CLI choices and probe(), which both assume the
+# run_job()/methods.run_method() execution path. Listing V1/V2 there
+# would let --manifest V1 "succeed" by running 0 jobs silently -- worse
+# than a clear NotImplementedError. See VALIDATION_BUILDERS below for the
+# config-only builders, used directly (not through run_manifest.py) until
+# their runners exist.
+VALIDATION_BUILDERS = {"V1": build_V1_jobs, "V2": build_V2_jobs, "V3": build_V3_jobs}
 
 
 if __name__ == "__main__":
+    print("Execution-ready (run_manifest.py):")
     for name, fn in BUILDERS.items():
-        jobs = fn()
-        print(f"{name}: {len(jobs)} jobs")
-    print(f"ALL (E1-E5): {len(build_all_jobs())} jobs")
+        print(f"  {name}: {len(fn())} jobs")
+    print(f"  ALL (M1+M2+S1+S2): {len(build_all_jobs())} jobs")
+    print("\nConfig-only (no runner yet, or runs via a separate script):")
+    for name, fn in VALIDATION_BUILDERS.items():
+        n = len(fn()) if name != "V3" else "n/a (separate script, see build_V3_jobs docstring)"
+        print(f"  {name}: {n}")

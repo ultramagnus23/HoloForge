@@ -17,8 +17,8 @@ def test_make_numbers_tex_pending_when_no_data():
 def test_make_numbers_tex_real_values_when_data_present():
     fake_paper_numbers = dict(
         n_result_files=8,
-        per_config={"E1/abc": {"M4": {"n_seeds": 3}, "M2": {"n_seeds": 3}}},
-        e1_headroom_closure=[
+        per_config={"M1/abc": {"MIL": {"n_seeds": 3}, "BSGD": {"n_seeds": 3}}},
+        m1_headroom_closure=[
             dict(budget=2.0, measured_contrast_C=1.9, predicted_Kc_from_measured_C=4.1,
                 observed_Kstar_interp=4.2, observed_Kstar_ci=4.5,
                 gain_curve=[(1.0, 2.0, 1.5, 2.5), (5.0, -0.5, -1.0, 0.0)]),
