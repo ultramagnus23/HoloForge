@@ -10,7 +10,10 @@ import torch
 
 torch.set_default_dtype(torch.float64)
 
-from manifest import build_M1_jobs, build_S1_jobs, config_hash
+from manifest import (build_M1_jobs, build_M2_jobs, build_S1_jobs, build_S2_jobs,
+                      config_hash, PAPER_SEEDS, S1_K_POINTS,
+                      S2_PERTURBATIONS_PCT, S2_PERTURBATIONS_PCT_FULL,
+                      S2_K_POINTS, S2_K_POINTS_FULL, _cliff_K_grid)
 import run_manifest as rm
 
 
@@ -198,7 +201,7 @@ def test_stall_detection_raises_after_two_stuck_chunks():
     real stall condition, not a mock of the detection logic itself."""
     calls = []
 
-    def fake_stuck(name, max_minutes, n_x=1024, n_iters=800, converge_tol=1e-4):
+    def fake_stuck(name, max_minutes, n_x=1024, n_iters=800, converge_tol=1e-4, shard=None):
         calls.append(1)
         return dict(complete=False, n_run=0, n_done_already=5, n_done=5,
                    n_total=40, n_remaining=35, last_attempted_job_id="M1_abc_MIL_seed0")
@@ -237,16 +240,103 @@ def test_probe_exit_code_reflects_gate1():
     print("probe CLI exit code under budget OK: 0")
 
 
+def test_compute_budget_reduction_defaults():
+    """Regression test for the run-cost-audit reduction package: PAPER_SEEDS
+    is 3 (not 5), M2 defaults to the 3-point sub/near/post-cliff K subset
+    (not M1's full 14-point grid), and S2 defaults to the trimmed
+    perturbation/K grids -- with the full pre-cut grids still importable
+    and usable via explicit opt-in."""
+    assert len(PAPER_SEEDS) == 3, PAPER_SEEDS
+
+    dx = 51.2 / 1024
+    m2_default = build_M2_jobs(n_x=1024)
+    m2_full = build_M2_jobs(n_x=1024, K_points=_cliff_K_grid(dx))
+    assert len(m2_default) < len(m2_full), (len(m2_default), len(m2_full))
+    m2_Ks = {j["config"]["K_nominal"] for j in m2_default}
+    assert m2_Ks == set(S1_K_POINTS), m2_Ks
+
+    assert len(S2_PERTURBATIONS_PCT) < len(S2_PERTURBATIONS_PCT_FULL)
+    assert len(S2_K_POINTS) < len(S2_K_POINTS_FULL)
+    s2_default = build_S2_jobs(n_x=1024)
+    s2_full = build_S2_jobs(n_x=1024, perturbations_pct=S2_PERTURBATIONS_PCT_FULL,
+                            K_points=S2_K_POINTS_FULL)
+    assert len(s2_default) < len(s2_full), (len(s2_default), len(s2_full))
+    print(f"compute-budget defaults OK: M2 {len(m2_default)}/{len(m2_full)} jobs "
+         f"(default/full), S2 {len(s2_default)}/{len(s2_full)} jobs (default/full)")
+
+
+def test_apply_shard_partitions_without_overlap_or_gaps():
+    jobs = build_S1_jobs(n_x=32, n_iters=3, seeds=[0])
+    shards = [rm.apply_shard(jobs, (i, 4)) for i in range(4)]
+    assert sum(len(s) for s in shards) == len(jobs)
+    seen_ids = set()
+    for s in shards:
+        for j in s:
+            key = (j["experiment_id"], j["method_id"], j["config_hash"], j["seed"])
+            assert key not in seen_ids, f"job {key} appeared in more than one shard"
+            seen_ids.add(key)
+    assert len(seen_ids) == len(jobs)
+    assert rm.apply_shard(jobs, None) == jobs
+    print(f"apply_shard OK: {len(jobs)} jobs split into 4 shards, no overlap/gaps")
+
+
+def test_sharded_run_covers_full_manifest_with_no_duplicate_writes():
+    """Two shards run against the same results dir (as if two parallel
+    --workers processes) must together produce exactly one result file
+    per job -- no job skipped by both, no job written by both."""
+    tmp = tempfile.mkdtemp(prefix="manifest_shard_test_")
+    try:
+        rm.set_results_root(tmp)
+        jobs = build_S1_jobs(n_x=32, n_iters=3, converge_tol=1e-4)
+        rm.run_manifest("S1", max_minutes=None, n_x=32, n_iters=3,
+                        converge_tol=1e-4, shard=(0, 2))
+        rm.run_manifest("S1", max_minutes=None, n_x=32, n_iters=3,
+                        converge_tol=1e-4, shard=(1, 2))
+        n_files = sum(len(files) for _, _, files in os.walk(tmp))
+        assert n_files == len(jobs), f"expected {len(jobs)} result files, found {n_files}"
+        print(f"sharded run OK: 2 shards together produced exactly {n_files} result files")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_cli_parses_shard_argument():
+    """--shard i/N end-to-end through the real CLI: a 0/2 shard of a tiny
+    S1 run should complete with roughly half the jobs (S1 has 90 total at
+    full scale, but at n_x=32/n_iters=3 what matters is just that it runs
+    and produces fewer files than an unsharded run would)."""
+    import subprocess
+    tmp = tempfile.mkdtemp(prefix="manifest_shard_cli_test_")
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "experiments.run_manifest", "--manifest", "S1",
+             "--n-x", "32", "--n-iters", "3", "--allow-cpu", "--shard", "0/2",
+             "--results-dir", tmp],
+            cwd=os.path.join(os.path.dirname(__file__), ".."),
+            capture_output=True, text=True)
+        assert result.returncode == 0, (result.returncode, result.stdout, result.stderr)
+        n_files = sum(len(files) for _, _, files in os.walk(tmp))
+        full_total = len(build_S1_jobs(n_x=32, n_iters=3, converge_tol=1e-4))
+        assert 0 < n_files < full_total, (n_files, full_total)
+        print(f"CLI --shard 0/2 OK: {n_files} files (< {full_total} unsharded total)")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_cli_rejects_no_gpu_without_allow_cpu():
     """The hard GPU assertion (spec Sec. 1.2) must actually reject a
-    no-GPU environment when --allow-cpu is not passed -- this dev
-    environment has no GPU, so this is a real (not mocked) check."""
+    no-GPU environment when --allow-cpu is not passed. Force GPU-absence
+    for the subprocess via CUDA_VISIBLE_DEVICES="" rather than relying on
+    the ambient environment having no GPU -- that assumption broke the
+    first time this test ran on a machine with a real CUDA device (a
+    local RTX 3050), which is exactly the environment this pipeline is
+    now meant to support, not an environment to avoid testing in."""
     import subprocess
+    env = dict(os.environ, CUDA_VISIBLE_DEVICES="")
     result = subprocess.run(
         [sys.executable, "-m", "experiments.run_manifest", "--manifest", "S1",
          "--probe", "--n-x", "32", "--n-iters", "3"],
         cwd=os.path.join(os.path.dirname(__file__), ".."),
-        capture_output=True, text=True)
+        capture_output=True, text=True, env=env)
     assert result.returncode != 0, "expected the hard GPU assertion to fail without a GPU"
     assert "No GPU allocated" in result.stderr, result.stderr
     print("CLI correctly rejects no-GPU run without --allow-cpu")
@@ -264,5 +354,9 @@ if __name__ == "__main__":
     test_run_manifest_until_complete_happy_path()
     test_stall_detection_raises_after_two_stuck_chunks()
     test_probe_exit_code_reflects_gate1()
+    test_compute_budget_reduction_defaults()
+    test_apply_shard_partitions_without_overlap_or_gaps()
+    test_sharded_run_covers_full_manifest_with_no_duplicate_writes()
+    test_cli_parses_shard_argument()
     test_cli_rejects_no_gpu_without_allow_cpu()
     print("PASSED")

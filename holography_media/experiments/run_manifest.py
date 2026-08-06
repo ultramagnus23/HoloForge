@@ -2,9 +2,10 @@
 Phase 1.1/1.2/1.4: resumable manifest runner + unified result schema + probe mode.
 
 Usage:
-    python -m experiments.run_manifest --manifest E1 --max-minutes 170
-    python -m experiments.run_manifest --manifest E1 --probe
+    python -m experiments.run_manifest --manifest M1 --max-minutes 170
+    python -m experiments.run_manifest --manifest M1 --probe
     python -m experiments.run_manifest --manifest all --max-minutes 170
+    python -m experiments.run_manifest --manifest M1 --shard 0/8   # 1 of 8 parallel shards
 
 Resume semantics: a job is "done" iff its result file
 results/{experiment_id}/{config_hash}/seed{N}.json already exists on disk.
@@ -89,8 +90,17 @@ def assert_gpu_and_report() -> torch.device:
     and local development, matching the require_gpu=False/True pattern
     already used in experiments/_gpu_common.py) -- only main()'s real
     entrypoint calls this, so `pytest`-style direct calls to run_manifest()
-    /probe() from tests are unaffected."""
-    assert torch.cuda.is_available(), "No GPU allocated -- stop and fix the runtime."
+    /probe() from tests are unaffected.
+
+    Checks device_count() > 0, not just is_available(): on at least one
+    real torch/CUDA build (2.6.0+cu124), is_available() returned True with
+    CUDA_VISIBLE_DEVICES="" (0 devices actually visible) -- an
+    is_available()-only check would pass this assertion and then crash a
+    few lines later inside get_device_properties() with a confusing raw
+    "Invalid device id" AssertionError instead of this function's own
+    clear message."""
+    assert torch.cuda.is_available() and torch.cuda.device_count() > 0, \
+        "No GPU allocated -- stop and fix the runtime."
     device = torch.device("cuda")
     props = torch.cuda.get_device_properties(device)
     print(f"[run_manifest] GPU: {torch.cuda.get_device_name(device)}, "
@@ -259,14 +269,31 @@ def run_job(job: dict, device, commit: str, dtype: torch.dtype = DTYPE) -> dict:
     )
 
 
+def apply_shard(jobs: list[dict], shard: tuple[int, int] | None) -> list[dict]:
+    """Filter a job list to shard[0]-th of shard[1] shards, by position in
+    the (deterministic) list a builder returns. Safe by construction: each
+    job already writes to its own content-hashed path and a job is "done"
+    iff that file exists, so N processes each given a disjoint index%N
+    slice never write the same path or double-count progress -- this is
+    just a filter, not a new execution mode. Jobs are 1D and small (a few
+    tens of MB of VRAM/RAM even with n_iters=800 unrolled), so this is the
+    intended way to use multiple CPU cores or several small concurrent GPU
+    contexts instead of the strictly-serial single-process default."""
+    if shard is None:
+        return jobs
+    i, n = shard
+    return [j for idx, j in enumerate(jobs) if idx % n == i]
+
+
 def run_manifest(name: str, max_minutes: float | None, n_x=1024, n_iters=800,
-                 converge_tol=1e-4):
+                 converge_tol=1e-4, shard: tuple[int, int] | None = None):
     device = get_device()
     commit = git_commit_hash()
     if name == "all":
         jobs = build_all_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
     else:
         jobs = BUILDERS[name](n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
+    jobs = apply_shard(jobs, shard)
 
     t_start = time.time()
     n_done_already = n_run = 0
@@ -322,7 +349,8 @@ class ManifestStallError(RuntimeError):
 
 def run_manifest_until_complete(name: str, chunk_minutes: float = 60,
                                 n_x=1024, n_iters=800, converge_tol=1e-4,
-                                max_stall_chunks: int = 2):
+                                max_stall_chunks: int = 2,
+                                shard: tuple[int, int] | None = None):
     """Repeatedly calls run_manifest in chunk_minutes-sized chunks until
     it reports complete. Extracted as a real, importable, testable
     function (rather than only living as notebook-cell source, which
@@ -334,7 +362,8 @@ def run_manifest_until_complete(name: str, chunk_minutes: float = 60,
     stall_count = 0
     while True:
         status = run_manifest(name, max_minutes=chunk_minutes, n_x=n_x,
-                              n_iters=n_iters, converge_tol=converge_tol)
+                              n_iters=n_iters, converge_tol=converge_tol,
+                              shard=shard)
         if status["complete"]:
             return status
         if last_n_done is not None and status["n_done"] <= last_n_done:
@@ -353,46 +382,72 @@ def run_manifest_until_complete(name: str, chunk_minutes: float = 60,
 
 
 def probe(name: str, n_x=1024, n_iters=800, converge_tol=1e-4):
-    """Run exactly one representative job per experiment (Phase 1.4). Prints
-    a T4-hour extrapolation and the Gate-1 threshold check -- does NOT
-    decide anything; the user reviews this table and picks a reduction
-    option if it's over budget."""
+    """Run one representative job PER METHOD within each manifest (not one
+    representative for the whole manifest -- that was a real bug: with a
+    single representative, BSGD (cheapest -- one linear multiply + BPM
+    readout) was always picked first among the iterative methods, so its
+    timing got extrapolated across MIL/ORC/ORU jobs too, which cost ~20x
+    more per iteration (a full NPDD forward pass). That undercounted every
+    tier that isn't all-BSGD by roughly that same factor. Costing per
+    method_id group and summing per_method_s * n_jobs_in_group fixes this
+    at the cost of a few more representative-job timings per manifest."""
     device = get_device()
     commit = git_commit_hash()
     names = list(BUILDERS.keys()) if name == "all" else [name]
     rows = []
     for exp_name in names:
         jobs = BUILDERS[exp_name](n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
-        # pick a representative iterative job (not a closed-form M1/M3, so
-        # the timing reflects the actual compute-heavy path)
-        rep = next((j for j in jobs if j["method_id"] in ("BSGD", "MIL", "ORC", "ORU")), jobs[0])
-        print(f"[probe] {exp_name}: running representative job "
-              f"({rep['method_id']}, {len(jobs)} total jobs in this manifest) ...")
-        result = run_job(rep, device, commit)
-        per_job_s = result["wall_s"]
-        total_s = per_job_s * len(jobs)
+        by_method: dict[str, list[dict]] = {}
+        for j in jobs:
+            by_method.setdefault(j["method_id"], []).append(j)
+
+        method_rows = []
+        exp_total_s = 0.0
+        for method_id in sorted(by_method):
+            mjobs = by_method[method_id]
+            rep = mjobs[0]
+            print(f"[probe] {exp_name}/{method_id}: running representative "
+                  f"job ({len(mjobs)} jobs of this method in this manifest) ...")
+            result = run_job(rep, device, commit)
+            per_job_s = result["wall_s"]
+            method_total_s = per_job_s * len(mjobs)
+            exp_total_s += method_total_s
+            method_rows.append(dict(method_id=method_id, n_jobs=len(mjobs),
+                                    per_job_s=per_job_s,
+                                    total_hours=method_total_s / 3600.0))
+            print(f"  {method_id}: {per_job_s:.1f}s -> {len(mjobs)} jobs -> "
+                  f"{method_total_s/3600.0:.2f}h")
+
         rows.append(dict(experiment=exp_name, n_jobs=len(jobs),
-                         per_job_s=per_job_s, total_hours=total_s / 3600.0))
-        print(f"  representative job: {per_job_s:.1f}s -> "
-              f"{len(jobs)} jobs -> {total_s/3600.0:.2f}h extrapolated")
+                         total_hours=exp_total_s / 3600.0, by_method=method_rows))
 
     grand_total = sum(r["total_hours"] for r in rows)
-    print("\n" + "=" * 60)
-    print(f"{'experiment':12s} {'n_jobs':>8s} {'per_job_s':>10s} {'total_hours':>12s}")
+    print("\n" + "=" * 70)
+    print(f"{'experiment/method':18s} {'n_jobs':>8s} {'per_job_s':>10s} {'total_hours':>12s}")
     for r in rows:
-        print(f"{r['experiment']:12s} {r['n_jobs']:8d} {r['per_job_s']:10.1f} {r['total_hours']:12.2f}")
-    print("-" * 60)
-    print(f"{'TOTAL':12s} {'':8s} {'':10s} {grand_total:12.2f}")
-    print("=" * 60)
+        print(f"{r['experiment']:18s} {r['n_jobs']:8d} {'':>10s} {r['total_hours']:12.2f}")
+        for mr in r["by_method"]:
+            label = f"  {mr['method_id']}"
+            print(f"{label:18s} {mr['n_jobs']:8d} {mr['per_job_s']:10.1f} {mr['total_hours']:12.2f}")
+    print("-" * 70)
+    print(f"{'TOTAL':18s} {'':8s} {'':10s} {grand_total:12.2f}")
+    print("=" * 70)
     if grand_total > GATE1_HOURS:
-        m1_row = next((r for r in rows if r["experiment"] == "M1"), None)
-        m1_hours = m1_row["total_hours"] if m1_row else 0.0
         print(f"\nGATE 1: FAILED -- projected {grand_total:.1f}h exceeds the "
-              f"{GATE1_HOURS:.0f}h threshold. This requires "
-              f"a decision, not a unilateral reduction:\n"
-              f"  (a) 3 seeds instead of 5 for M1/M2 (would cut M1's ~{m1_hours:.1f}h by ~40%)\n"
-              f"  (b) coarser K/sweep grids\n"
-              f"  (c) drop E6 (wavelength rerun; already have a single-seed supplement result)\n"
+              f"{GATE1_HOURS:.0f}h threshold. Options, beyond what's already "
+              f"the default (3 seeds not 5, M2's grid cut to the 3 sub/near/"
+              f"post-cliff K's x 3 budgets, S2's perturbations cut to "
+              f"+/-25% and K's cut to the innermost 4 -- see manifest.py's "
+              f"PAPER_SEEDS/build_M2_jobs/S2_PERTURBATIONS_PCT/S2_K_POINTS "
+              f"comments for the full-grid opt-in):\n"
+              f"  (a) run S1/S2 at a smaller --n-x (mesh convergence data shows "
+              f"PSNR is mesh-independent within 0.04dB across n_x=512/1024/2048 "
+              f"-- results/gpu_reruns/npdd_mesh_sweep/results.json)\n"
+              f"  (b) shard across processes with --shard i/N (embarrassingly "
+              f"parallel -- each job writes to its own content-hashed path and "
+              f"resume is skip-if-exists, so this is safe by construction)\n"
+              f"  (c) cut M1's seeds further (2 instead of 3) -- last resort, "
+              f"this is the figure the paper leads with\n"
               f"Report this table back and choose a combination before running 'full'.")
     else:
         print(f"\nGATE 1: PASSED -- projected {grand_total:.1f}h is within the "
@@ -413,7 +468,20 @@ def main():
     ap.add_argument("--allow-cpu", action="store_true",
                     help="skip the hard GPU assertion (local dev/smoke-testing "
                          "only -- never use for an actual science run)")
+    ap.add_argument("--shard", type=str, default=None,
+                    help="run only every N-th job, offset i: 'i/N' (e.g. "
+                         "'0/8' .. '7/8' for 8 parallel processes). Safe to "
+                         "run all N shards concurrently -- see apply_shard()'s "
+                         "docstring for why. Not applied to --probe (probe "
+                         "times one representative job per method, "
+                         "independent of how the full run is sharded).")
     args = ap.parse_args()
+
+    shard = None
+    if args.shard is not None:
+        i_str, n_str = args.shard.split("/")
+        shard = (int(i_str), int(n_str))
+        assert 0 <= shard[0] < shard[1], f"--shard {args.shard!r}: need 0 <= i < N"
 
     # spec Sec. 1.6: deterministic algorithms where feasible. Verified
     # (tests/test_manifest_runner.py::test_deterministic_rerun_matches)
@@ -450,7 +518,8 @@ def main():
         sys.exit(2 if grand_total > GATE1_HOURS else 0)
     else:
         run_manifest(args.manifest, args.max_minutes, n_x=args.n_x,
-                    n_iters=args.n_iters, converge_tol=args.converge_tol)
+                    n_iters=args.n_iters, converge_tol=args.converge_tol,
+                    shard=shard)
 
 
 if __name__ == "__main__":

@@ -1,19 +1,37 @@
 """
-Phase 5: figures, deterministic from results JSONs. No manual data entry.
+Figures, deterministic from results JSONs. No manual data entry.
 
-F1-F7 depend on Phase 3 (E1-E6) / Phase 6 (twin validation CSVs) data that
-does not exist yet as of this pass -- each of those functions is fully
-implemented and unit-tested against real (tiny, synthetic-scale) data in
-tests/test_figures.py, but when run against the actual repo state today
-they correctly emit a "NOT YET AVAILABLE" placeholder PDF (figures.style.
-no_data_placeholder) stating exactly what's missing, rather than
-fabricating a plot from data that doesn't exist (ground rule 1).
+Numbering follows the V1-V3 (validation) / M1-M2 (main) / S1-S2
+(supporting) tier structure -- see the figure-remapping table agreed with
+the user (not stored in-repo; see PR/commit history) for the old E1-E7
+scheme's F1-F8(a-e) -> this F1-F9(a-c) mapping and the rationale for each
+change. Summary:
+  F1        pipeline schematic (illustrative, no data dependency)
+  F2        V1: twin vs. digitized literature curves
+  F3a       V3: Kogelnik vs. RCWA validity envelope (real data)
+  F3b       V2: Kogelnik/BPM/RCWA 3-way regime map (blocked -- no BPM-leg
+            runner yet; kept as its OWN figure, not merged into F3a, so a
+            missing V2 doesn't silently hide inside F3a's real V3 data)
+  F4        M1/M2: paired gain vs K, panel (a) iteration-matched (M1),
+            panel (b) compute-matched (M2) -- panel layout deferred until
+            M1 data exists (see the run-order agreement); still a
+            single-panel placeholder-or-M1-only render until then
+  F5        M1: observed K* vs predicted Kc scatter
+  F6        M3: cliff-location shift (M2-M1) per budget, per-seed band
+  F7        S1: physics-component ablation
+  F8        S2: cliff-location sensitivity band under NPDD parameter error
+  F9a-c     supplementary, real data already committed (gradient-pathway
+            ablation, GPU mesh convergence, GPU wavelength detuning)
 
-F8's five sub-panels use data that IS already real and committed
-(gradient ablation, RCWA incl. the E7 validity-envelope grid, GPU mesh
-convergence, GPU wavelength detuning, and the old CPU-scale shrinkage
-sweep -- the last explicitly labeled single-seed per ground rule 3) and
-are rendered for real by this pass.
+Old F2/F3 (exposure/reconstruction panels) and F8e (shrinkage-prelim,
+seed-bug-era data) are retired, not renumbered -- see the figure-remapping
+discussion for why (schema gap and superseded-data respectively). Old F6
+(sigma probe) is also retired -- it depended on E2, which does not exist
+under the V/M/S tier structure.
+
+Every figure whose data doesn't exist yet correctly emits a "NOT YET
+AVAILABLE" placeholder PDF (figures.style.no_data_placeholder) stating
+exactly what's missing, rather than fabricating a plot (ground rule 1).
 
 Usage: python -m figures.make_all
 """
@@ -25,19 +43,38 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "experiments"))
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
 from style import (new_fig, savefig, no_data_placeholder, COLORS,
-                   METHOD_COLORS, METHOD_LABELS, SINGLE_COL_IN, DOUBLE_COL_IN)
-from analysis.aggregate import (load_all_results, group_by_config,
+                   METHOD_COLORS, METHOD_LABELS, METHOD_MARKERS,
+                   BUDGET_LINESTYLES, BUDGET_MARKERS,
+                   SINGLE_COL_IN, DOUBLE_COL_IN)
+from analysis.aggregate import (load_all_results as _load_all_results_raw,
+                                group_by_config,
                                 headroom_closure, gain_curve, BUDGETS,
                                 mean_std_median_ci95, paired_gain)
+import run_manifest as rm
 
 HERE = os.path.dirname(__file__)
 OUT_DIR = os.path.join(HERE, "paper")
 RESULTS_ROOT = os.path.join(HERE, "..", "results")
+
+
+def load_all_results():
+    """Wraps analysis.aggregate.load_all_results, but always reads from
+    run_manifest.RESULTS_ROOT (the single mutable global tests already
+    redirect via run_manifest.set_results_root()) rather than
+    aggregate.py's own separate, independently-hardcoded RESULTS_ROOT
+    constant. Without this, rm.set_results_root(tmp_dir) in a test had NO
+    effect on what make_all.py's figure functions actually read -- they
+    always read the real repo results/ tree regardless, which silently
+    made test isolation for figures non-functional (caught via a
+    regression test that fixed a broken byte-size heuristic and then
+    found the figure it was "testing" wasn't even seeing the test data)."""
+    return _load_all_results_raw(rm.RESULTS_ROOT)
 
 
 def _load_json(*parts):
@@ -50,80 +87,125 @@ def _load_json(*parts):
 
 # --------------------------------------------------------------------- F1
 def make_F1_pipeline_schematic():
-    """Twin -> readout -> loss -> gradient back to exposure. Purely
-    illustrative (no data dependency) -- flagged for manual polish per
-    the master prompt."""
-    fig, ax = new_fig(width="double", height_in=SINGLE_COL_IN * 0.6)
-    ax.set_xlim(0, 10); ax.set_ylim(0, 3); ax.axis("off")
+    """Twin -> readout -> loss -> gradient back to exposure, annotated
+    with where each tier sits relative to this loop: V1-V3 validate the
+    twin/readout themselves (upstream, gate everything below), M1-M2 run
+    this exact loop (the main cliff/budget sweep, two arms), S1-S2 perturb
+    the twin's physics/parameters and re-run the same loop. Purely
+    illustrative (no data dependency)."""
+    fig, ax = new_fig(width="double", height_in=SINGLE_COL_IN * 0.75)
+    ax.set_xlim(0, 10); ax.set_ylim(0, 4); ax.axis("off")
     boxes = [("Exposure\nE(x)", 0.5), ("NPDD Twin\n(recording)", 2.7),
              ("BPM Readout\n(Kogelnik-consistent)", 5.1), ("Loss vs.\nTarget", 7.7)]
     for label, x in boxes:
-        ax.add_patch(mpatches.Rectangle((x, 1.0), 1.6, 1.0, fill=False,
+        ax.add_patch(mpatches.Rectangle((x, 1.7), 1.6, 1.0, fill=False,
                                         edgecolor=COLORS["black"], linewidth=1.0))
-        ax.text(x + 0.8, 1.5, label, ha="center", va="center", fontsize=6.5)
+        ax.text(x + 0.8, 2.2, label, ha="center", va="center", fontsize=6.5)
     for x0, x1 in [(2.1, 2.7), (4.3, 5.1), (6.7, 7.7)]:
-        ax.annotate("", xy=(x1, 1.5), xytext=(x0, 1.5),
+        ax.annotate("", xy=(x1, 2.2), xytext=(x0, 2.2),
                    arrowprops=dict(arrowstyle="->", color=COLORS["black"]))
-    ax.annotate("", xy=(0.5, 0.5), xytext=(9.3, 0.5),
+    ax.annotate("", xy=(0.5, 1.2), xytext=(9.3, 1.2),
                arrowprops=dict(arrowstyle="->", color=COLORS["blue"], linewidth=1.2))
-    ax.text(5.0, 0.2, r"$\partial L / \partial E$  (unrolled autodiff through the twin)",
+    ax.text(5.0, 0.9, r"$\partial L / \partial E$  (unrolled autodiff through the twin)",
             ha="center", va="center", fontsize=6.5, color=COLORS["blue"])
+    ax.text(1.3, 3.4, "V1-V3: validate the twin + readout above\n"
+                      "(gates everything below)",
+            ha="center", va="center", fontsize=6, color=COLORS["vermillion"])
+    ax.text(5.0, 3.4, "M1-M2: run this loop twice --\nmedia-aware vs. media-unaware arm",
+            ha="center", va="center", fontsize=6, color=COLORS["bluish_green"])
+    ax.text(8.5, 3.4, "S1-S2: perturb the twin's physics/\nparameters, re-run this loop",
+            ha="center", va="center", fontsize=6, color=COLORS["orange"])
     ax.set_title("F1: media-in-the-loop optimization pipeline (schematic)", fontsize=7.5)
     savefig(fig, os.path.join(OUT_DIR, "F1_pipeline_schematic.pdf"))
+    return True
 
 
-# --------------------------------------------------------------------- F2/F3
-def make_F2_exposure_profiles(K_values=(2.62, 5.0)):
-    grouped = group_by_config(load_all_results())
-    have_data = any(exp_id == "E1" for exp_id, _ in grouped)
-    if not have_data:
+# --------------------------------------------------------------------- F2 (V1)
+def make_F2_twin_validation():
+    csvs_exist = os.path.isdir(os.path.join(HERE, "..", "data", "literature")) and any(
+        f.endswith(".csv") for f in os.listdir(os.path.join(HERE, "..", "data", "literature")))
+    if not csvs_exist:
         no_data_placeholder(
-            os.path.join(OUT_DIR, "F2_exposure_profiles.pdf"),
-            "F2: exposure/recorded-dn profiles (naive vs M3 vs M4)",
-            f"needs E1 manifest results at K={list(K_values)} rad/um; "
-            f"Phase 3 has not run yet.")
-        return
-    _render_F2(grouped, K_values)  # exercised for real once E1 data exists
+            os.path.join(OUT_DIR, "F2_twin_validation.pdf"),
+            "F2 (V1): twin vs. digitized literature (growth curve, angular selectivity)",
+            "needs digitized CSVs (data/literature/*.csv) from WebPlotDigitizer -- "
+            "not yet provided; see data/literature/README.md.")
+        return False
+    no_data_placeholder(
+        os.path.join(OUT_DIR, "F2_twin_validation.pdf"),
+        "F2 (V1): twin vs. digitized literature (growth curve, angular selectivity)",
+        "digitized CSVs now exist, but this figure's render code is not "
+        "yet implemented -- add it now that the data is here.")
+    return False
 
 
-def _render_F2(grouped, K_values):
-    # Real implementation: for each K, plot the M3/M4 exposure shape
-    # (would need the raw E field, not just PSNR -- Phase 1.2's schema
-    # logs contrast stats but not the full E(x) array to keep JSONs small
-    # (<=200-point downsampled loss curves only); this function documents
-    # that gap rather than silently omitting the figure's actual content.
-    fig, axs = new_fig(width="double", nrows=1, ncols=len(K_values), height_in=SINGLE_COL_IN * 0.5)
-    for ax, K in zip(np.atleast_1d(axs), K_values):
-        ax.set_title(f"K={K:.2f} rad/um", fontsize=6.5)
-        ax.text(0.5, 0.5, "E(x) profile not in Phase 1.2 schema\n(PSNR/DE/contrast-stats only)",
-               ha="center", va="center", fontsize=5.5, transform=ax.transAxes, color=COLORS["vermillion"])
-    savefig(fig, os.path.join(OUT_DIR, "F2_exposure_profiles.pdf"))
+# --------------------------------------------------------------------- F3a/F3b (V3/V2)
+def make_F3a_rcwa_validity_envelope():
+    """V3: Kogelnik vs. RCWA -- real data, already committed. Kept as its
+    own figure (not merged with F3b/V2) so a missing V2 doesn't hide
+    behind this figure's real content."""
+    d3 = _load_json("results_rcwa.json")
+    d90 = _load_json("results_rcwa_e7.json")
+    if d3 is None and d90 is None:
+        no_data_placeholder(os.path.join(OUT_DIR, "F3a_rcwa_validity_envelope.pdf"),
+                            "F3a (V3): Kogelnik vs. RCWA validity envelope",
+                            "results_rcwa*.json missing")
+        return False
+    fig, ax = new_fig(width="single")
+    if d90:
+        by_geom = {}
+        for c in d90["cases"]:
+            by_geom.setdefault(c["geometry"], []).append((c["K"], c["abs_deviation"]))
+        colors = [COLORS["blue"], COLORS["vermillion"], COLORS["bluish_green"]]
+        markers = ["o", "s", "^"]
+        for (geom, pts), color, marker in zip(by_geom.items(), colors, markers):
+            pts = sorted(pts)
+            Ks = [p[0] for p in pts]
+            devs = [p[1] for p in pts]
+            ax.scatter(Ks, devs, color=color, marker=marker, s=8, label=geom, alpha=0.8)
+        ax.set_xlabel("K (rad/um)"); ax.set_ylabel("|Kogelnik - RCWA T1|")
+        ax.legend(frameon=False, fontsize=5.5)
+    savefig(fig, os.path.join(OUT_DIR, "F3a_rcwa_validity_envelope.pdf"))
+    return True
 
 
-def make_F3_reconstruction_panels(K_values=(1.31, 3.93, 5.24)):
-    grouped = group_by_config(load_all_results())
-    have_data = any(exp_id == "E1" for exp_id, _ in grouped)
-    if not have_data:
-        no_data_placeholder(
-            os.path.join(OUT_DIR, "F3_reconstruction_panels.pdf"),
-            "F3: reconstruction panels (target/M1-M5a) at K in {1.31,3.93,5.24}",
-            "needs E1 manifest results; Phase 3 has not run yet. Also needs raw "
-            "recon arrays, which Phase 1.2's schema does not log (PSNR/DE only, "
-            "to keep result JSONs small) -- schema would need extending.")
-        return
+def make_F3b_regime_map():
+    """V2: genuine 3-way Kogelnik/BPM/RCWA regime map. Blocked -- needs a
+    BPM-leg runner that doesn't exist yet (rcwa_crosscheck.py's grid only
+    compares Kogelnik vs RCWA). This is its own figure, deliberately not
+    folded into F3a, so this gap stays visible rather than silently
+    absent from a figure that otherwise looks complete."""
+    no_data_placeholder(
+        os.path.join(OUT_DIR, "F3b_regime_map.pdf"),
+        "F3b (V2): Kogelnik/BPM/RCWA 3-way regime map",
+        "needs a genuine 3-way comparison runner (Kogelnik closed-form vs. "
+        "SlabBPM split-step vs. RCWA) -- does not exist yet; "
+        "experiments/manifest.py's build_V2_jobs has the job configs but "
+        "no execution path through run_job() yet. See manifest.py's "
+        "VALIDATION_BUILDERS docstring.")
+    return False
 
 
-# --------------------------------------------------------------------- F4/F5
+# --------------------------------------------------------------------- F4/F5 (M1/M2)
 def make_F4_headline_gain_vs_K():
+    """M1 (iteration-matched) is rendered now; the M2 (compute-matched)
+    second panel and final two-panel layout are deferred until M1 data
+    exists to design around (agreed run-order: look at M1 before
+    committing to a panel layout for the headline figure)."""
     grouped = group_by_config(load_all_results())
     closure = headroom_closure(grouped, "M1", budgets=BUDGETS)
     if all(r.get("status") == "no_data" for r in closure):
         no_data_placeholder(
             os.path.join(OUT_DIR, "F4_headline_gain_vs_K.pdf"),
-            "F4: paired gain (M4-M2) vs K, one curve per budget, 95% CI bands",
-            "needs E1 manifest results across all 3 budgets; Phase 3 has not run yet.")
-        return
+            "F4 (M1/M2): paired gain (MIL-BSGD) vs K, panel (a) M1 "
+            "iteration-matched / panel (b) M2 compute-matched, one curve "
+            "per budget, 95% CI bands",
+            "needs M1 manifest results across all 3 budgets. Panel (b) "
+            "(M2) and the final 2-panel layout are deferred until M1 "
+            "data exists to design around -- see the run-order agreement.")
+        return False
     _render_F4(closure)
+    return True
 
 
 def _render_F4(closure):
@@ -137,12 +219,13 @@ def _render_F4(closure):
         los = [c[2] for c in curve]
         his = [c[3] for c in curve]
         color = {2.0: COLORS["blue"], 4.0: COLORS["vermillion"], 8.0: COLORS["bluish_green"]}[budget]
-        ax.plot(Ks, means, "-o", color=color, ms=2.5, label=f"budget={budget:.0f}x")
+        ax.plot(Ks, means, marker=BUDGET_MARKERS[budget], ls=BUDGET_LINESTYLES[budget],
+                color=color, ms=2.5, label=f"budget={budget:.0f}x")
         ax.fill_between(Ks, los, his, color=color, alpha=0.2, linewidth=0)
         if row.get("predicted_Kc_from_measured_C") is not None:
             ax.axvline(row["predicted_Kc_from_measured_C"], color=color, ls="--", lw=0.7)
     ax.axhline(0, color=COLORS["black"], lw=0.5)
-    ax.set_xlabel("K (rad/um)"); ax.set_ylabel("paired gain M4-M2 (dB)")
+    ax.set_xlabel("K (rad/um)"); ax.set_ylabel("paired gain MIL-BSGD (dB)")
     ax.legend(frameon=False)
     savefig(fig, os.path.join(OUT_DIR, "F4_headline_gain_vs_K.pdf"))
 
@@ -154,9 +237,9 @@ def make_F5_Kstar_vs_Kc_scatter():
     if not valid:
         no_data_placeholder(
             os.path.join(OUT_DIR, "F5_Kstar_vs_Kc_scatter.pdf"),
-            "F5: observed K* vs predicted Kc (both estimators), y=x line",
-            "needs E1 headroom-closure results; Phase 3 has not run yet.")
-        return
+            "F5 (M1): observed K* vs predicted Kc (both estimators), y=x line",
+            "needs M1 headroom-closure results.")
+        return False
     fig, ax = new_fig(width="single", height_in=SINGLE_COL_IN)
     kc_vals = [r["predicted_Kc_from_measured_C"] for r in valid]
     for r in valid:
@@ -172,40 +255,92 @@ def make_F5_Kstar_vs_Kc_scatter():
     ax.set_ylabel("observed K* (rad/um)")
     ax.legend(frameon=False)
     savefig(fig, os.path.join(OUT_DIR, "F5_Kstar_vs_Kc_scatter.pdf"))
+    return True
 
 
-# --------------------------------------------------------------------- F6
-def make_F6_sigma_probe():
+# --------------------------------------------------------------------- F6 (M3)
+def make_F6_cliff_shift():
+    """M3: shift in cliff location (K*) between the M1 and M2 arms, per
+    budget, with a per-seed uncertainty band -- the derived statistic
+    computed by analysis/aggregate.py's m3_cliff_shift(). Layout deferred
+    until M1+M2 data exist (same run-order reasoning as F4's panel (b))."""
     grouped = group_by_config(load_all_results())
-    have_e2 = any(exp_id == "E2" for exp_id, _ in grouped)
-    if not have_e2:
+    from analysis.aggregate import m3_cliff_shift
+    rows = m3_cliff_shift(grouped, budgets=BUDGETS)
+    if all(r.get("point_estimate_shift") is None for r in rows):
         no_data_placeholder(
-            os.path.join(OUT_DIR, "F6_sigma_probe.pdf"),
-            "F6: sigma probe with CI bars, Ghat(K) prediction overlaid",
-            "needs E2 manifest results; Phase 3 has not run yet.")
-        return
+            os.path.join(OUT_DIR, "F6_cliff_shift.pdf"),
+            "F6 (M3): cliff-location shift M2-M1 per budget, per-seed band",
+            "needs M1+M2 manifest results across all 3 budgets -- layout "
+            "deferred until that data exists to design around.")
+        return False
+    # Data exists, but the render/layout is deliberately deferred (see
+    # docstring) -- still emit a real PDF, not silence, so main() never
+    # produces a missing file that looks like an oversight.
+    no_data_placeholder(
+        os.path.join(OUT_DIR, "F6_cliff_shift.pdf"),
+        "F6 (M3): cliff-location shift M2-M1 per budget, per-seed band",
+        "M1+M2 data now exists, but this figure's layout was deliberately "
+        "deferred until that data existed to design around -- implement "
+        "_render_F6 now that the data is here.")
+    return False
 
 
-# --------------------------------------------------------------------- F7
-def make_F7_twin_validation():
-    csvs_exist = os.path.isdir(os.path.join(HERE, "..", "data", "literature")) and any(
-        f.endswith(".csv") for f in os.listdir(os.path.join(HERE, "..", "data", "literature")))
-    if not csvs_exist:
+# --------------------------------------------------------------------- F7 (S1)
+def make_F7_physics_ablation():
+    """S1: physics-component ablation (sigma/D0/k_bleach/dn_max toggles)
+    at sub/near/post-cliff K. Not to be confused with F9a's gradient-
+    pathway ablation (an engineering question, not a physics one) --
+    see docs/legacy_results_audit.md for the naming-collision this
+    guards against."""
+    grouped = group_by_config(load_all_results())
+    have_data = any(exp_id == "S1" for exp_id, _ in grouped)
+    if not have_data:
         no_data_placeholder(
-            os.path.join(OUT_DIR, "F7_twin_validation.pdf"),
-            "F7: twin vs. digitized literature (growth curve, angular selectivity)",
-            "needs Phase 6 digitized CSVs (data/literature/*.csv) from WebPlotDigitizer -- "
-            "not yet provided; see data/literature/README.md.")
-        return
+            os.path.join(OUT_DIR, "F7_physics_ablation.pdf"),
+            "F7 (S1): physics-component ablation (no_nonlocality/"
+            "no_diffusion/no_dye_depletion/no_saturation_approx vs. baseline)",
+            "needs S1 manifest results.")
+        return False
+    no_data_placeholder(
+        os.path.join(OUT_DIR, "F7_physics_ablation.pdf"),
+        "F7 (S1): physics-component ablation",
+        "S1 data now exists, but this figure's render code is not yet "
+        "implemented -- add it now that the data is here.")
+    return False
 
 
-# --------------------------------------------------------------------- F8 (real data)
-def make_F8a_gradient_ablation():
+# --------------------------------------------------------------------- F8 (S2)
+def make_F8_sensitivity_band():
+    """S2: cliff-location sensitivity band under NPDD parameter error.
+    See docs/s2_sensitivity_notes.md for the two write-up caveats this
+    figure's discussion needs (one-at-a-time perturbation, no interaction
+    terms; perturbation magnitudes need justifying against the literature
+    spread once V1 exists) -- write those into the caption/discussion
+    when this is rendered for real, don't silently drop them."""
+    grouped = group_by_config(load_all_results())
+    have_data = any(exp_id == "S2" for exp_id, _ in grouped)
+    if not have_data:
+        no_data_placeholder(
+            os.path.join(OUT_DIR, "F8_sensitivity_band.pdf"),
+            "F8 (S2): cliff-location sensitivity band vs. NPDD parameter error",
+            "needs S2 manifest results.")
+        return False
+    no_data_placeholder(
+        os.path.join(OUT_DIR, "F8_sensitivity_band.pdf"),
+        "F8 (S2): cliff-location sensitivity band vs. NPDD parameter error",
+        "S2 data now exists, but this figure's render code is not yet "
+        "implemented -- add it now that the data is here.")
+    return False
+
+
+# --------------------------------------------------------------------- F9a-c (supplementary, real data)
+def make_F9a_gradient_ablation():
     d = _load_json("results_ablation_gradients.json")
     if d is None:
-        no_data_placeholder(os.path.join(OUT_DIR, "F8a_gradient_ablation.pdf"),
-                            "F8a: gradient-pathway ablation", "results_ablation_gradients.json missing")
-        return
+        no_data_placeholder(os.path.join(OUT_DIR, "F9a_gradient_ablation.pdf"),
+                            "F9a: gradient-pathway ablation", "results_ablation_gradients.json missing")
+        return False
     fig, axs = new_fig(width="single", ncols=2, height_in=SINGLE_COL_IN * 0.6)
     ax1, ax2 = axs
     fid = d["fidelity"]
@@ -218,38 +353,16 @@ def make_F8a_gradient_ablation():
            color=[COLORS["black"], COLORS["blue"], COLORS["orange"]])
     ax2.set_ylabel("downstream PSNR (dB)")
     ax2.tick_params(axis="x", labelrotation=30)
-    savefig(fig, os.path.join(OUT_DIR, "F8a_gradient_ablation.pdf"))
+    savefig(fig, os.path.join(OUT_DIR, "F9a_gradient_ablation.pdf"))
+    return True
 
 
-def make_F8b_rcwa():
-    d3 = _load_json("results_rcwa.json")
-    d90 = _load_json("results_rcwa_e7.json")
-    if d3 is None and d90 is None:
-        no_data_placeholder(os.path.join(OUT_DIR, "F8b_rcwa.pdf"),
-                            "F8b: RCWA validity envelope", "results_rcwa*.json missing")
-        return
-    fig, ax = new_fig(width="single")
-    if d90:
-        by_geom = {}
-        for c in d90["cases"]:
-            by_geom.setdefault(c["geometry"], []).append((c["K"], c["abs_deviation"]))
-        colors = [COLORS["blue"], COLORS["vermillion"], COLORS["bluish_green"]]
-        for (geom, pts), color in zip(by_geom.items(), colors):
-            pts = sorted(pts)
-            Ks = [p[0] for p in pts]
-            devs = [p[1] for p in pts]
-            ax.scatter(Ks, devs, color=color, s=6, label=geom, alpha=0.7)
-        ax.set_xlabel("K (rad/um)"); ax.set_ylabel("|Kogelnik - RCWA T1|")
-        ax.legend(frameon=False, fontsize=5.5)
-    savefig(fig, os.path.join(OUT_DIR, "F8b_rcwa.pdf"))
-
-
-def make_F8c_mesh_convergence():
+def make_F9b_mesh_convergence():
     d = _load_json("results", "gpu_reruns", "npdd_mesh_sweep", "results.json")
     if d is None:
-        no_data_placeholder(os.path.join(OUT_DIR, "F8c_mesh_convergence.pdf"),
-                            "F8c: mesh-density convergence", "results/gpu_reruns/npdd_mesh_sweep missing")
-        return
+        no_data_placeholder(os.path.join(OUT_DIR, "F9b_mesh_convergence.pdf"),
+                            "F9b: mesh-density convergence", "results/gpu_reruns/npdd_mesh_sweep missing")
+        return False
     fig, ax = new_fig(width="single")
     nxs, psnrs = [], []
     for key, row in d["mesh_density"].items():
@@ -260,15 +373,16 @@ def make_F8c_mesh_convergence():
     ax.set_xscale("log", base=2)
     ax.set_xlabel("n_x"); ax.set_ylabel("PSNR (dB)")
     ax.set_title("single seed, single Colab T4 run", fontsize=6)
-    savefig(fig, os.path.join(OUT_DIR, "F8c_mesh_convergence.pdf"))
+    savefig(fig, os.path.join(OUT_DIR, "F9b_mesh_convergence.pdf"))
+    return True
 
 
-def make_F8d_wavelength_detuning():
+def make_F9c_wavelength_detuning():
     d = _load_json("results", "gpu_reruns", "bpm_wavelength_sweep", "results.json")
     if d is None:
-        no_data_placeholder(os.path.join(OUT_DIR, "F8d_wavelength_detuning.pdf"),
-                            "F8d: wavelength-detuning readout sweep", "results/gpu_reruns/bpm_wavelength_sweep missing")
-        return
+        no_data_placeholder(os.path.join(OUT_DIR, "F9c_wavelength_detuning.pdf"),
+                            "F9c: wavelength-detuning readout sweep", "results/gpu_reruns/bpm_wavelength_sweep missing")
+        return False
     fig, ax = new_fig(width="single")
     lams = sorted(float(k) for k in d["by_wavelength"])
     psnrs = [d["by_wavelength"][str(l)]["psnr"] for l in lams]
@@ -278,48 +392,30 @@ def make_F8d_wavelength_detuning():
     ax.set_xlabel("wavelength (nm)"); ax.set_ylabel("PSNR (dB)")
     ax.set_title("single seed, single Colab T4 run", fontsize=6)
     ax.legend(frameon=False)
-    savefig(fig, os.path.join(OUT_DIR, "F8d_wavelength_detuning.pdf"))
-
-
-def make_F8e_shrinkage_prelim():
-    """CPU-scale, seed-bugged-era shrinkage sweep (results_prelim2.json) --
-    explicitly labeled single-seed/superseded per ground rule 3, NOT
-    presented as a Phase-3 E3 result."""
-    d = _load_json("results_prelim2.json")
-    if d is None:
-        no_data_placeholder(os.path.join(OUT_DIR, "F8e_shrinkage_prelim.pdf"),
-                            "F8e: shrinkage sweep (CPU-scale preliminary)", "results_prelim2.json missing")
-        return
-    fig, ax = new_fig(width="single")
-    shrink = d["shrinkage"]
-    svals = sorted(float(k) for k in shrink)
-    gains = []
-    for s in svals:
-        rows = shrink[str(s)]
-        row0 = rows[0]  # seed field present but bugged (bit-identical) -- see docs/provenance_report.md
-        gains.append(row0["ours"] - row0["blind"])
-    ax.plot(svals, gains, "-o", color=COLORS["blue"])
-    ax.set_xlabel("shrinkage s"); ax.set_ylabel("gain M4-M2 (dB)")
-    ax.set_title("CPU-scale, single EFFECTIVE seed (seed-init bug era) -- "
-                 "superseded by E3 once Phase 3 runs", fontsize=5.5, color=COLORS["vermillion"])
-    savefig(fig, os.path.join(OUT_DIR, "F8e_shrinkage_prelim.pdf"))
+    savefig(fig, os.path.join(OUT_DIR, "F9c_wavelength_detuning.pdf"))
+    return True
 
 
 ALL_FIGURES = [
-    make_F1_pipeline_schematic, make_F2_exposure_profiles,
-    make_F3_reconstruction_panels, make_F4_headline_gain_vs_K,
-    make_F5_Kstar_vs_Kc_scatter, make_F6_sigma_probe, make_F7_twin_validation,
-    make_F8a_gradient_ablation, make_F8b_rcwa, make_F8c_mesh_convergence,
-    make_F8d_wavelength_detuning, make_F8e_shrinkage_prelim,
+    make_F1_pipeline_schematic,
+    make_F2_twin_validation,
+    make_F3a_rcwa_validity_envelope, make_F3b_regime_map,
+    make_F4_headline_gain_vs_K, make_F5_Kstar_vs_Kc_scatter,
+    make_F6_cliff_shift, make_F7_physics_ablation, make_F8_sensitivity_band,
+    make_F9a_gradient_ablation, make_F9b_mesh_convergence, make_F9c_wavelength_detuning,
 ]
 
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
+    n_real = 0
     for fn in ALL_FIGURES:
-        print(f"[make_all] {fn.__name__} ...")
-        fn()
-    print(f"[make_all] done -- see {OUT_DIR}")
+        is_real = fn()
+        status = "real content" if is_real else "placeholder"
+        print(f"[make_all] {fn.__name__} ... {status}")
+        n_real += bool(is_real)
+    print(f"[make_all] done -- {n_real}/{len(ALL_FIGURES)} figures have real "
+         f"content, see {OUT_DIR}")
 
 
 if __name__ == "__main__":

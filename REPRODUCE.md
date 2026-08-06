@@ -12,25 +12,49 @@ pip install -r requirements.txt
 python tests/test_smoke.py                # ~2 min, verifies the core pipeline
 ```
 
-## 1. Run the science manifests (Colab T4 GPU; see `notebooks/colab_runner.ipynb`)
+## 1. Run the science manifests (M1/M2/S1/S2; GPU required)
+
+Two ways to run these, same underlying engine (`experiments/run_manifest.py`)
+either way -- resume, atomic writes, stall detection, and per-job seeding
+behave identically:
+
+**Option A -- local NVIDIA GPU** (e.g. a laptop RTX with 4GB+ VRAM; every
+result field in this pipeline is 1D, so VRAM is not the bottleneck, wall
+clock time is):
+
+```bash
+pip install --index-url https://download.pytorch.org/whl/cu124 torch torchvision
+cd holography_media
+python -m experiments.run_local            # runs M1, M2, S1, S2 in order, resumable
+# or double-click holography_media/run_local.bat
+```
+
+**Option B -- Colab T4 GPU** (see `notebooks/colab_runner.ipynb`, or run the
+same commands manually):
 
 ```bash
 python -m experiments.run_manifest --manifest all --probe   # budget check first
-python -m experiments.run_manifest --manifest E1 --max-minutes 170
-python -m experiments.run_manifest --manifest E2 --max-minutes 170
-python -m experiments.run_manifest --manifest E3 --max-minutes 170
-python -m experiments.run_manifest --manifest E4 --max-minutes 170
-python -m experiments.run_manifest --manifest E5 --max-minutes 170
-# E6 optional, only if Gate 1 budget allows:
-python -m experiments.run_manifest --manifest E6 --max-minutes 170
-# E7 needs no GPU, runs on CPU (torcwa):
+python -m experiments.run_manifest --manifest M1 --max-minutes 170
+python -m experiments.run_manifest --manifest M2 --max-minutes 170
+python -m experiments.run_manifest --manifest S1 --max-minutes 170
+python -m experiments.run_manifest --manifest S2 --max-minutes 170
+```
+
+V3 needs no GPU, runs on CPU (torcwa):
+
+```bash
 python experiments/rcwa_crosscheck.py e7
 ```
 
-Each `--manifest` invocation is resumable -- re-running the identical
-command after an interruption skips every already-completed job and
-picks up where it left off (see `experiments/run_manifest.py`'s
-docstring).
+V1/V2 are not yet execution-ready through this manifest system (see
+`experiments/manifest.py`'s `VALIDATION_BUILDERS` docstring) -- V1 overlaps
+with `experiments/fit_literature_curves.py`, V2 needs a genuine 3-way
+Kogelnik/BPM/RCWA comparison that doesn't exist yet.
+
+Each `--manifest` invocation (and `run_local.py`, which wraps the same
+function) is resumable -- re-running the identical command after an
+interruption skips every already-completed job and picks up where it left
+off (see `experiments/run_manifest.py`'s docstring).
 
 ## 2. Aggregate statistics
 
@@ -50,7 +74,7 @@ python scripts/make_numbers_tex.py
 
 ```bash
 python -m figures.make_all
-# writes figures/paper/F1_*.pdf ... F8e_*.pdf
+# writes figures/paper/F1_*.pdf ... F9c_*.pdf
 ```
 
 ## 5. Twin validation (needs digitized literature CSVs -- see

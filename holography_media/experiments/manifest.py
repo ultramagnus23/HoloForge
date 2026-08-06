@@ -53,7 +53,18 @@ DEFAULT_MEDIUM = dict(D0=0.1, sigma=0.08, kappa=2.0, gamma=1.0, dn_max=3.5e-3,
 # short codes replaced the earlier M1-M5b naming (collision with these
 # new experiment-tier names).
 ALL_METHODS = ["GS", "BSGD", "LPC", "MIL", "ORC", "ORU"]
-PAPER_SEEDS = [0, 1, 2, 3, 4]
+
+# 5 -> 3 seeds (compute-budget reduction, see the run-cost audit that
+# prompted this change): analysis/aggregate.py's CI already uses a
+# t-distribution, which handles n=3 correctly -- this just means M1/M2
+# report n=3 with correspondingly wider intervals, honestly, not n=5.
+PAPER_SEEDS = [0, 1, 2]
+
+# sub/near/post-cliff K's (moved up from the S1 section below so
+# build_M2_jobs can use them as its default K subset -- Python evaluates
+# default-argument expressions at function-definition time, so this has
+# to be defined before build_M2_jobs, not just before S1's build_S1_jobs).
+S1_K_POINTS = [1.308996938995747, 3.9269908169872414, 5.235987755982988]
 
 # Measured (not assumed) on CPU at n_x=1024: MIL (media_in_the_loop, full
 # NPDD forward per iteration) costs ~21.7x more wall-clock per iteration
@@ -143,7 +154,8 @@ def build_M1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
 
 
 def build_M2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
-                  seeds=None, compute_match_ratio: float = COMPUTE_MATCH_RATIO) -> list[dict]:
+                  seeds=None, compute_match_ratio: float = COMPUTE_MATCH_RATIO,
+                  K_points=None) -> list[dict]:
     """Same cliff x budget grid, COMPUTE-matched arms: BSGD gets
     n_iters * compute_match_ratio iterations so its total wall-clock/FLOP
     cost approximately matches MIL's (which does a full NPDD forward pass
@@ -155,10 +167,17 @@ def build_M2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
     COMPUTE_MATCH_RATIO's docstring) -- pass a GPU-measured ratio once
     available; this parameter exists specifically so that re-measurement
     doesn't require editing this function.
+
+    K_points defaults to S1_K_POINTS (sub/near/post-cliff, 3 points) rather
+    than M1's full 14-point grid: M2 exists to answer one question -- is
+    MIL's gain just more compute, at fixed budget? -- not to re-map the
+    cliff (M1 already does that). 3 K's x 3 budgets = 9 cells is a
+    complete answer to that confound at ~1/5th the job count. Pass
+    K_points=_cliff_K_grid(dx) explicitly for the full grid if you want it.
     """
     seeds = seeds if seeds is not None else PAPER_SEEDS
     dx = 51.2 / n_x
-    all_K = _cliff_K_grid(dx)
+    all_K = K_points if K_points is not None else S1_K_POINTS
     budgets = [2.0, 4.0, 8.0]
     bsgd_n_iters = round(n_iters * compute_match_ratio)
 
@@ -187,7 +206,8 @@ def build_M2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
 # fields alone (no new holomedia code): setting a parameter to its
 # limiting value approximates removing that physical mechanism.
 # =====================================================================
-S1_K_POINTS = [1.308996938995747, 3.9269908169872414, 5.235987755982988]  # sub/near/post-cliff
+# S1_K_POINTS moved up to the top-of-file constants section (needed there
+# as build_M2_jobs's default K subset).
 S1_BUDGET = 2.0
 
 S1_CONDITIONS = {
@@ -234,26 +254,44 @@ def build_S1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
 # all 3 budgets if compute allows.
 # =====================================================================
 S2_PARAMS = ["D0", "sigma", "kappa"]
-S2_PERTURBATIONS_PCT = [-50, -25, -10, 0, 10, 25, 50]
+
+# Reduced from the original 7-point +/-10/25/50% grid (S2_PERTURBATIONS_PCT_FULL
+# below): drop +/-25%, keep the ends (+/-10%, +/-50%) and baseline. This
+# still yields two distinct, interpretable claims (a "small" and a "large"
+# perturbation regime) rather than collapsing to one point estimate, at
+# ~1.8x the job count of a +/-25%-only cut. See docs/s2_sensitivity_notes.md
+# for the two write-up caveats this tier needs regardless of which grid is
+# used (one-at-a-time perturbation with no interaction terms; perturbation
+# magnitudes need justifying against the literature spread once V1's
+# digitized curves exist, not asserted). Full 7-point grid still available
+# via perturbations_pct=S2_PERTURBATIONS_PCT_FULL.
+S2_PERTURBATIONS_PCT_FULL = [-50, -25, -10, 0, 10, 25, 50]
+S2_PERTURBATIONS_PCT = [-50, -10, 0, 10, 50]
 S2_BUDGET = 2.0
 # Collapse-region K's from the M1 grid -- where a shift in K* is actually
 # observable; the same rationale as M1's "dense insert" for this range.
-S2_K_POINTS = [3.5, 4.25, 4.6, 5.0, 5.24, 5.6, 6.0, 6.5]
+# Trimmed to the innermost 4 (dropping the two outermost on each side) as
+# part of the same compute-budget cut -- full 8-point grid kept below for
+# explicit opt-in.
+S2_K_POINTS_FULL = [3.5, 4.25, 4.6, 5.0, 5.24, 5.6, 6.0, 6.5]
+S2_K_POINTS = [4.6, 5.0, 5.24, 5.6]
 
 
 def build_S2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
-                  seeds=None) -> list[dict]:
+                  seeds=None, perturbations_pct=None, K_points=None) -> list[dict]:
     seeds = seeds if seeds is not None else [0, 1, 2]
+    perturbations_pct = perturbations_pct if perturbations_pct is not None else S2_PERTURBATIONS_PCT
+    K_points = K_points if K_points is not None else S2_K_POINTS
     dx = 51.2 / n_x
     jobs = []
     for param in S2_PARAMS:
         base_value = DEFAULT_MEDIUM[param]
-        for pct in S2_PERTURBATIONS_PCT:
+        for pct in perturbations_pct:
             if pct == 0 and param != S2_PARAMS[0]:
                 continue  # baseline (0%) is param-independent; only emit it once
             value = base_value * (1.0 + pct / 100.0)
             medium = dict(DEFAULT_MEDIUM, **{param: value})
-            for K in S2_K_POINTS:
+            for K in K_points:
                 period_px = period_from_K(K, dx)
                 config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=n_iters,
                              converge_tol=converge_tol, contrast_cap=S2_BUDGET,

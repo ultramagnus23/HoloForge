@@ -28,6 +28,24 @@ METHOD_LABELS = {
     "ORU": "oracle (unconstrained)",
 }
 
+# Optica requires that colour not be the sole means of distinguishing
+# figure elements (print/grayscale/colorblind readability) -- these pair
+# with METHOD_COLORS / a per-series color dict so every series also
+# differs in line style and/or marker shape, not just hue.
+METHOD_LINESTYLES = {
+    "GS": "-", "BSGD": "--", "LPC": ":",
+    "MIL": "-", "ORC": "-.", "ORU": (0, (3, 1, 1, 1)),
+}
+METHOD_MARKERS = {
+    "GS": "o", "BSGD": "s", "LPC": "^",
+    "MIL": "D", "ORC": "v", "ORU": "P",
+}
+# Contrast budgets (2x/4x/8x) recur across F4/F5/F6 as a second
+# categorical dimension independent of method -- give them their own
+# line-style/marker cycle too.
+BUDGET_LINESTYLES = {2.0: "-", 4.0: "--", 8.0: ":"}
+BUDGET_MARKERS = {2.0: "o", 4.0: "s", 8.0: "^"}
+
 plt.rcParams.update({
     "font.size": 7, "axes.labelsize": 7, "axes.titlesize": 7.5,
     "xtick.labelsize": 6.5, "ytick.labelsize": 6.5, "legend.fontsize": 6.5,
