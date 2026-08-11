@@ -334,7 +334,29 @@ def linear_precomp(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
     freq = torch.fft.fftfreq(n_x, d=dx).to(device=device, dtype=dtype)  # cycles/um
     K = (2.0 * math.pi * freq).abs()  # rad/um; H depends on K^2, sign irrelevant
     H = recorder.small_signal_mtf(K, I_mean=I_mean)
-    boost = torch.clamp(1.0 / (H + 1e-9), max=1e6)  # numerical safety only
+    # Boost ceiling = the contrast budget, NOT 1e6.
+    #
+    # This was `clamp(..., max=1e6)`, described as "numerical safety only".
+    # 1e6 is not a safety margin, it is no ceiling at all: H -> 0 near
+    # Nyquist, so 1/H actually REACHED the 1e6 clamp on the production grid
+    # (measured: 1/H = 1.92 at K=4, 29 at K=15.7, 1e6 at K=60). A bar
+    # target has energy at every odd harmonic, so multiplying by that
+    # profile made the resulting exposure dominated by near-Nyquist
+    # harmonics rather than the target's own fundamental -- which is why
+    # LPC returned an essentially K-independent result (0.56 dB spread
+    # across the whole 14-point K grid and all three budgets), i.e. it was
+    # not functioning as a baseline at all.
+    #
+    # The correct ceiling is the contrast budget itself. That IS the
+    # paper's cliff condition (Eq. 5): compensation is feasible only where
+    # the required boost 1/H(K) fits inside the available contrast
+    # headroom B. Capping here makes LPC the honest closed-form
+    # realization of that theory -- boost every frequency by 1/H(K), up to
+    # what the budget actually permits -- instead of an unbounded boost
+    # that contrast_project then has to salvage after the spectrum has
+    # already been destroyed.
+    max_boost = contrast_cap if contrast_cap is not None else 1e6
+    boost = torch.clamp(1.0 / (H + 1e-9), max=max_boost)
 
     T_hat = torch.fft.fft(target.to(dtype).to(cdtype))
     E_hat = T_hat * boost.to(cdtype)
