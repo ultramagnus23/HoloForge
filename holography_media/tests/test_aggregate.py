@@ -55,6 +55,45 @@ def test_zero_crossing_estimator():
     print("find_zero_crossing_K OK:", kstar)
 
 
+def test_last_crossing_estimator_is_robust_to_a_mid_curve_dip():
+    """Regression test for the pinned-K* bug. The real M1 gain curve is
+    NOT monotone: it dips negative, recovers positive, then falls for
+    good. find_zero_crossing_K stops at the FIRST dip, so on the real data
+    it returned a K* inside the same [3.93, 4.25] grid interval for all
+    three contrast budgets -- an artifact of the stopping rule, which made
+    the cliff look budget-independent regardless of the physics.
+    find_last_crossing_K must instead report the last up-crossing."""
+    # gain: positive, dips negative at K=4, recovers at K=5, gone after 6
+    curve = [(1.0, 2.0), (2.0, 1.5), (4.0, -0.5), (5.0, 1.0), (6.0, -1.0), (7.0, -2.0)]
+    first = agg.find_zero_crossing_K(curve)
+    last = agg.find_last_crossing_K(curve)
+    assert 2.0 < first < 4.0, first          # fragile: pinned to the early dip
+    assert 5.0 < last < 6.0, last            # robust: the real last crossing
+    assert last > first
+
+    # cliff above the sampled grid (still positive at the top) -> None,
+    # not a fabricated in-grid number
+    assert agg.find_last_crossing_K([(1.0, 1.0), (2.0, 2.0)]) is None
+    # never positive -> None
+    assert agg.find_last_crossing_K([(1.0, -1.0), (2.0, -2.0)]) is None
+    print(f"find_last_crossing_K OK: first={first:.2f} (pinned to dip), last={last:.2f}")
+
+
+def test_self_consistent_Kc_uses_per_K_contrast():
+    """Kc must be solved where 1/H(K) exceeds the contrast realized AT
+    THAT K, not against one K-averaged scalar. Uses a monotonically
+    falling C(K) so the two definitions provably disagree."""
+    from holomedia import NPDDRecorder, MediumParams
+    rec = NPDDRecorder(256, 0.05, params=MediumParams())
+    Ks = [2.0, 4.0, 6.0, 8.0, 10.0]
+    contrast_by_K = {k: c for k, c in zip(Ks, [8.0, 6.0, 4.0, 2.0, 1.5])}
+    kc = agg._self_consistent_Kc(rec, contrast_by_K)
+    assert kc is not None and Ks[0] <= kc <= Ks[-1], kc
+    # a uniformly huge realized contrast is never exceeded over this grid
+    assert agg._self_consistent_Kc(rec, {k: 1e6 for k in Ks}) is None
+    print(f"self-consistent Kc OK: {kc:.3f} (per-K C, not K-averaged)")
+
+
 def test_ci_includes_zero_estimator():
     # K=3's CI includes 0, and gain stays <=0.25 for K=3,4,5 -> K*=3
     curve = [(1, 2.0, 1.5, 2.5), (2, 1.0, 0.5, 1.5),
@@ -162,6 +201,8 @@ if __name__ == "__main__":
     test_mean_std_median_ci95()
     test_paired_gain()
     test_zero_crossing_estimator()
+    test_last_crossing_estimator_is_robust_to_a_mid_curve_dip()
+    test_self_consistent_Kc_uses_per_K_contrast()
     test_ci_includes_zero_estimator()
     test_end_to_end_headroom_closure_on_real_tiny_data()
     test_m3_cliff_shift_on_real_tiny_M1_and_M2_data()

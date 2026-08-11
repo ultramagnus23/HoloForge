@@ -102,10 +102,69 @@ def test_history_last_iteration_is_accurate_stop_point():
           f"early-stop run ends at {hist_early[-1][0]}")
 
 
+def test_oracle_respects_medium_saturation():
+    """Regression test for the unphysical-oracle bug: oracle_ideal built
+    its index profile as dn_max*(E - E.mean()) with no saturation clamp,
+    so a contrast_cap of B produced index modulation up to (B-1)*dn_max --
+    measured at exactly 7.00x dn_max for B=8. dn_max IS the medium's
+    saturation index, so that 'oracle' was an unachievable bound and every
+    headroom-to-oracle number was measured against it. Both oracles must
+    now stay within the physically reachable index range."""
+    from holomedia import oracle_ideal, oracle_unconstrained
+    n_x = 128
+    med = MediumParams()
+    rec = NPDDRecorder(n_x, 0.05, params=med)
+    bpm = SlabBPM(n_x, 0.05, 0.405, med.thickness, n_z=8, n0=med.n0)
+    target = torch.zeros(n_x); target[40:60] = 1.0
+
+    for cap in (2.0, 4.0, 8.0):
+        E, _ = oracle_ideal(target, rec, bpm, n_iters=20, dose_budget=1.0,
+                            seed=0, contrast_cap=cap)
+        dn_lin = med.dn_max * (E - E.mean())
+        dn = med.dn_max * torch.tanh(dn_lin / med.dn_max)
+        ratio = float(dn.abs().max()) / med.dn_max
+        assert ratio <= 1.0 + 1e-6, (
+            f"ORC at cap={cap}x reached {ratio:.2f}x dn_max -- oracle is "
+            f"recording beyond the medium's saturation index")
+
+    dn_u, _ = oracle_unconstrained(target, rec, bpm, n_iters=20, seed=0)
+    assert float(dn_u.abs().max()) / med.dn_max <= 1.0 + 1e-6
+    print("oracle saturation OK: both oracles within 1.0x dn_max (ORC was 7.00x)")
+
+
+def test_loss_and_metric_are_the_same_objective():
+    """Regression test for the objective/metric mismatch: optimizers
+    minimized a SUM-normalized MSE while the reported PSNR was
+    MAX-normalized, so 'optimized better' and 'scored better' could
+    disagree. psnr_si must be exactly the monotone transform of the
+    si_mse the optimizers now minimize, and must be invariant to
+    rescaling the reconstruction."""
+    from holomedia import si_mse, psnr_si
+    torch.manual_seed(0)
+    b = torch.rand(256).abs() + 0.1
+    a = (b + 0.1 * torch.rand(256)).abs()
+
+    # psnr_si == -10 log10(si_mse), exactly
+    assert abs(psnr_si(a, b) - float(-10.0 * torch.log10(si_mse(a, b) + 1e-12))) < 1e-9
+
+    # scale invariance: the whole point -- brightness is a readout gain,
+    # not a property of the design, so it must not change the score.
+    for s in (0.01, 0.5, 3.0, 100.0):
+        assert abs(psnr_si(a * s, b) - psnr_si(a, b)) < 1e-4, \
+            f"psnr_si changed under rescaling by {s}"
+
+    # better reconstruction => strictly better score (monotone, sane)
+    worse = (b + 0.5 * torch.rand(256)).abs()
+    assert psnr_si(a, b) > psnr_si(worse, b)
+    print("objective/metric alignment OK: psnr_si == -10log10(si_mse), scale-invariant")
+
+
 if __name__ == "__main__":
     test_contrast_project_hits_cap()
     test_contrast_project_none_is_dose_project_only()
     test_linear_precomp_reduces_to_target_when_H_is_one()
     test_linear_precomp_satisfies_constraints_exactly()
     test_history_last_iteration_is_accurate_stop_point()
+    test_oracle_respects_medium_saturation()
+    test_loss_and_metric_are_the_same_objective()
     print("PASSED")

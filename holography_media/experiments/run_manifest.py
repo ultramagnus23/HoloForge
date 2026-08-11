@@ -264,6 +264,10 @@ def run_job(job: dict, device, commit: str, dtype: torch.dtype = DTYPE) -> dict:
         loss_curve=hist, iterations_run=result["iterations_run"],
         early_stop_reason=result["early_stop_reason"], wall_s=wall_s,
         peak_mem_mb=peak_mem_mb, psnr=result["psnr"],
+        # carried through so a post-fix result set can be compared directly
+        # against the pre-fix archive under the OLD metric as well as the
+        # new one -- see the objective-alignment note in holomedia/optimize.py
+        psnr_maxnorm_legacy=result["psnr_maxnorm_legacy"],
         diffraction_efficiency=result["diffraction_efficiency"],
         contrast=result["contrast"],
     )

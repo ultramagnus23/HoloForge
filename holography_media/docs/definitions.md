@@ -104,6 +104,40 @@ per `docs/provenance_report.md`) is entirely attributable to *some
 combination* of exposure-domain constraints and medium physics, with no way
 to split the two from the current data.
 
+### UPDATE — the M5a oracle was unphysical, and the M5a/M5b decomposition was inverted
+
+M5b was subsequently added (`oracle_unconstrained`), but the decomposition
+above still did not work, for a reason that invalidated the *constrained*
+oracle rather than the new one:
+
+- `oracle_ideal` (M5a) built its index profile as
+  $\Delta n = \Delta n_\text{max}(E - \bar E)$ with **no saturation clamp**.
+  `contrast_project` bounds $\max(E)/\bar E \le B$, not the resulting index
+  swing, so with $\bar E = $ `dose_budget` the modulation reached
+  $(B-1)\,\Delta n_\text{max}$ — **measured at exactly 7.00× $\Delta n_\text{max}$
+  at $B = 8$.**
+- $\Delta n_\text{max}$ *is* the medium's saturation index. An "oracle"
+  recording 7× beyond it is not an achievable upper bound but an impossible
+  one, so every headroom-to-oracle number was measured against an
+  unreachable target.
+- `oracle_unconstrained` (M5b) *was* correctly clamped
+  ($\Delta n_\text{max}\tanh(\cdot)$, measured 1.00×). So the
+  "unconstrained" oracle was **7× more index-limited than the "constrained"
+  one**, making the measured M5a/M5b gap negative — i.e. removing
+  constraints appeared to *cost* performance (mean M5a 9.85 dB vs
+  M5b 4.47 dB on the M1 data).
+
+**Fixed** by applying the same $\Delta n_\text{max}\tanh(\cdot)$ soft
+saturation inside `oracle_ideal` (and `oracle_ideal_batched`). Both oracles
+now live in the same physically reachable index range, so their difference
+isolates exactly what it claims to — the cost of the exposure-domain
+($E\ge0$ / dose / contrast) constraints — and nothing else. Regression test:
+`tests/test_method_registry.py::test_oracle_respects_medium_saturation`.
+
+Any oracle-gap number produced before this fix (including the 3.1–13.0 dB
+range above) is measured against the unphysical bound and must not be
+carried into the manuscript.
+
 ## (c) Recording geometry: 1D-in-x kinetics; z enters ONLY at readout as extrusion, with NO depth-resolved absorption implemented
 
 Checked directly against code, not the paper's prose, which claims more than

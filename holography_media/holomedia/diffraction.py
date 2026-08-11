@@ -102,7 +102,13 @@ class SlabBPM(torch.nn.Module):
         dz_eff = self.dz * (1.0 - shrinkage)
         tan_phi = math.tan(math.radians(slant_deg))
         fx = torch.fft.fftfreq(self.n_x, d=self.dx).to(dn_profile.device)
-        dn_hat = torch.fft.fft(dn_profile.to(torch.complex128))
+        # self.cdtype, NOT a hardcoded complex128: this line previously
+        # upcast to complex128 on every forward regardless of how the BPM
+        # was constructed, so the float32/complex64 production pipeline
+        # (docs/precision_policy.md) was silently doing its BPM inner loop
+        # in double precision -- paying the cost of float64 while the
+        # policy documented float32.
+        dn_hat = torch.fft.fft(dn_profile.to(self.cdtype))
         for iz in range(self.n_z):
             z = (iz + 0.5) * self.dz
             shift = shrinkage * tan_phi * z

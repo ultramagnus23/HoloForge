@@ -32,7 +32,7 @@ import torch
 from holomedia import (NPDDRecorder, SlabBPM,
                        media_in_the_loop, media_blind_sgd, media_blind_gs,
                        oracle_ideal, oracle_unconstrained, linear_precomp,
-                       psnr, diffraction_efficiency)
+                       psnr, psnr_si, diffraction_efficiency)
 
 METHOD_IDS = ["GS", "BSGD", "LPC", "MIL", "ORC", "ORU"]
 
@@ -72,7 +72,8 @@ def run_method(method_id: str, target: torch.Tensor, recorder: NPDDRecorder,
     iterations_run = n_iters
 
     if method_id == "GS":
-        E, recon = media_blind_gs(target, recorder, bpm, dose_budget=dose_budget, seed=seed)
+        E, recon = media_blind_gs(target, recorder, bpm, dose_budget=dose_budget,
+                                  seed=seed, contrast_cap=contrast_cap)
         iterations_run = 0
         early_stop_reason = "closed_form_no_optimization"
 
@@ -111,7 +112,14 @@ def run_method(method_id: str, target: torch.Tensor, recorder: NPDDRecorder,
 
     return dict(
         method_id=method_id, method_name=METHOD_NAMES[method_id],
-        psnr=psnr(recon, target),
+        # psnr is now the SCALE-INVARIANT metric (holomedia.optimize.psnr_si),
+        # which is exactly the objective every optimizer minimizes -- see the
+        # objective-alignment note in optimize.py. psnr_maxnorm_legacy is the
+        # OLD max-normalized metric, retained per-row so pre-fix and post-fix
+        # result sets can be compared directly instead of the change being an
+        # unexplainable jump in the headline number.
+        psnr=psnr_si(recon, target),
+        psnr_maxnorm_legacy=psnr(recon, target),
         diffraction_efficiency=diffraction_efficiency(recon, mask),
         loss_history=history, iterations_run=iterations_run,
         early_stop_reason=early_stop_reason,

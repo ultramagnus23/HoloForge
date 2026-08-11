@@ -106,7 +106,15 @@ def _cliff_K_grid(dx: float) -> list[float]:
     existing_periods = [8, 12, 16, 24, 32, 48, 64]
     existing_K = sorted(K_from_period(p, dx) for p in existing_periods)
     dense_insert_K = [3.5, 4.25, 4.6, 5.0, 5.6, 6.0, 6.5]
-    return sorted(set(round(k, 6) for k in existing_K + dense_insert_K))
+    # Second dense insert, 7.0-7.6. The analytic cliff prediction at the
+    # 4x and 8x contrast budgets lands near Kc ~ 6.6 and ~ 7.3, but the
+    # grid above jumped 6.5 -> 7.854 -> 10.472, so the two highest-budget
+    # predictions fell in an unsampled gap: there was no measurement
+    # anywhere near where the theory said the cliff should be, which alone
+    # made the budget-dependence of K* unresolvable at those budgets.
+    high_budget_bracket_K = [7.0, 7.3, 7.6]
+    return sorted(set(round(k, 6) for k in
+                      existing_K + dense_insert_K + high_budget_bracket_K))
 
 
 # =====================================================================

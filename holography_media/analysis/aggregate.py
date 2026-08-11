@@ -113,10 +113,22 @@ def paired_gain(rows_a: list[dict], rows_b: list[dict], key: str = "psnr") -> li
            for r in rows_a if r["seed"] in by_seed_b]
 
 
-# --------------------------------------------------------------- E1 cliff estimators
+# --------------------------------------------------------------- cliff estimators
 def find_zero_crossing_K(K_gain_pairs: list[tuple]) -> float | None:
-    """Linear-interpolation zero-crossing where mean paired gain goes
-    positive -> non-positive as K increases. K_gain_pairs sorted by K."""
+    """FIRST-crossing estimator: linear-interpolation zero-crossing where
+    mean paired gain first goes positive -> non-positive as K increases.
+
+    FRAGILE, and retained only for continuity with already-archived
+    result sets -- prefer find_last_crossing_K below. The measured M1
+    gain curve is NOT monotone in K (it dips negative, recovers positive,
+    dips again), so "the first crossing" is decided by whichever single
+    K point happens to dip first. On the real M1 data that pinned the
+    reported K* into the same [3.93, 4.25] grid interval for all three
+    budgets (4.19 / 4.21 / 4.24), which is an artifact of this estimator's
+    stopping rule, not a measurement that the cliff does not move: the
+    estimator structurally cannot report a K* outside the first dip's
+    interval no matter what happens at higher K.
+    """
     for i in range(len(K_gain_pairs) - 1):
         K0, g0 = K_gain_pairs[i]
         K1, g1 = K_gain_pairs[i + 1]
@@ -124,6 +136,38 @@ def find_zero_crossing_K(K_gain_pairs: list[tuple]) -> float | None:
             frac = g0 / (g0 - g1)
             return K0 + frac * (K1 - K0)
     return None
+
+
+def find_last_crossing_K(K_gain_pairs: list[tuple],
+                         threshold: float = 0.0) -> float | None:
+    """ROBUST cliff estimator (preferred): the LAST K at which mean paired
+    gain is still above `threshold`, interpolated to the crossing with the
+    next point.
+
+    Rationale: the cliff is the frequency past which media-awareness stops
+    helping *for good*. That is the last up-crossing of the envelope, not
+    the first dip. This estimator is insensitive to isolated negative
+    excursions below the cliff (which first-crossing is maximally
+    sensitive to) while still requiring the gain to stay down afterwards,
+    because it takes the LAST index with gain > threshold: any later
+    recovery moves the estimate later, by construction.
+
+    Returns None if gain is above threshold nowhere (cliff below the grid)
+    or everywhere (cliff above the grid) -- both are honest "unresolved by
+    this K grid" answers rather than a fabricated in-grid number.
+    """
+    above = [i for i, (_, g) in enumerate(K_gain_pairs) if g > threshold]
+    if not above:
+        return None
+    i = above[-1]
+    if i == len(K_gain_pairs) - 1:
+        return None  # still positive at the top of the grid: cliff not bracketed
+    K0, g0 = K_gain_pairs[i]
+    K1, g1 = K_gain_pairs[i + 1]
+    if g0 == g1:
+        return K0
+    frac = (g0 - threshold) / (g0 - g1)
+    return K0 + frac * (K1 - K0)
 
 
 def find_ci_includes_zero_K(K_gain_ci: list[tuple],
@@ -201,6 +245,34 @@ def _configs_for_budget(grouped: dict, experiment_id: str, budget: float) -> lis
     return out
 
 
+def _self_consistent_Kc(rec, contrast_by_K: dict) -> float | None:
+    """Smallest measured K where the required boost 1/H(K) exceeds the
+    contrast C(K) the optimizer actually realized at that same K, linearly
+    interpolated between adjacent K samples.
+
+    This is the per-K analogue of NPDDRecorder.predicted_cliff (which
+    inverts 1/H(K) > B for one scalar B). Returns None when the condition
+    never flips over the sampled K range -- an honest "the grid does not
+    bracket Kc" rather than an extrapolated number.
+    """
+    import torch
+    Ks = sorted(contrast_by_K)
+    if not Ks:
+        return None
+    K_t = torch.tensor(Ks, dtype=rec.dtype)
+    inv_H = (1.0 / rec.small_signal_mtf(K_t)).tolist()
+    deficit = [ih - contrast_by_K[k] for ih, k in zip(inv_H, Ks)]  # >0 => infeasible
+    for i in range(len(Ks)):
+        if deficit[i] > 0:
+            if i == 0:
+                return Ks[0]
+            d0, d1 = deficit[i - 1], deficit[i]
+            if d1 == d0:
+                return Ks[i]
+            return Ks[i - 1] + (0.0 - d0) / (d1 - d0) * (Ks[i] - Ks[i - 1])
+    return None
+
+
 def headroom_closure(grouped: dict, experiment_id: str = "M1", budgets=BUDGETS) -> list[dict]:
     """The paper's central table: budget -> measured contrast C (from
     MIL's logged realized-contrast stats) -> predicted Kc(C) (Eq. 5, using
@@ -214,33 +286,52 @@ def headroom_closure(grouped: dict, experiment_id: str = "M1", budgets=BUDGETS) 
         curve = gain_curve(grouped, experiment_id, budget)
         configs_and_methods = _configs_for_budget(grouped, experiment_id, budget)
 
-        # measured contrast C: mean of MIL's realized max/mean across all
-        # (K, seed) for this budget
-        contrasts = [r["contrast"]["max_over_mean"]
-                    for _, by_method in configs_and_methods
-                    for r in by_method.get("MIL", [])
+        # Measured contrast C, PER K (not averaged over K).
+        #
+        # This used to be one scalar: the mean of MIL's realized max/mean
+        # over every (K, seed) in the budget group. That is a
+        # mis-specification whenever the realized contrast is itself
+        # K-dependent -- which it measurably is. On the real M1 data at
+        # 8x budget, MIL realized C = 8.0 at the lowest K but only ~3.4-5.6
+        # across the mid range, and 1.03 at the top K, so a single
+        # K-averaged C described no K in particular. It was also outlier-
+        # driven: at 2x budget the near-constant C~2.02 was dragged to
+        # 1.95 purely by the single collapsed K=15.7 point.
+        #
+        # Kc is now solved SELF-CONSISTENTLY: the cliff is where the boost
+        # the medium demands, 1/H(K), first exceeds the contrast the
+        # optimizer actually realized AT THAT K, C(K) -- i.e. the smallest
+        # K with 1/H(K) > C(K), rather than 1/H(K) > (one global C).
+        contrast_by_K = {}
+        for cfg, by_method in configs_and_methods:
+            vals = [r["contrast"]["max_over_mean"] for r in by_method.get("MIL", [])
                     if r["contrast"]["max_over_mean"] is not None]
+            if vals:
+                contrast_by_K[round(float(cfg["K_nominal"]), 6)] = statistics.fmean(vals)
 
-        if not curve or not contrasts:
+        if not curve or not contrast_by_K:
             table.append(dict(budget=budget, status="no_data"))
             continue
 
-        measured_C = statistics.fmean(contrasts)
-        # predicted Kc(measured_C): rebuild a recorder from ANY matching
-        # config's medium/grid to evaluate the analytic Eq. 5 inversion
-        # (grid/medium are the same across every job in a budget group by
-        # construction of build_M1_jobs/build_M2_jobs, so any one config
-        # is representative)
+        measured_C = statistics.fmean(contrast_by_K.values())  # reported for continuity only
         any_cfg = configs_and_methods[0][0]
         medium = MediumParams(**any_cfg["medium"])
         rec = NPDDRecorder(any_cfg["n_x"], any_cfg["dx"], params=medium)
-        predicted_Kc = float(rec.predicted_cliff(budget=measured_C))
+        predicted_Kc_avgC = float(rec.predicted_cliff(budget=measured_C))
+        predicted_Kc = _self_consistent_Kc(rec, contrast_by_K)
 
         K_gain_pairs = [(k, g) for k, g, _, _ in curve]
         table.append(dict(
-            budget=budget, measured_contrast_C=measured_C,
+            budget=budget,
+            measured_contrast_C=measured_C,
+            contrast_by_K=sorted(contrast_by_K.items()),
+            # primary (self-consistent, per-K C) and the old K-averaged
+            # form side by side, so the change in method is visible in the
+            # output rather than being a silent redefinition of Kc.
             predicted_Kc_from_measured_C=predicted_Kc,
-            observed_Kstar_interp=find_zero_crossing_K(K_gain_pairs),
+            predicted_Kc_from_Kaveraged_C=predicted_Kc_avgC,
+            observed_Kstar_last=find_last_crossing_K(K_gain_pairs),   # preferred
+            observed_Kstar_interp=find_zero_crossing_K(K_gain_pairs),  # legacy/fragile
             observed_Kstar_ci=find_ci_includes_zero_K(curve),
             n_K_points=len(curve), gain_curve=curve,
         ))
