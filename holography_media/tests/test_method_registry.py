@@ -132,6 +132,35 @@ def test_oracle_respects_medium_saturation():
     print("oracle saturation OK: both oracles within 1.0x dn_max (ORC was 7.00x)")
 
 
+def test_unconstrained_oracle_is_at_least_the_constrained_one():
+    """Ordering invariant: M5b (oracle_unconstrained) optimizes over a
+    strictly LOOSER feasible set than M5a (oracle_ideal) -- same dn_max
+    saturation bound, but no E>=0 / dose / contrast constraints -- so it
+    can never score worse. It did, by 3.8 dB (6.76 vs 10.55), because it
+    optimized a raw index-valued variable of scale dn_max=3.5e-3 while
+    inheriting the lr=5e-2 shared by methods whose variables are O(1):
+    every Adam step moved it ~14x dn_max, saturating tanh instead of
+    descending. Now reparameterized to a dimensionless u with
+    dn = dn_max*tanh(u). A violation here means the M5a/M5b gap
+    decomposition is invalid again."""
+    from holomedia import oracle_ideal, oracle_unconstrained, psnr_si
+    n_x = 128
+    med = MediumParams()
+    rec = NPDDRecorder(n_x, 0.05, params=med)
+    bpm = SlabBPM(n_x, 0.05, 0.405, med.thickness, n_z=8, n0=med.n0)
+    target = torch.zeros(n_x); target[40:60] = 1.0
+
+    _, recon_c = oracle_ideal(target, rec, bpm, n_iters=300, lr=5e-2,
+                              dose_budget=1.0, seed=0, contrast_cap=8.0)
+    _, recon_u = oracle_unconstrained(target, rec, bpm, n_iters=300, lr=5e-2, seed=0)
+    p_c, p_u = psnr_si(recon_c, target), psnr_si(recon_u, target)
+    assert p_u >= p_c - 0.5, (
+        f"unconstrained oracle ({p_u:.2f} dB) scored below the constrained one "
+        f"({p_c:.2f} dB) -- impossible for a looser feasible set; the M5a/M5b "
+        f"decomposition is invalid")
+    print(f"oracle ordering OK: ORU {p_u:.2f} dB >= ORC {p_c:.2f} dB")
+
+
 def test_loss_and_metric_are_the_same_objective():
     """Regression test for the objective/metric mismatch: optimizers
     minimized a SUM-normalized MSE while the reported PSNR was
@@ -166,5 +195,6 @@ if __name__ == "__main__":
     test_linear_precomp_satisfies_constraints_exactly()
     test_history_last_iteration_is_accurate_stop_point()
     test_oracle_respects_medium_saturation()
+    test_unconstrained_oracle_is_at_least_the_constrained_one()
     test_loss_and_metric_are_the_same_objective()
     print("PASSED")

@@ -478,25 +478,47 @@ def oracle_unconstrained(target: torch.Tensor, recorder: NPDDRecorder, bpm: Slab
     via arbitrarily large index contrast, which is not a physically
     meaningful upper bound). Comparing M5a (constrained) vs M5b decomposes
     the oracle gap in Sec. 5 into "cost of exposure-domain constraints"
-    (M4 vs M5a headroom) vs "cost of medium physics" (M5a vs M5b headroom)."""
+    (M4 vs M5a headroom) vs "cost of medium physics" (M5a vs M5b headroom).
+
+    STEP-SCALE FIX: the optimized variable is now the DIMENSIONLESS u in
+    dn = dn_max*tanh(u), not a raw index-valued dn_free.
+
+    Previously this optimized dn_free directly, i.e. a variable whose
+    natural scale is dn_max = 3.5e-3, while inheriting the lr = 5e-2
+    shared by every other method -- methods that optimize a softplus
+    pre-activation whose natural scale is O(1). One Adam step is ~lr, so
+    each step moved the index variable by ~14x dn_max, slamming tanh into
+    saturation and bouncing between extremes instead of descending. The
+    measurable symptom: this "unconstrained" oracle scored BELOW the
+    constrained one (6.76 vs 10.55 dB at K=2.62), which is impossible for
+    a strictly looser feasible set and made the M5a/M5b decomposition
+    meaningless. Re-running with the step scaled to the variable
+    (lr*dn_max) gave 12.06 dB, correctly above M5a.
+
+    Optimizing u instead makes the variable O(1) like every other method's,
+    so the shared lr is correctly scaled by construction and no per-method
+    lr special-casing is needed.
+    """
     device = target.device
     dn_max = recorder.p.dn_max
     g = torch.Generator(device="cpu")
     g.manual_seed(seed)
-    dn_free = (1e-3 * torch.randn(recorder.n_x, generator=g, dtype=recorder.dtype)
-              ).to(device).requires_grad_(True)
-    opt = torch.optim.Adam([dn_free], lr=lr)
+    # u is dimensionless (O(1)), matching the softplus pre-activations the
+    # other methods optimize, so the shared lr is correctly scaled.
+    u = (1e-2 * torch.randn(recorder.n_x, generator=g, dtype=recorder.dtype)
+         ).to(device).requires_grad_(True)
+    opt = torch.optim.Adam([u], lr=lr)
 
     for _ in range(n_iters):
         opt.zero_grad()
-        dn = dn_max * torch.tanh(dn_free / dn_max)  # soft-bounded, no hard E/dose constraint
+        dn = dn_max * torch.tanh(u)  # soft-bounded, no hard E/dose constraint
         recon = bpm(dn, shrinkage=0.0)
         loss = si_mse(recon, target)
         loss.backward()
         opt.step()
 
     with torch.no_grad():
-        dn = dn_max * torch.tanh(dn_free / dn_max)
+        dn = dn_max * torch.tanh(u)
         recon = bpm(dn, shrinkage=0.0)
     return dn.detach(), recon.detach()
 
