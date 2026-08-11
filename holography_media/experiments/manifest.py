@@ -96,25 +96,53 @@ def K_from_period(period_px: int, dx: float) -> float:
 
 
 def period_from_K(K: float, dx: float) -> int:
-    return max(2, round(2.0 * math.pi / (K * dx)))
+    """Nearest EVEN pixel period for a requested K.
+
+    Even, because build_target renders bars as (x // (period_px // 2)) % 2,
+    whose true period is 2*(period_px//2). For ODD period_px that floor
+    silently discards the last pixel: period_px=17 and 16 both render
+    half-period 8, i.e. the SAME target. On the previous grid that
+    collapsed 17 nominal K points onto 13 distinct targets (5.0 with
+    5.236; 6.5 with 7.0; 7.3, 7.6 and 7.854 all together) and made the
+    realized K differ from the nominal one by up to +7.6% -- so the cliff
+    plot's x-axis was wrong precisely at the high-K end where the budget
+    comparison happens, and aggregate.py treated duplicated experiments as
+    independent points on the gain curve.
+
+    Rounding to even makes period_px//2 exact, so the rendered period is
+    period_px and the realized K is exactly 2*pi/(period_px*dx).
+    """
+    p = round(2.0 * math.pi / (K * dx))
+    p = 2 * round(p / 2)          # nearest even
+    return max(4, p)
+
+
+def K_from_period_exact(period_px: int, dx: float) -> float:
+    """The K a given EVEN pixel period actually realizes. Inverse of
+    period_from_K on the realizable lattice."""
+    return 2.0 * math.pi / (period_px * dx)
 
 
 # The 14-point K grid from the original cliff/budget design (7 historical
 # period-px values union a dense insert across the collapse region) --
 # unchanged science, just the experiment_id it feeds is renamed below.
+# The cliff grid is defined by EVEN pixel periods, not by requested K.
+#
+# Only K = 2*pi/(p*dx) for even p is actually renderable (see
+# period_from_K), so specifying the grid in K and rounding afterwards
+# silently produced duplicate targets and a K axis off by up to 7.6%.
+# Defining it in p makes every grid point exactly realizable, distinct by
+# construction, and the reported K exact.
+#
+# Coverage at dx = 0.05 um: p=64..8 spans K = 1.96..15.71 rad/um, dense
+# through the collapse region, with p=18 (6.98) and p=16 (7.85) bracketing
+# the 8x-budget analytic prediction Kc ~ 7.3 and p=20 (6.28) / p=18 (6.98)
+# bracketing the 4x prediction Kc ~ 6.6.
+_CLIFF_PERIODS_PX = [64, 48, 36, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 8]
+
+
 def _cliff_K_grid(dx: float) -> list[float]:
-    existing_periods = [8, 12, 16, 24, 32, 48, 64]
-    existing_K = sorted(K_from_period(p, dx) for p in existing_periods)
-    dense_insert_K = [3.5, 4.25, 4.6, 5.0, 5.6, 6.0, 6.5]
-    # Second dense insert, 7.0-7.6. The analytic cliff prediction at the
-    # 4x and 8x contrast budgets lands near Kc ~ 6.6 and ~ 7.3, but the
-    # grid above jumped 6.5 -> 7.854 -> 10.472, so the two highest-budget
-    # predictions fell in an unsampled gap: there was no measurement
-    # anywhere near where the theory said the cliff should be, which alone
-    # made the budget-dependence of K* unresolvable at those budgets.
-    high_budget_bracket_K = [7.0, 7.3, 7.6]
-    return sorted(set(round(k, 6) for k in
-                      existing_K + dense_insert_K + high_budget_bracket_K))
+    return sorted(round(K_from_period_exact(p, dx), 6) for p in _CLIFF_PERIODS_PX)
 
 
 # =====================================================================

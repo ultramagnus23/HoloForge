@@ -240,6 +240,42 @@ def test_probe_exit_code_reflects_gate1():
     print("probe CLI exit code under budget OK: 0")
 
 
+def test_cliff_K_grid_points_are_distinct_and_exactly_realizable():
+    """Regression test for the collapsed-K-grid bug. build_target renders
+    bars as (x // (period_px // 2)) % 2, whose true period is
+    2*(period_px//2) -- so an ODD period_px silently renders the same
+    target as period_px-1. The K-specified grid rounded to odd periods and
+    collapsed 17 nominal K points onto 13 distinct targets (5.0 with 5.236;
+    6.5 with 7.0; 7.3, 7.6 and 7.854 together), with realized K off by up
+    to +7.6%. That meant duplicate experiments entered the gain curve as
+    independent points and the cliff plot's x-axis was wrong exactly at
+    the high-K end where the budget comparison lives.
+
+    Every grid point must now map to a distinct rendered target AND report
+    its true realized K.
+    """
+    import math
+    from manifest import period_from_K, K_from_period_exact
+    dx = 51.2 / 1024
+    grid = _cliff_K_grid(dx)
+
+    half_periods = {}
+    for K in grid:
+        p = period_from_K(K, dx)
+        assert p % 2 == 0, f"K={K} -> odd period_px {p}; halves collapse"
+        half = p // 2
+        assert half not in half_periods, (
+            f"K={K} and K={half_periods[half]} both render half-period "
+            f"{half} -- duplicate experiment masquerading as two K points")
+        half_periods[half] = K
+        K_realized = 2.0 * math.pi / (2 * half * dx)
+        assert abs(K_realized - K) / K < 1e-6, (
+            f"K={K} actually renders {K_realized} ({100*(K_realized-K)/K:+.2f}%)")
+
+    assert len(half_periods) == len(grid)
+    print(f"cliff K grid OK: {len(grid)} points, all distinct, realized error < 1e-6")
+
+
 def test_compute_budget_reduction_defaults():
     """Regression test for the run-cost-audit reduction package: PAPER_SEEDS
     is 3 (not 5), M2 defaults to the 3-point sub/near/post-cliff K subset
@@ -354,6 +390,7 @@ if __name__ == "__main__":
     test_run_manifest_until_complete_happy_path()
     test_stall_detection_raises_after_two_stuck_chunks()
     test_probe_exit_code_reflects_gate1()
+    test_cliff_K_grid_points_are_distinct_and_exactly_realizable()
     test_compute_budget_reduction_defaults()
     test_apply_shard_partitions_without_overlap_or_gaps()
     test_sharded_run_covers_full_manifest_with_no_duplicate_writes()
