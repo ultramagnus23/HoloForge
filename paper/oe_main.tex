@@ -19,16 +19,32 @@
 %    pass, Phase 3 (E1-E6 GPU runs) has not happened, so most macros
 %    render as [PENDING] -- this file is correct-but-incomplete by
 %    construction until real data lands, not broken.
-% 3. UNVERIFIED CITATION FLAGGED: Sec. 2's "concurrent work" paragraph
-%    names arXiv:2601.16330 per the master prompt's Related Work spec (a).
-%    This environment has no web access to confirm that ID resolves to
-%    the described paper (differentiable wave-optics + photochemistry for
-%    holographic volumetric 3D printing) -- verify it exists and matches
-%    before using it; a fabricated or mismatched citation is worse than
-%    an admitted gap. Left as an explicit TODO, not asserted as fact.
-% 4. check_refs.py currently FAILS (4 bibliography entries -- more than
-%    the master prompt's estimate of 3 -- still need title verification;
-%    see paper/refs.bib). This file will not have a clean build until
+% 3. arXiv:2601.16330 VERIFIED (via WebSearch/WebFetch): resolves to
+%    Wechsler, Rizzo, Moser, "Single-View Holographic Volumetric 3D
+%    Printing with Coupled Differentiable Wave-Optical and Photochemical
+%    Optimization" (SHVAM), submitted 2026-01-22. Confirmed: couples a
+%    differentiable wave-optical forward model with a photochemical
+%    model, as the draft's differentiators paragraph assumed. NUANCE TO
+%    CHECK BEFORE ASSERTING THE DIFFERENTIATORS AS WRITTEN: its
+%    photochemical model "explicitly captures inhibitor diffusion" per
+%    its own abstract -- i.e. it does include a transport/diffusion term,
+%    contrary to a differentiator claim of "no diffusion/transport
+%    term at all." The correct differentiator is almost certainly still
+%    real (printed/threshold-converted geometry vs. a recorded Bragg-
+%    selective index grating; likely no NON-LOCAL polymerization kernel
+%    specifically, which is different from having no diffusion term at
+%    all) but was NOT independently confirmed here -- read the actual
+%    PDF before finalizing this paragraph's wording, don't assert the
+%    stronger "no diffusion" version.
+% 4. check_refs.py: 3 of the original 4 TODO-VERIFY bibliography entries
+%    are now resolved with verified titles/authors/venues (gleeson2008chain
+%    confirmed correct as originally cited; kelly2011reply and
+%    jeong2022pqpmma were not just missing titles but WRONG -- wrong
+%    author, year, and/or volume/page -- corrected and renamed to
+%    sheridan2012reply / hsieh2022pqpmma respectively, see paper/refs.bib
+%    for the full trail). gallego2008shrinkage remains unresolved: its
+%    cited PubMed ID resolves to a different paper entirely (different
+%    author, journal, and year) -- see the comment in refs.bib. This file
 %    that's resolved, by design.
 % ============================================================================
 
@@ -109,15 +125,25 @@ geometry -- an etched height map. Volume photopolymers differ in kind:
 the recorded object is a volumetric index distribution produced by
 chemistry, and readout is Bragg-selective.
 
-% TODO (UNVERIFIED, do not use until confirmed -- see file header note 3):
-% Concurrent work, arXiv:2601.16330, reportedly couples differentiable
-% wave optics with photochemistry for holographic volumetric 3D printing.
-% Differentiators per the master prompt: printed geometry vs. a recorded
-% index grating; threshold conversion vs. Bragg-selective volume readout;
-% no NPDD non-locality/transport term; no compensation-limit theory. I
-% cannot confirm this arXiv ID resolves to this paper from this
-% environment -- verify before citing.
-\textbf{[TODO: concurrent-work paragraph, arXiv:2601.16330 -- verify the ID first.]}
+% VERIFIED (see file header note 3): arXiv:2601.16330 is Wechsler, Rizzo,
+% Moser, "Single-View Holographic Volumetric 3D Printing with Coupled
+% Differentiable Wave-Optical and Photochemical Optimization" (SHVAM),
+% 2026. Differentiators per the master prompt, checked against the
+% verified abstract: printed/threshold-converted geometry vs. our
+% recorded, Bragg-selective index grating -- holds. "No compensation-
+% limit theory" -- not contradicted by the abstract, but not positively
+% confirmed either; SHVAM's own framing is dose-distribution shaping, not
+% a K-dependent compensation-cliff argument. "No NPDD non-locality/
+% transport term" needs REWORDING, not deletion: SHVAM's abstract states
+% its photochemical model "explicitly captures inhibitor diffusion," so
+% it does have a diffusion/transport term -- the accurate differentiator
+% is no NON-LOCAL (spatially-smeared production) kernel specifically,
+% which is a different and narrower claim. Read the full PDF before
+% finalizing this paragraph's exact wording.
+\textbf{[TODO: write the concurrent-work paragraph -- citation and
+differentiators are now verified (see comment above), narrow prose
+still needs drafting, particularly the diffusion/non-locality distinction.]}
+~\cite{wechsler2026shvam}
 
 % TODO: (b) adjoint/PDE-constrained inverse design in photonics -- add
 % citations once selected (not fabricated here).

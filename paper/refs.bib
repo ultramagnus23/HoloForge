@@ -82,29 +82,44 @@
   year    = {1969},
 }
 
-% TODO-VERIFY: exact article title not independently confirmed against a
-% primary source (identified via search-result text only). Re-verify from
-% library access before submission.
-@article{kelly2011reply,
-  author  = {Kelly, Dermot and Sheridan, John T.},
-  title   = {{[TITLE NOT VERIFIED]} reply/diffusion-rate discussion},
+% CORRECTED (was TODO-VERIFY), verified via WebSearch/WebFetch against
+% optica.org, academia.edu, and MURAL (Maynooth University repository).
+%
+% The bib key/entry as it existed ("Kelly, Dermot and Sheridan, John T.",
+% JOSA B 28(4):658, 2011) is WRONG on every field, not just missing a
+% title:
+%   - vol 28(4), p. 658, 2011 is the ORIGINAL paper being replied to:
+%     C. E. Close, M. R. Gleeson, J. T. Sheridan, "Monomer diffusion
+%     rates in photopolymer material. Part I. Low spatial frequency
+%     holographic gratings," JOSA B 28(4):658-666 (2011).
+%   - the actual REPLY (matching this entry's "reply" note) is a
+%     DIFFERENT paper: Sheridan, J. T.; Gleeson, M. R.; Close, C. E.,
+%     "Monomer diffusion rates in photopolymer material: Part I. Low
+%     spatial frequency holographic gratings: reply," JOSA B 29(2),
+%     2012. No author named "Kelly" appears on either paper.
+% Renamed the key to match (old key kept nowhere else in refs.bib/tex --
+% grep before assuming safe if reusing this file elsewhere).
+@article{sheridan2012reply,
+  author  = {Sheridan, John T. and Gleeson, Michael R. and Close, Ciara E.},
+  title   = {Monomer diffusion rates in photopolymer material: Part {I}. Low spatial frequency holographic gratings: reply},
   journal = {Journal of the Optical Society of America B},
-  volume  = {28},
-  number  = {4},
-  pages   = {658},
-  year    = {2011},
+  volume  = {29},
+  number  = {2},
+  pages   = {1--3},
+  year    = {2012},
 }
 
-% TODO-VERIFY: exact article title not independently confirmed against a
-% primary source (identified via search-result text only). Re-verify from
-% library access before submission.
+% CORRECTED (was TODO-VERIFY), verified via WebFetch against
+% opg.optica.org/josab/abstract.cfm?uri=josab-25-3-396. Volume/issue/page
+% matched the placeholder entry exactly; only the title and full author
+% list were missing.
 @article{gleeson2008chain,
-  author  = {Gleeson, Michael R. and Liu, Shui and Guo, Jinxin and Sheridan, John T.},
-  title   = {{[TITLE NOT VERIFIED]} chain-transfer-agent / spatial-frequency-response study},
+  author  = {Gleeson, Michael R. and Sabol, Dusan and Liu, Shui and Close, Ciara E. and Kelly, John V. and Sheridan, John T.},
+  title   = {Improvement of the spatial frequency response of photopolymer materials by modifying polymer chain length},
   journal = {Journal of the Optical Society of America B},
   volume  = {25},
   number  = {3},
-  pages   = {396},
+  pages   = {396--406},
   year    = {2008},
 }
 
@@ -118,23 +133,63 @@
   year    = {2017},
 }
 
-% TODO-VERIFY: exact article title not independently confirmed against a
-% primary source (identified via search-result text only). Re-verify from
-% library access before submission.
-@article{jeong2022pqpmma,
-  author  = {Jeong, Y.-C. and others},
-  title   = {{[TITLE NOT VERIFIED]} PQ/PMMA solvent-cast film study},
+% CORRECTED (was TODO-VERIFY), verified via WebSearch + PubMed/ACS
+% Publications cross-check. The placeholder attributed this to an author
+% "Jeong" -- no such author exists on any 2022 ACS Omega PQ/PMMA
+% solvent-cast-film paper found. The actual paper (matching the exact
+% subject/journal/year) is by Hsieh, Cheng, and Chung, National Central
+% University, Taiwan (PubMed 35449970, DOI 10.1021/acsomega.1c06887).
+% Renamed the key to match.
+@article{hsieh2022pqpmma,
+  author  = {Hsieh, Yu-Hsiang and Cheng, Yung-Cheng and Chung, Te-Yuan},
+  title   = {Study on {PQ/PMMA} Photopolymer Films Fabricated by Solvent Casting},
   journal = {ACS Omega},
+  volume  = {7},
+  number  = {14},
+  pages   = {11770--11776},
   year    = {2022},
 }
 
-% TODO-VERIFY: exact title AND year not independently confirmed (identified
-% via abstract/search-result text only, not a fetched full-text reading).
-% Re-verify against the primary record (PubMed ID 21747495) before submission.
+% STILL UNVERIFIED -- escalated, not just re-flagged. Searched
+% (WebSearch/WebFetch against PubMed, Springer/Applied Physics A, and
+% general web) for "Gallego" + shrinkage + Applied Physics A + 2008 and
+% could not find a matching paper. Two independent problems:
+%   1. PubMed ID 21747495 (cited in the placeholder as the primary
+%      record) does NOT resolve to a Gallego paper in Applied Physics A.
+%      It resolves to: Moothanchery, M.; Naydenova, I.; Toal, V., "Study
+%      of the shrinkage caused by holographic grating formation in
+%      acrylamide based photopolymer film," OPTICS EXPRESS 19(14):
+%      13395-13404 (2011) -- different authors, different journal,
+%      different year.
+%   2. The same group (Moothanchery, Naydenova, Toal) also has a
+%      companion paper "Studies of shrinkage as a result of holographic
+%      recording in acrylamide-based photopolymer film," Applied Physics
+%      A 104(3):899-902 (2011) -- matching journal, but again not
+%      Gallego, and 2011 not 2008.
+% Sergi Gallego does publish on photopolymer shrinkage (search turned up
+% several later/different papers, e.g. shrinkage in holographic
+% waveguide couplers), but nothing matching "Applied Physics A, 2008"
+% specifically was found. This entry needs a human decision: is the
+% intended citation actually Moothanchery/Naydenova/Toal (either the
+% Optics Express or the Applied Physics A paper), a genuine Gallego
+% paper this search missed, or something else -- do not guess further
+% here.
+% TODO-VERIFY: identity of the source is now in question, not just its
+% title. Resolve from library/database access before submission.
 @article{gallego2008shrinkage,
   author  = {Gallego, S. and others},
-  title   = {{[TITLE NOT VERIFIED]} shrinkage-vs-intensity study},
+  title   = {{[TITLE NOT VERIFIED -- SOURCE ITSELF UNCONFIRMED, SEE COMMENT ABOVE]} shrinkage-vs-intensity study},
   journal = {Applied Physics A},
-  note    = {PubMed ID 21747495},
+  note    = {PubMed ID 21747495 does not resolve to this author/journal/year -- see comment above},
   year    = {2008},
+}
+
+% Concurrent work, verified via WebSearch/WebFetch against arxiv.org --
+% see oe_main.tex's file header note 3 for the differentiator check
+% against this paper's actual abstract.
+@article{wechsler2026shvam,
+  author  = {Wechsler, Felix and Rizzo, Riccardo and Moser, Christophe},
+  title   = {Single-View Holographic Volumetric {3D} Printing with Coupled Differentiable Wave-Optical and Photochemical Optimization},
+  journal = {arXiv preprint arXiv:2601.16330},
+  year    = {2026},
 }
