@@ -17,7 +17,7 @@ import torch
 torch.set_default_dtype(torch.float64)
 
 import aggregate as agg
-from manifest import _job, DEFAULT_MEDIUM, K_from_period
+from manifest import _job, DEFAULT_MEDIUM, K_from_period, config_hash
 import run_manifest as rm
 
 
@@ -160,6 +160,51 @@ def test_end_to_end_headroom_closure_on_real_tiny_data():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_group_by_config_pairs_methods_despite_different_n_iters():
+    """Regression test for a real bug: build_M2_jobs deliberately gives
+    BSGD a different n_iters than MIL (that's the entire point of the
+    compute-matched arm) -- experiments/manifest.py's config_hash includes
+    n_iters, so MIL's and BSGD's config_hash differed even though every
+    other field (K, budget, medium, target) was identical. group_by_config
+    used to group by (experiment_id, config_hash), silently splitting
+    every M2 pair into two different groups -- gain_curve/paired_gain
+    found zero pairs, and m3_cliff_shift returned "no_data" for a fully
+    real, 54/54-job M2 run without ever raising an error. Never caught by
+    the existing M3 test above because its fixture happened to give both
+    arms the same n_iters, which does not exercise this path.
+
+    group_by_config's pairing key must ignore n_iters (via _pairing_key)
+    while still respecting every other field, so this constructs two
+    configs identical except for n_iters and confirms they land in the
+    same group."""
+    base = dict(n_x=48, dx=51.2 / 48, lam_um=0.405, converge_tol=1e-4,
+               contrast_cap=4.0, dose_budget=1.0, medium=DEFAULT_MEDIUM,
+               target=dict(kind="bars", period_px=12), K_nominal=3.5,
+               arm="compute_matched")
+    mil_config = dict(base, n_iters=100)
+    bsgd_config = dict(base, n_iters=2170)  # compute_match_ratio-scaled, like the real bug
+    assert config_hash(mil_config) != config_hash(bsgd_config), \
+        "fixture must reproduce the actual bug: different n_iters -> different config_hash"
+
+    mil_job = _job("M2", "MIL", 0, mil_config)
+    bsgd_job = _job("M2", "BSGD", 0, bsgd_config)
+    mil_result = dict(mil_job, psnr=5.0, experiment_id="M2", config=mil_config,
+                      config_hash=mil_job["config_hash"])
+    bsgd_result = dict(bsgd_job, psnr=3.0, experiment_id="M2", config=bsgd_config,
+                       config_hash=bsgd_job["config_hash"])
+
+    grouped = agg.group_by_config([mil_result, bsgd_result])
+    m2_groups = {k: v for k, v in grouped.items() if k[0] == "M2"}
+    assert len(m2_groups) == 1, (
+        f"MIL and BSGD (differing only in n_iters) landed in {len(m2_groups)} "
+        f"groups, expected 1 -- the n_iters-mismatch bug is back")
+    (_, by_method), = m2_groups.items()
+    assert set(by_method.keys()) == {"MIL", "BSGD"}
+    curve = agg.gain_curve(grouped, "M2", 4.0)
+    assert len(curve) == 1 and curve[0][1] == 2.0, curve  # 5.0 - 3.0 paired gain
+    print("group_by_config pairs MIL/BSGD across differing n_iters OK (M2 bug fixed)")
+
+
 def test_m3_cliff_shift_on_real_tiny_M1_and_M2_data():
     """M3 = the shift in cliff location between M1 (iteration-matched) and
     M2 (compute-matched) arms. Real tiny data for both arms, across a K
@@ -205,5 +250,6 @@ if __name__ == "__main__":
     test_self_consistent_Kc_uses_per_K_contrast()
     test_ci_includes_zero_estimator()
     test_end_to_end_headroom_closure_on_real_tiny_data()
+    test_group_by_config_pairs_methods_despite_different_n_iters()
     test_m3_cliff_shift_on_real_tiny_M1_and_M2_data()
     print("PASSED")

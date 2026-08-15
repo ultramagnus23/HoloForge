@@ -27,6 +27,7 @@ paper_numbers.json in the meantime; missing data produces explicit
 """
 from __future__ import annotations
 import glob
+import hashlib
 import json
 import math
 import os
@@ -75,11 +76,40 @@ def load_all_results(results_root: str = RESULTS_ROOT) -> list[dict]:
     return out
 
 
+def _pairing_key(config: dict) -> str:
+    """Grouping key used to pair methods within a config, DELIBERATELY
+    excluding n_iters (unlike experiments/manifest.py's config_hash, which
+    includes it).
+
+    Bug this fixes: build_M2_jobs gives BSGD n_iters * compute_match_ratio
+    while MIL keeps n_iters (that's the entire point of the compute-
+    matched arm) -- so MIL's and BSGD's config_hash differ even though
+    every other field (K_nominal, contrast_cap, medium, target) is
+    identical. Grouping by config_hash therefore put every M2 MIL job and
+    its paired BSGD job in DIFFERENT groups, and gain_curve/paired_gain
+    (which pair methods within a group) found zero pairs for all of M2 --
+    m3_cliff_shift silently returned "no_data" for a fully-populated
+    54/54-job M2 run. Never caught earlier because M2 had no real data
+    until this run.
+
+    Every other field still participates, so this does not merge distinct
+    experimental conditions: S1's ablation_condition and S2's
+    sensitivity_param/sensitivity_pct both live inside `medium` or as
+    their own config keys and are still hashed, so different ablations/
+    perturbations remain separate groups. For M1 (where n_iters IS
+    uniform across methods within a group already), this key produces
+    the exact same grouping as config_hash -- confirmed no M1 result
+    changed after this fix."""
+    stripped = {k: v for k, v in config.items() if k != "n_iters"}
+    canon = json.dumps(stripped, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canon.encode()).hexdigest()[:16]
+
+
 def group_by_config(results: list[dict]) -> dict:
-    """{(experiment_id, config_hash): {method_id: [result, ...]}}"""
+    """{(experiment_id, pairing_key): {method_id: [result, ...]}}"""
     g = defaultdict(lambda: defaultdict(list))
     for r in results:
-        g[(r["experiment_id"], r["config_hash"])][r["method_id"]].append(r)
+        g[(r["experiment_id"], _pairing_key(r["config"]))][r["method_id"]].append(r)
     return g
 
 
