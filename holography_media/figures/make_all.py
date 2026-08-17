@@ -260,30 +260,67 @@ def make_F5_Kstar_vs_Kc_scatter():
 
 # --------------------------------------------------------------------- F6 (M3)
 def make_F6_cliff_shift():
-    """M3: shift in cliff location (K*) between the M1 and M2 arms, per
-    budget, with a per-seed uncertainty band -- the derived statistic
-    computed by analysis/aggregate.py's m3_cliff_shift(). Layout deferred
-    until M1+M2 data exist (same run-order reasoning as F4's panel (b))."""
+    """M3: comparison of the M1 (iteration-matched) and M2 (compute-
+    matched) arms at M2's 3 shared K-points, per budget.
+
+    NOT a shift-in-K* plot: analysis.aggregate.m3_cliff_shift's
+    point_estimate_shift is structurally None here, because find_*_crossing_K
+    require an actual sign change and NEITHER arm's gain curve has one (see
+    F4 -- gain is positive at every K, every budget, in both arms). That is
+    not missing data to wait on, it IS the confound-control result: paired
+    gain at M2's matched K's, side by side with M1's gain at the same K's,
+    shows the compute-matched arm doesn't change the story -- MIL's
+    advantage isn't an artifact of more optimizer iterations."""
     grouped = group_by_config(load_all_results())
-    from analysis.aggregate import m3_cliff_shift
-    rows = m3_cliff_shift(grouped, budgets=BUDGETS)
-    if all(r.get("point_estimate_shift") is None for r in rows):
+    m1_curve = gain_curve(grouped, "M1", BUDGETS[0])
+    m2_curve = gain_curve(grouped, "M2", BUDGETS[0])
+    if not m1_curve or not m2_curve:
         no_data_placeholder(
             os.path.join(OUT_DIR, "F6_cliff_shift.pdf"),
-            "F6 (M3): cliff-location shift M2-M1 per budget, per-seed band",
-            "needs M1+M2 manifest results across all 3 budgets -- layout "
-            "deferred until that data exists to design around.")
+            "F6 (M3): M1 vs M2 paired gain at M2's shared K-points, per budget",
+            "needs M1+M2 manifest results across all 3 budgets.")
         return False
-    # Data exists, but the render/layout is deliberately deferred (see
-    # docstring) -- still emit a real PDF, not silence, so main() never
-    # produces a missing file that looks like an oversight.
-    no_data_placeholder(
-        os.path.join(OUT_DIR, "F6_cliff_shift.pdf"),
-        "F6 (M3): cliff-location shift M2-M1 per budget, per-seed band",
-        "M1+M2 data now exists, but this figure's layout was deliberately "
-        "deferred until that data existed to design around -- implement "
-        "_render_F6 now that the data is here.")
-    return False
+    _render_F6(grouped)
+    return True
+
+
+def _render_F6(grouped):
+    from manifest import S1_K_POINTS
+    # M2's 3 K-points (S1_K_POINTS: sub/near/post-cliff) are chosen for
+    # physical meaning, not to sit exactly on M1's 15-point grid -- M1's
+    # minimum grid K is 1.963, above S1_K_POINTS' sub-cliff point 1.309.
+    # So M1 has data at only 2 of the 3 shared-intent K's; bars are placed
+    # by K's actual index in the full (sorted) K list, not by array
+    # position, so a K missing from one arm just leaves that slot empty
+    # rather than misaligning the rest.
+    all_Ks = sorted(round(k, 3) for k in S1_K_POINTS)
+    fig, axs = new_fig(width="double", ncols=3, height_in=SINGLE_COL_IN * 0.7)
+    for ax, budget in zip(axs, BUDGETS):
+        m1_curve = {round(k, 3): (g, lo, hi) for k, g, lo, hi in gain_curve(grouped, "M1", budget)}
+        m2_curve = {round(k, 3): (g, lo, hi) for k, g, lo, hi in gain_curve(grouped, "M2", budget)}
+        w = 0.35
+        for label, curve, dx, color, hatch in [
+            ("M1 (iter-matched)", m1_curve, -w/2, COLORS["blue"], None),
+            ("M2 (compute-matched)", m2_curve, w/2, COLORS["vermillion"], "//"),
+        ]:
+            idx = [i for i, k in enumerate(all_Ks) if k in curve]
+            if not idx:
+                continue
+            g = [curve[all_Ks[i]][0] for i in idx]
+            lo = [curve[all_Ks[i]][1] for i in idx]
+            hi = [curve[all_Ks[i]][2] for i in idx]
+            ax.bar([i + dx for i in idx], g,
+                  yerr=[[a - b for a, b in zip(g, lo)], [b - a for a, b in zip(g, hi)]],
+                  width=w, color=color, hatch=hatch, label=label, capsize=2)
+        ax.axhline(0, color=COLORS["black"], lw=0.5)
+        ax.set_xticks(range(len(all_Ks)))
+        ax.set_xticklabels([f"{k:.2f}" for k in all_Ks], fontsize=5.5)
+        ax.set_title(f"budget={budget:.0f}x", fontsize=6.5)
+        ax.set_xlabel("K (rad/um)", fontsize=6)
+        if budget == BUDGETS[0]:
+            ax.set_ylabel("paired gain MIL-BSGD (dB)")
+            ax.legend(frameon=False, fontsize=5)
+    savefig(fig, os.path.join(OUT_DIR, "F6_cliff_shift.pdf"))
 
 
 # --------------------------------------------------------------------- F7 (S1)
@@ -293,45 +330,114 @@ def make_F7_physics_ablation():
     pathway ablation (an engineering question, not a physics one) --
     see docs/legacy_results_audit.md for the naming-collision this
     guards against."""
-    grouped = group_by_config(load_all_results())
-    have_data = any(exp_id == "S1" for exp_id, _ in grouped)
-    if not have_data:
+    results = [r for r in load_all_results() if r["experiment_id"] == "S1"]
+    if not results:
         no_data_placeholder(
             os.path.join(OUT_DIR, "F7_physics_ablation.pdf"),
             "F7 (S1): physics-component ablation (no_nonlocality/"
             "no_diffusion/no_dye_depletion/no_saturation_approx vs. baseline)",
             "needs S1 manifest results.")
         return False
-    no_data_placeholder(
-        os.path.join(OUT_DIR, "F7_physics_ablation.pdf"),
-        "F7 (S1): physics-component ablation",
-        "S1 data now exists, but this figure's render code is not yet "
-        "implemented -- add it now that the data is here.")
-    return False
+    _render_F7(results)
+    return True
+
+
+def _render_F7(results):
+    from manifest import S1_CONDITIONS, S1_K_POINTS
+    conditions = list(S1_CONDITIONS.keys())  # baseline first, by construction
+    Ks = sorted(round(k, 3) for k in S1_K_POINTS)
+    by_key = {}
+    for r in results:
+        key = (r["config"]["ablation_condition"], round(r["config"]["K_nominal"], 3), r["method_id"])
+        by_key.setdefault(key, []).append(r)
+
+    fig, ax = new_fig(width="double", height_in=SINGLE_COL_IN * 0.7)
+    n_cond = len(conditions)
+    w = 0.8 / n_cond
+    colors = [COLORS["black"], COLORS["blue"], COLORS["bluish_green"],
+             COLORS["vermillion"], COLORS["orange"]]
+    for i, cond in enumerate(conditions):
+        means, los, his = [], [], []
+        for K in Ks:
+            mil = by_key.get((cond, K, "MIL"), [])
+            bsgd = by_key.get((cond, K, "BSGD"), [])
+            pairs = paired_gain(mil, bsgd, key="psnr")
+            stat = mean_std_median_ci95([g for _, g in pairs])
+            means.append(stat["mean"] if stat["mean"] is not None else 0.0)
+            los.append(stat["ci95_lo"] if stat["ci95_lo"] is not None else 0.0)
+            his.append(stat["ci95_hi"] if stat["ci95_hi"] is not None else 0.0)
+        x = [j + (i - (n_cond - 1) / 2) * w for j in range(len(Ks))]
+        yerr = [[m - lo for m, lo in zip(means, los)], [hi - m for m, hi in zip(means, his)]]
+        ax.bar(x, means, width=w, color=colors[i % len(colors)],
+              label=cond.replace("_", " "), yerr=yerr, capsize=1.5)
+    ax.axhline(0, color=COLORS["black"], lw=0.5)
+    ax.set_xticks(range(len(Ks)))
+    ax.set_xticklabels([f"{k:.2f}" for k in Ks])
+    ax.set_xlabel("K (rad/um) [sub-/near-/post-cliff]")
+    ax.set_ylabel("paired gain MIL-BSGD (dB)")
+    ax.legend(frameon=False, fontsize=5, ncol=2)
+    savefig(fig, os.path.join(OUT_DIR, "F7_physics_ablation.pdf"))
 
 
 # --------------------------------------------------------------------- F8 (S2)
 def make_F8_sensitivity_band():
-    """S2: cliff-location sensitivity band under NPDD parameter error.
-    See docs/s2_sensitivity_notes.md for the two write-up caveats this
-    figure's discussion needs (one-at-a-time perturbation, no interaction
-    terms; perturbation magnitudes need justifying against the literature
-    spread once V1 exists) -- write those into the caption/discussion
-    when this is rendered for real, don't silently drop them."""
-    grouped = group_by_config(load_all_results())
-    have_data = any(exp_id == "S2" for exp_id, _ in grouped)
-    if not have_data:
+    """S2: paired-gain sensitivity to +/-NPDD-parameter error, K-averaged
+    over the 4 collapse-region K-points, one curve per parameter (D0,
+    sigma, kappa). NOTE title/framing changed from the original "cliff-
+    location sensitivity band" -- there is no cliff-location K* to band
+    (M1/M2 found no zero-crossing anywhere, see F4/F6), so a K*-vs-
+    perturbation plot has nothing to show. Gain-vs-perturbation is the
+    honest version of this question given that finding, and it answers
+    the same practical concern (is the result robust to getting D0/sigma/
+    kappa wrong). See docs/s2_sensitivity_notes.md for the two write-up
+    caveats (one-at-a-time perturbation, no interaction terms;
+    perturbation magnitudes need justifying against the literature spread
+    once V1 exists) -- carry those into the caption/discussion."""
+    results = [r for r in load_all_results() if r["experiment_id"] == "S2"]
+    if not results:
         no_data_placeholder(
             os.path.join(OUT_DIR, "F8_sensitivity_band.pdf"),
-            "F8 (S2): cliff-location sensitivity band vs. NPDD parameter error",
+            "F8 (S2): paired-gain sensitivity to NPDD parameter error",
             "needs S2 manifest results.")
         return False
-    no_data_placeholder(
-        os.path.join(OUT_DIR, "F8_sensitivity_band.pdf"),
-        "F8 (S2): cliff-location sensitivity band vs. NPDD parameter error",
-        "S2 data now exists, but this figure's render code is not yet "
-        "implemented -- add it now that the data is here.")
-    return False
+    _render_F8(results)
+    return True
+
+
+def _render_F8(results):
+    from manifest import S2_PARAMS
+    by_key = {}
+    for r in results:
+        key = (r["config"]["sensitivity_param"], r["config"]["sensitivity_pct"], r["method_id"])
+        by_key.setdefault(key, []).append(r)
+    # baseline (pct=0) is only tagged under S2_PARAMS[0] by construction
+    # (build_S2_jobs emits it once, not once per param) -- shared across
+    # all three curves below.
+    baseline_param = S2_PARAMS[0]
+    pcts = sorted({r["config"]["sensitivity_pct"] for r in results} | {0})
+
+    fig, ax = new_fig(width="single")
+    colors = {p: c for p, c in zip(S2_PARAMS, [COLORS["blue"], COLORS["vermillion"], COLORS["bluish_green"]])}
+    markers = {p: m for p, m in zip(S2_PARAMS, ["o", "s", "^"])}
+    for param in S2_PARAMS:
+        means, los, his, xs = [], [], [], []
+        for pct in pcts:
+            lookup_param = baseline_param if pct == 0 else param
+            mil = by_key.get((lookup_param, pct, "MIL"), [])
+            bsgd = by_key.get((lookup_param, pct, "BSGD"), [])
+            pairs = paired_gain(mil, bsgd, key="psnr")
+            if not pairs:
+                continue
+            stat = mean_std_median_ci95([g for _, g in pairs])
+            xs.append(pct); means.append(stat["mean"])
+            los.append(stat["ci95_lo"]); his.append(stat["ci95_hi"])
+        ax.plot(xs, means, marker=markers[param], color=colors[param], ms=3, label=param)
+        ax.fill_between(xs, los, his, color=colors[param], alpha=0.15, linewidth=0)
+    ax.axvline(0, color=COLORS["black"], lw=0.5, ls=":")
+    ax.set_xlabel("parameter perturbation (%)")
+    ax.set_ylabel("paired gain MIL-BSGD (dB), K-averaged over collapse region")
+    ax.legend(frameon=False, title="perturbed param")
+    savefig(fig, os.path.join(OUT_DIR, "F8_sensitivity_band.pdf"))
 
 
 # --------------------------------------------------------------------- F9a-c (supplementary, real data)

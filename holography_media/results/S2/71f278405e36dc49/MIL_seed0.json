@@ -1,0 +1,95 @@
+{
+ "git_commit": "d12e13e250c1f2bb59843650f66426ced5c04d8d",
+ "experiment_id": "S2",
+ "method_id": "MIL",
+ "seed": 0,
+ "config": {
+  "n_x": 512,
+  "dx": 0.1,
+  "lam_um": 0.405,
+  "n_iters": 800,
+  "converge_tol": 0.0001,
+  "contrast_cap": 2.0,
+  "dose_budget": 1.0,
+  "medium": {
+   "D0": 0.1,
+   "sigma": 0.08,
+   "kappa": 2.2,
+   "gamma": 1.0,
+   "dn_max": 0.0035,
+   "k_bleach": 0.2,
+   "alpha_D": 1.0,
+   "shrinkage": 0.005,
+   "thickness": 30.0,
+   "n0": 1.5
+  },
+  "target": {
+   "kind": "bars",
+   "period_px": 12
+  },
+  "K_nominal": 5.0,
+  "sensitivity_param": "kappa",
+  "sensitivity_pct": 10
+ },
+ "config_hash": "71f278405e36dc49",
+ "device": "cuda",
+ "device_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+ "dtype": "torch.float32",
+ "loss_curve": [
+  [
+   0,
+   0.24998483061790466
+  ],
+  [
+   50,
+   0.2358204424381256
+  ],
+  [
+   100,
+   0.2322140783071518
+  ],
+  [
+   150,
+   0.2312471568584442
+  ],
+  [
+   200,
+   0.23105114698410034
+  ],
+  [
+   250,
+   0.23097017407417297
+  ],
+  [
+   300,
+   0.23092296719551086
+  ],
+  [
+   350,
+   0.2308914065361023
+  ],
+  [
+   400,
+   0.23086944222450256
+  ],
+  [
+   450,
+   0.2308538258075714
+  ],
+  [
+   500,
+   0.23084206879138947
+  ]
+ ],
+ "iterations_run": 500,
+ "early_stop_reason": "converge_tol",
+ "wall_s": 1208.8486652374268,
+ "peak_mem_mb": 9.750528,
+ "psnr": 6.366854190826416,
+ "psnr_maxnorm_legacy": 4.878900527954102,
+ "diffraction_efficiency": 0.5174791234839173,
+ "contrast": {
+  "max_over_mean": 2.0056655406951904,
+  "p95_over_mean": 2.0056655406951904
+ }
+}
