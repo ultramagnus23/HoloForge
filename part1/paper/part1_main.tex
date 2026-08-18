@@ -7,11 +7,11 @@
 %
 % Build:  pdflatex part1_main.tex  (x2 for references)
 %         Figures are resolved via \graphicspath (see preamble): drop the PNGs
-%         from holography_sandbox/results/ into ./figures/ for submission, or
-%         build in place against ../holography_sandbox/results/.
+%         from code/results/ into ./figures/ for submission, or
+%         build in place against ../code/results/.
 %
 % NOTE ON NUMBERS: every quantitative value in this draft is taken verbatim from
-% the experiment outputs in ../holography_sandbox/results/ produced by
+% the experiment outputs in ../code/results/ produced by
 % run_experiments.py (commit-tracked CSVs: metrics_summary.csv,
 % multi_scene_summary.csv, seed_sensitivity_summary.csv). Single-scene values
 % refer to the gaussian_spots reference scene; "across scenes" values are the
@@ -23,7 +23,7 @@
 \usepackage[T1]{fontenc}
 % Figures: search a local ./figures/ dir first (for submission), then the
 % in-repo results directory (for building against freshly generated outputs).
-\graphicspath{{figures/}{../holography_sandbox/results/}}
+\graphicspath{{figures/}{../code/results/}}
 
 % ─── Metadata ────────────────────────────────────────────────────────────────
 \title{Systematic Degradation Analysis in Phase-Only\\Computational Holography: A Simulation Framework}

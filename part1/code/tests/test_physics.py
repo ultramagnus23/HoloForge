@@ -2,7 +2,7 @@
 tests/test_physics.py
 Tests core physics invariants of the HoloForge waveoptics engine.
 
-Run with: pytest holography_sandbox/tests/
+Run with: pytest part1/code/tests/
 """
 import pytest
 import numpy as np

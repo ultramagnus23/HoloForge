@@ -20,12 +20,12 @@ as-is with the default `IEEEtran` class.
 
 ## Figures
 
-Figures are resolved via `\graphicspath{{figures/}{../holography_sandbox/results/}}`,
+Figures are resolved via `\graphicspath{{figures/}{../code/results/}}`,
 so `\includegraphics` uses **bare filenames**. Two ways to build:
 
-- **In place**: run the experiments first (populates `../holography_sandbox/results/`):
+- **In place**: run the experiments first (populates `../code/results/`):
   ```bash
-  cd ../holography_sandbox && python run_experiments.py   # ~40 s on CPU
+  cd ../code && python run_experiments.py   # ~40 s on CPU
   ```
 - **For submission**: copy the referenced PNGs into a local `paper/figures/`
   directory (then the paper is self-contained, no relative paths leave the

@@ -17,7 +17,7 @@ after every wavelength; safe to interrupt/resume). CPU-scale results
 elsewhere in the repo are untouched.
 
 Colab usage:
-    !git clone <repo_url> && cd HoloForge/holography_media
+    !git clone <repo_url> && cd HoloForge/part2/code
     !python experiments/gpu_bpm_wavelength_sweep.py
 """
 import sys, os

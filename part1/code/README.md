@@ -16,7 +16,7 @@ The central question: **"Does this actually look much worse?"**
 ## Structure
 
 ```
-holography_sandbox/
+part1/code/
 ├── core/
 │   ├── waveoptics.py    Angular Spectrum propagation + Gerchberg-Saxton
 │   ├── degradation.py   All degradation knobs

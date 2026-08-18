@@ -29,7 +29,7 @@ every run -- safe to interrupt and re-run; completed cells are skipped).
 CPU-scale results elsewhere in the repo are untouched.
 
 Colab usage:
-    !git clone <repo_url> && cd HoloForge/holography_media
+    !git clone <repo_url> && cd HoloForge/part2/code
     !pip install -q torch  # Colab GPU runtime already has a CUDA build
     !python experiments/gpu_npdd_mesh_convergence_sweep.py
 """
