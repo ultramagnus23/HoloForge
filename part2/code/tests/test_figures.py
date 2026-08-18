@@ -39,7 +39,6 @@ def test_placeholder_figures_are_valid_pdfs_when_no_data():
             (fig_mod.make_F6_cliff_shift, "F6_cliff_shift.pdf"),
             (fig_mod.make_F7_physics_ablation, "F7_physics_ablation.pdf"),
             (fig_mod.make_F8_sensitivity_band, "F8_sensitivity_band.pdf"),
-            (fig_mod.make_F2_twin_validation, "F2_twin_validation.pdf"),
             (fig_mod.make_F3b_regime_map, "F3b_regime_map.pdf"),
         ]
         for fn, name in fns_and_names:
@@ -55,10 +54,17 @@ def test_placeholder_figures_are_valid_pdfs_when_no_data():
 
 
 def test_F1_and_F9_real_data_figures_render():
-    """F1 has no data dependency; F9a/F9b/F9c/F3a use real files already
+    """F1 has no data dependency; F9a/F9b/F9c/F3a/F2 use real files already
     committed in the repo -- render against the ACTUAL repo state (not a
     temp dir) since that's the real data these functions are contracted
-    to use."""
+    to use. F2 joined this list once data/literature/*.csv and
+    results_literature_fit.json became real, committed data -- like F3a,
+    make_F2_twin_validation() resolves its input via a HERE-relative path
+    in figures/make_all.py, not rm.set_results_root(), so it always reads
+    the real repo files regardless of the OTHER test's temp-dir isolation
+    (checked: a prior version of this test still expected F2 to report
+    no-real-content in that isolated case, which stopped being true the
+    moment real literature data was committed -- see git log)."""
     tmp_out = tempfile.mkdtemp(prefix="fig_test_out2_")
     try:
         fig_mod.OUT_DIR = tmp_out
@@ -68,13 +74,14 @@ def test_F1_and_F9_real_data_figures_render():
             (fig_mod.make_F3a_rcwa_validity_envelope, "F3a_rcwa_validity_envelope.pdf"),
             (fig_mod.make_F9b_mesh_convergence, "F9b_mesh_convergence.pdf"),
             (fig_mod.make_F9c_wavelength_detuning, "F9c_wavelength_detuning.pdf"),
+            (fig_mod.make_F2_twin_validation, "F2_twin_validation.pdf"),
         ]
         for fn, name in fns_and_names:
             is_real = fn()
             assert is_real is True, f"{fn.__name__} should report real content given committed data"
             p = os.path.join(tmp_out, name)
             assert os.path.exists(p) and _is_valid_pdf(p), name
-        print("F1 + F9/F3a real-data figures OK (valid PDFs, real content confirmed)")
+        print("F1 + F9/F3a/F2 real-data figures OK (valid PDFs, real content confirmed)")
     finally:
         shutil.rmtree(tmp_out, ignore_errors=True)
 
