@@ -28,30 +28,25 @@
 %    installed to do a real pdflatex compile, so that step still needs
 %    doing by a human before submission).
 % STILL BLOCKING, IN PRIORITY ORDER:
-%  1. TEMPLATE: restructured to Optica's real universal-manuscript-template
-%     STRUCTURE (\documentclass{optica-article}, \authormark/\address/
-%     \email, \begin{abstract*}, \begin{backmatter}\bmsection{...}) based
-%     on the actual template .tex the user pasted in-chat -- but the class
-%     file itself, optica-article.cls (and its .bst, opticajnl.bst), is
-%     STILL MISSING. Official download (opg.optica.org) is CAPTCHA-gated;
-%     Overleaf's is behind a JS-rendered button; a third-party GitHub gist
-%     exists but is explicitly an arXiv-only modified variant
-%     (opticaArxiv.cls), not the submission-ready file -- not used here.
-%     UNTESTED: this file has NOT been compiled against the real class,
-%     only checked for structural consistency (see note 4). Get
-%     optica-article.cls + opticajnl.bst from the same Overleaf project
-%     the .tex came from, drop them in this directory, then recompile.
-%  2. refs.bib: gallego2008shrinkage remains genuinely unresolved (its
-%     cited PubMed ID resolves to a different paper entirely -- different
-%     author, journal, year; see the comment in refs.bib for the full
-%     search trail). Needs a human decision on what was actually meant,
-%     not another guess. scripts/check_refs.py fails the build on this
-%     alone.
+%  1. TEMPLATE: optica-article.cls and opticajnl.bst obtained (pasted by
+%     the user) and in place. TWO SUPPORTING FILES STILL MISSING though:
+%     the class's \journal{opticajournal} needs styles/opticajournal.sty,
+%     and opticajnl.bst's format.journal function needs a \JournalTitle
+%     macro -- neither was included in what was pasted (the real
+%     universal template ships a per-journal styles/ directory we don't
+%     have). paper/styles/opticajournal.sty here is an explicitly-labeled
+%     STOPGAP (defines \@journalname and a no-op \JournalTitle) so the
+%     document compiles locally -- replace it with the real file before
+%     submission, don't treat its output as a preview of final formatting.
+%  2. refs.bib: gallego2008shrinkage REMOVED entirely (not just flagged)
+%     per instruction -- it was never actually \cite{}'d in this file, so
+%     removal was clean. See refs.bib's header comment for the full
+%     search trail if this citation is needed again later.
 %  3. Twin Validation section (Sec.~\ref{sec:twin-validation-ref}) is
 %     empty, blocked on digitizing published literature curves
 %     (data/literature/README.md) -- needs a human reading published
 %     figures, not automatable from here.
-%  4. Once the class file lands: recompile with pdflatex/bibtex (this repo
+%  4. Recompile with pdflatex/bibtex (this repo
 %     already has a working MiKTeX install, see git log) and proofread the
 %     actual rendered PDF against the previous generic-article compile
 %     (paper/oe_main.pdf, 7 pages, already verified clean under the OLD
@@ -435,12 +430,10 @@ at \url{https://github.com/ultramagnus23/HoloForge} under
 
 \end{backmatter}
 
-% NOTE: opticajnl.bst (the Optica-specific BibTeX style) is not available
-% here yet either -- still using the generic "plain" style, which WILL
-% NOT match Optica's reference formatting (numbered-in-brackets vs.
-% Optica's own callout style). Swap to \bibliographystyle{opticajnl} once
-% opticajnl.bst is obtained alongside optica-article.cls.
-\bibliographystyle{plain}
+% optica-article.cls sets \bibliographystyle{opticajnl} internally --
+% do NOT override it here (an earlier version of this file had an
+% explicit \bibliographystyle{plain} after this point, which would have
+% silently clobbered the class's setting back to the wrong style).
 \bibliography{refs}
 
 \end{document}

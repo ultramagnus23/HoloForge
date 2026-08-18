@@ -1,16 +1,12 @@
-% paper/refs.bib -- Phase 7.3 migration from part2_media_main.tex's inline
-% \bibitem entries. Four entries below carry a "% TODO-VERIFY" comment:
-% their article titles were never independently confirmed against a
-% primary source (identified via search-result/abstract text only during
-% the Table 1 citation pass) -- resolve these from library access before
-% submission. scripts/check_refs.py fails the build while any TODO-VERIFY
-% comment remains anywhere in this file.
-%
-% Note: the master prompt that requested this migration said "three
-% entries currently flagged" -- the actual count in the source tex is
-% FOUR (kelly2011reply, gleeson2008chain, jeong2022pqpmma also carry the
-% flag, in addition to gallego2008shrinkage). Migrated as four, matching
-% the real state of the document, not the prompt's estimate.
+% paper/refs.bib -- migrated from part2_media_main.tex's inline \bibitem
+% entries. Of the original four TODO-VERIFY entries: gleeson2008chain was
+% confirmed correct as-is; kelly2011reply and jeong2022pqpmma were WRONG
+% (not just missing titles) and corrected to sheridan2012reply /
+% hsieh2022pqpmma; gallego2008shrinkage was removed entirely after two
+% search passes found no matching real paper (see git log for the
+% removal commit). scripts/check_refs.py fails the build while any
+% TODO-VERIFY comment remains anywhere in this file -- as of this pass,
+% none do.
 
 @article{tripathi2025holoforge,
   author  = {Tripathi, Chaitanya},
@@ -150,39 +146,17 @@
   year    = {2022},
 }
 
-% STILL UNVERIFIED -- escalated, not just re-flagged. Searched
-% (WebSearch/WebFetch against PubMed, Springer/Applied Physics A, and
-% general web) for "Gallego" + shrinkage + Applied Physics A + 2008 and
-% could not find a matching paper. Two independent problems:
-%   1. PubMed ID 21747495 (cited in the placeholder as the primary
-%      record) does NOT resolve to a Gallego paper in Applied Physics A.
-%      It resolves to: Moothanchery, M.; Naydenova, I.; Toal, V., "Study
-%      of the shrinkage caused by holographic grating formation in
-%      acrylamide based photopolymer film," OPTICS EXPRESS 19(14):
-%      13395-13404 (2011) -- different authors, different journal,
-%      different year.
-%   2. The same group (Moothanchery, Naydenova, Toal) also has a
-%      companion paper "Studies of shrinkage as a result of holographic
-%      recording in acrylamide-based photopolymer film," Applied Physics
-%      A 104(3):899-902 (2011) -- matching journal, but again not
-%      Gallego, and 2011 not 2008.
-% Sergi Gallego does publish on photopolymer shrinkage (search turned up
-% several later/different papers, e.g. shrinkage in holographic
-% waveguide couplers), but nothing matching "Applied Physics A, 2008"
-% specifically was found. This entry needs a human decision: is the
-% intended citation actually Moothanchery/Naydenova/Toal (either the
-% Optics Express or the Applied Physics A paper), a genuine Gallego
-% paper this search missed, or something else -- do not guess further
-% here.
-% TODO-VERIFY: identity of the source is now in question, not just its
-% title. Resolve from library/database access before submission.
-@article{gallego2008shrinkage,
-  author  = {Gallego, S. and others},
-  title   = {{[TITLE NOT VERIFIED -- SOURCE ITSELF UNCONFIRMED, SEE COMMENT ABOVE]} shrinkage-vs-intensity study},
-  journal = {Applied Physics A},
-  note    = {PubMed ID 21747495 does not resolve to this author/journal/year -- see comment above},
-  year    = {2008},
-}
+% REMOVED (was gallego2008shrinkage), per instruction -- not currently
+% \cite{}'d anywhere in oe_main.tex (only ever existed in this bib file),
+% so dropping it is a clean removal, not a dangling reference. Left
+% unresolved after two independent search passes: the entry's PubMed ID
+% resolves to a different paper entirely (Moothanchery, Naydenova, Toal,
+% Optics Express 19(14):13395-13404, 2011 -- different author, journal,
+% year than "Gallego, Applied Physics A, 2008" as originally cited), and
+% no matching Gallego/Applied Physics A/2008 paper was found. If this
+% citation is needed again later (e.g. for a shrinkage-vs-intensity claim
+% in S1/S2 discussion), re-derive it from a primary source rather than
+% reintroducing this entry as-is.
 
 % Concurrent work, verified via WebSearch/WebFetch against arxiv.org --
 % see oe_main.tex's file header note 3 for the differentiator check

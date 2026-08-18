@@ -1,0 +1,19 @@
+% STOPGAP, NOT THE OFFICIAL FILE.
+%
+% optica-article.cls's \journal{opticajournal} command requires
+% styles/opticajournal.sty to exist (\IfFileExists check), and
+% opticajnl.bst's format.journal function requires a \JournalTitle macro
+% to be defined. Neither was included in what was pasted for the .cls/
+% .bst -- the real universal template ships a set of per-journal style
+% files under styles/ (one per supported journal) that presumably define
+% these, matched to Optica's actual production requirements (exact
+% header text, margins, journal-specific abbreviations, etc).
+%
+% This file exists ONLY so the document compiles and can be visually
+% inspected locally. Replace it with the real styles/opticajournal.sty
+% from the same Overleaf project before submission -- do not use this
+% stopgap's output as a preview of the real formatting.
+\ProvidesPackage{opticajournal}[2026/08/18 STOPGAP -- not the official Optica style file]
+
+\newcommand{\@journalname}{Optics Express}
+\providecommand{\JournalTitle}[1]{#1}
