@@ -111,26 +111,34 @@ modulator hardware by measuring the actual reconstruction and
 backpropagating the residual into the display model~\cite{peng2020neural}.
 
 This solution is structurally unavailable to an entire class of
-holographic devices. Volume photopolymer media -- Bayfol HX,
-PVA/acrylamide, PQ/PMMA -- record a hologram as a permanent
-refractive-index distribution formed by photopolymerization and mass
-transport. The medium is write-once: measurement of the reconstruction
-error is possible only after the error has become unerasable. CITL's
-feedback signal arrives, by construction, too late. Yet these media are
-precisely where model mismatch is most severe: the recorded index
-profile is not a scaled copy of the exposure, but the product of monomer
-diffusion, non-local polymer chain growth, dye depletion, saturable index
+holographic devices. Volume photopolymer media -- Bayfol HX~\cite{fomenko2017bayfol},
+PVA/acrylamide, PQ/PMMA~\cite{hsieh2022pqpmma} -- record a hologram as a
+permanent refractive-index distribution formed by photopolymerization and
+mass transport. The medium is write-once: measurement of the
+reconstruction error is possible only after the error has become
+unerasable. CITL's feedback signal arrives, by construction, too late.
+Yet these media are precisely where model mismatch is most severe: the
+recorded index profile is not a scaled copy of the exposure, but the
+product of monomer diffusion~\cite{sheridan2012reply}, non-local polymer
+chain growth~\cite{gleeson2008chain}, dye depletion, saturable index
 response, and post-exposure shrinkage, each depending nonlinearly on the
 exposure itself.
 
 We close this gap by placing a differentiable model of the recording
-chemistry -- not just the readout optics -- inside the design loop.
+chemistry -- not just the readout optics -- inside the design loop. This
+work is the second in a two-part study; Part 1 characterized phase-only
+CGH degradation under idealized-modulator assumptions using purely
+objective image-quality metrics~\cite{tripathi2025holoforge}.
 
 \section{Related Work}
 
 \textbf{Model-mismatch correction for holographic displays.} CITL
 optimization~\cite{peng2020neural} and its extensions correct the
-display's forward model using camera measurements; all require a
+display's forward model using camera measurements: gradient-based
+Wirtinger optimization of the SLM phase~\cite{chakravarthula2019wirtinger},
+learned proxy models for real-time photorealistic
+reconstruction~\cite{shi2021towards}, and time-multiplexed control of
+heavily-quantized modulators~\cite{choi2022time}. All require a
 rewritable modulator observed live. Our setting inverts the
 availability: the medium is write-once, so the model must carry the
 full burden.
@@ -201,7 +209,7 @@ evaluates the resulting exposure on the real twin -- the standard
 practice this work argues against. \emph{Gerchberg-Saxton (GS)} performs
 classic far-field phase retrieval, then converts the retrieved phase to
 an exposure via the same naive linear assumption; closed-form, no
-optimizer. \emph{Linear pre-compensation (LPC)} is a closed-form
+optimizer~\cite{gerchberg1972practical}. \emph{Linear pre-compensation (LPC)} is a closed-form
 frequency-domain boost by $1/H(K)$ (the linearized recording transfer
 function), capped at the contrast budget -- the direct realization of
 the small-signal theory Section~\ref{sec:no-cliff} tests. The
@@ -376,7 +384,7 @@ narrow band across the full $\pm 50\%$ perturbation range tested.}
 
 \section{Discussion and Limitations}
 This study is simulation-only; its claims are conditioned on a physics
-model (NPDD, Kogelnik, split-step BPM) validated component-wise
+model (NPDD, Kogelnik coupled-wave theory~\cite{kogelnik1969coupled}, split-step BPM) validated component-wise
 (Sec.~\ref{sec:twin-validation-ref}) but not yet against a completed
 literature overlay. Scalar diffraction bounds validity to moderate
 numerical apertures; the RCWA validity-envelope grid (V3, formerly E7)
@@ -400,27 +408,22 @@ measured reconstructions) is explicitly future work.
 \begin{backmatter}
 
 \bmsection{Funding}
-% NOT ASSERTED -- I don't know this author's actual funding status and
-% won't guess it. The template's own instructions say this section is
-% auto-generated from Prism submission details at production; if
-% submitting via Prism this can likely be left as a placeholder. If no
-% external funding was received, the honest statement is typically
-% "No funding was received for this work." -- CONFIRM before using it.
-\textbf{[TODO: confirm funding status -- see comment above; do not leave
-this placeholder in the submitted version.]}
+% Confirmed by the author: no external funding; all compute was run on
+% the author's own laptop GPU.
+This work received no external funding. All computation was performed
+on the author's personal hardware (a laptop-class NVIDIA RTX 3050 GPU).
 
 \bmsection{Disclosures}
-% NOT ASSERTED for the same reason as Funding above -- this is a factual
-% claim about the author's conflicts of interest that only the author can
-% make. The standard default if genuinely none exist is "The authors
-% declare no conflicts of interest."
-\textbf{[TODO: confirm and state disclosures -- see comment above.]}
+% Confirmed by the author. Checked the rest of the repository (commit
+% history, docs, READMEs) for any other mention of funding sources,
+% collaborators, or conflicts before asserting this -- found none.
+The author declares no conflicts of interest.
 
 \bmsection{Data availability}
 {\sloppy
 All source code, experiment manifests, and raw result JSONs are available
 at \url{https://github.com/ultramagnus23/HoloForge} under
-\texttt{holography\_media/}, released under the Apache 2.0 license.
+\texttt{part2/code/}, released under the Apache 2.0 license.
 \par}
 % TODO (blocked on results freeze): a versioned Zenodo DOI archive is
 % prepared at results freeze -- not yet cut, since S2/further tiers may
