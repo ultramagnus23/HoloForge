@@ -166,10 +166,18 @@ def build_supplement_macros() -> str:
     rcwa3 = _load("results_rcwa.json")
     lines.append(macro("RCWAMaxDevThreeCase",
                        fmt(rcwa3.get("max_abs_deviation"), ".3f") if rcwa3 else None))
+    # NOTE: macro names must be letters-only -- LaTeX control words stop
+    # at the first non-letter character, so a name like "RCWAE7MaxDev"
+    # silently splits into the control sequence \RCWAE followed by literal
+    # text "7MaxDev" (and collides with any other macro sharing that same
+    # \RCWAE prefix). Caught by an actual pdflatex compile ("Missing
+    # \begin{document}" / "Missing number, treated as zero" cascading
+    # errors with no clear cause) -- this environment cannot catch this
+    # class of bug just by reading the .tex output, only by compiling it.
     rcwa_e7 = _load("results_rcwa_e7.json")
-    lines.append(macro("RCWAE7MaxDev",
+    lines.append(macro("RCWAVGridMaxDev",
                        fmt(rcwa_e7.get("max_abs_deviation"), ".3f") if rcwa_e7 else None))
-    lines.append(macro("RCWAE7NCases", str(rcwa_e7["n_cases"]) if rcwa_e7 else None))
+    lines.append(macro("RCWAVGridNCases", str(rcwa_e7["n_cases"]) if rcwa_e7 else None))
 
     mesh = _load("results", "gpu_reruns", "npdd_mesh_sweep", "results.json")
     if mesh:
