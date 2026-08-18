@@ -376,17 +376,78 @@ narrow band across the full $\pm 50\%$ perturbation range tested.}
 
 \section{Twin Validation}
 \label{sec:twin-validation-ref}
-% TODO (blocked on Phase 6): pending digitized literature CSVs and
-% experiments/fit_literature_curves.py's fit-quality report. Report the
-% ACTUAL fit quality (good or bad) once real data exists -- do not assert
-% agreement here.
-\textbf{[TODO: twin-vs-literature overlay and fit quality -- pending Phase 6 (data/literature/*.csv).]}
+We fit the twin's two free calibration parameters ($\kappa$, $D_0$; every
+other \texttt{MediumParams} field held at its literature-sourced default
+for the matching medium) against \NLiteratureSources{} digitized curves
+from two independent, open-access sources: Bruder et
+al.~\cite{bruder2017bayfol} (Bayfol HX, $\Delta n_1$ vs.\ exposure dose at
+$K=8.98$\,rad/\textmu m, both their experimental and their own simulated
+series) and Hsieh et al.~\cite{hsieh2022pqpmma} (PQ/PMMA, $\Delta n_1$
+vs.\ exposure time at $K=24.94$\,rad/\textmu m -- outside this paper's own
+tested range of 1.96--15.71\,rad/\textmu m, so an out-of-range check, not
+a same-regime one; this curve is that source's own simulated output from
+their independently-derived kinetic model, not a raw measurement).
+Fitting used bounded least squares (Section~\ref{sec:baselines}'s
+constraint style extended to parameter bounds, not just exposure
+constraints) over the physical ranges documented for $\kappa$ and $D_0$,
+widened per medium where a config's own literature-cited value fell
+outside the generic range (PQ/PMMA's $D_0$ is several orders of magnitude
+below PVA/acrylamide's).
+
+All three fits are poor: NRMSE \NRMSEBestFit--\NRMSEWorstFit\ (Figure~F2),
+against a working definition of NRMSE $<0.05$ as a good fit. This is
+reported as a negative result, not smoothed over. Two distinct failure
+modes are visible in Figure~F2, not one: (1) the Bayfol curves rise then
+decline with dose, a non-monotonic shape the twin's saturation response
+$\delta n \propto \tanh(\cdot)$ cannot produce by construction, since it
+is monotonically non-decreasing in accumulated exposure; the twin's best
+fit instead sits at a flat, low plateau that minimizes squared error
+against a curve shaped nothing like it. (2) The PQ/PMMA curve rises
+smoothly toward $5\times10^{-4}$ over 2000\,s while the twin's fit
+predicts almost no growth at all at this $K$ -- consistent with the
+model's high-$K$ rolloff (Section~\ref{sec:no-cliff}'s small-signal
+$H(K)$) being too aggressive well beyond the $K$ range this paper's
+M1--S2 results actually cover, though this cannot be separated from
+ordinary fit degeneracy at a single $K$ with only two free parameters
+without more sources.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{../code/figures/paper/F2_twin_validation.pdf}
+\caption{F2: twin (fitted $\kappa$, $D_0$) vs.\ digitized literature
+curves, one panel per source series. All three fits are poor
+(NRMSE \NRMSEBestFit--\NRMSEWorstFit); shown in full, including the worst,
+not selected for agreement.}
+\label{fig:F2}
+\end{figure}
+
+Because M1--S2's headline claims are paired comparisons (media-in-the-loop
+minus media-blind SGD, same twin used for both arms of every pair), they
+do not require the twin's \emph{absolute} response to match real
+photopolymers -- a systematic offset or wrong saturation level cancels in
+the difference as long as it is common to both arms, which it is by
+construction. What this validation attempt does undercut is any claim
+that the twin's specific numerical predictions (recovered $\Delta n$,
+absolute PSNR, the exact location of the saturation plateau) generalize
+to Bayfol HX or PQ/PMMA specifically. We do not make that claim in
+Section~\ref{sec:baselines}--\ref{sec:no-cliff}; this section is why. A
+parameter-spread extraction across sources (to justify or correct S2's
+$\pm50\%$ perturbation range) is not attempted from these fits --
+\texttt{results/summary/param\_spread.json} documents why three poorly
+converged fits would not support that claim rather than silently
+skipping it. The two Optica-published NPDD papers identified as primary
+sources (multi-$K$ growth-curve families, the regime this model was
+actually designed against) remain paywalled; see
+\texttt{data/literature/README.md} for what closing that gap needs.
 
 \section{Discussion and Limitations}
 This study is simulation-only; its claims are conditioned on a physics
-model (NPDD, Kogelnik coupled-wave theory~\cite{kogelnik1969coupled}, split-step BPM) validated component-wise
-(Sec.~\ref{sec:twin-validation-ref}) but not yet against a completed
-literature overlay. Scalar diffraction bounds validity to moderate
+model (NPDD, Kogelnik coupled-wave theory~\cite{kogelnik1969coupled}, split-step BPM). A literature
+overlay was attempted (Sec.~\ref{sec:twin-validation-ref}) and found poor
+agreement (NRMSE \NRMSEBestFit--\NRMSEWorstFit\ across the two independent
+sources tested) -- reported there as a negative result rather than
+omitted, with the paired-comparison argument for why M1--S2's gain claims
+survive it regardless. Scalar diffraction bounds validity to moderate
 numerical apertures; the RCWA validity-envelope grid (V3, formerly E7)
 bounds this quantitatively for the $K$/$\Delta n$/polarization/slant
 range tested -- readout-side error moves absolute PSNRs more than paired

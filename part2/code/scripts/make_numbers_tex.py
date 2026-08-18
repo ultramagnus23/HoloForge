@@ -193,6 +193,41 @@ def build_supplement_macros() -> str:
     return "".join(lines)
 
 
+def build_validation_macros() -> str:
+    """Macros for experiments/fit_literature_curves.py's output
+    (results_literature_fit.json) -- Phase 6/Twin Validation. Emits one
+    NRMSE/fit_quality macro per fitted source, plus a count, so Section 6
+    can cite exact numbers without hand-typing them. Ground rule 4 applies
+    here specifically: a poor fit gets its real NRMSE macro'd in, not
+    rounded away or omitted."""
+    lines = ["\n% --- validation (Phase 6 / Section 6) macros ---\n"]
+    fit_data = _load("results_literature_fit.json")
+    fits = fit_data.get("fits", []) if fit_data else []
+
+    lines.append(macro("NLiteratureSources", str(len(fits))))
+
+    # One macro pair per fit, keyed by a letters-only slug derived from the
+    # source filename (same macro-name constraint noted above for RCWA).
+    for fit in fits:
+        stem = fit["file"].replace(".csv", "")
+        slug = "".join(ch for ch in stem.title().replace("_", "") if ch.isalpha())
+        lines.append(macro(f"NRMSE{slug}", fmt(fit["nrmse"], ".2f")))
+
+    if fits:
+        worst = max(fits, key=lambda f: f["nrmse"])
+        best = min(fits, key=lambda f: f["nrmse"])
+        lines.append(macro("NRMSEWorstFit", fmt(worst["nrmse"], ".2f")))
+        lines.append(macro("NRMSEBestFit", fmt(best["nrmse"], ".2f")))
+        n_good = sum(1 for f in fits if f["fit_quality"] == "GOOD")
+        lines.append(macro("NGoodFits", str(n_good)))
+    else:
+        lines.append(macro("NRMSEWorstFit", None))
+        lines.append(macro("NRMSEBestFit", None))
+        lines.append(macro("NGoodFits", None))
+
+    return "".join(lines)
+
+
 def main():
     paper_numbers = {}
     if os.path.exists(PAPER_NUMBERS_PATH):
@@ -202,7 +237,7 @@ def main():
         print(f"[make_numbers_tex] WARNING: {PAPER_NUMBERS_PATH} not found "
               f"-- run analysis/aggregate.py first. Emitting all-PENDING macros.")
 
-    tex = build_macros(paper_numbers) + build_supplement_macros()
+    tex = build_macros(paper_numbers) + build_supplement_macros() + build_validation_macros()
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     with open(OUT_PATH, "w") as f:
         f.write(tex)

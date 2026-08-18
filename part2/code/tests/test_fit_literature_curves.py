@@ -27,6 +27,7 @@ from holomedia import MediumParams
 def test_infer_curve_type_and_K():
     assert flc.infer_curve_type_and_K("sheridan2011_growth_K6.csv") == ("growth", 6.0)
     assert flc.infer_curve_type_and_K("fomenko2017_angular_K12.5.csv") == ("angular", 12.5)
+    assert flc.infer_curve_type_and_K("bruder2017_growth_dn_K8.98_exp.csv") == ("growth_dn", 8.98)
     assert flc.infer_curve_type_and_K("random_name.csv") == ("unknown", None)
     print("infer_curve_type_and_K OK")
 
@@ -78,8 +79,50 @@ def test_fit_recovers_known_parameters_on_synthetic_data():
         flc.N_X, flc.DX = orig_n_x, orig_dx
 
 
+def test_growth_dn_fit_recovers_known_parameters_on_synthetic_data():
+    """Same self-consistency check as test_fit_recovers_known_parameters_
+    on_synthetic_data, but for the growth_dn (raw Delta-n1 vs. dose,
+    no Kogelnik conversion) branch added to support real digitized data
+    that reports Delta-n1 directly (see data/literature/README.md)."""
+    orig_n_x, orig_dx = flc.N_X, flc.DX
+    flc.N_X, flc.DX = 96, 0.1
+    try:
+        true_kappa, true_D0 = 1.5, 0.05
+        K = 8.98
+        # span growth AND plateau like the real digitized data (0.17-180
+        # mJ/cm^2) -- a narrow, plateau-only dose window leaves kappa/D0
+        # degenerate (checked: a 1-20 window recovered neither parameter),
+        # same sensitivity limitation the "growth" (DE) branch already
+        # documents for a single K.
+        dose_values = [0.2, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]
+        base_params = MediumParams()
+
+        clean = flc.simulate_growth_dn(dose_values, K, true_kappa, true_D0, base_params)
+        rng = np.random.default_rng(1)
+        # noise scaled to 2% of the clean curve's own range, not a fixed
+        # absolute value -- Delta-n1's scale depends heavily on K/kappa/D0,
+        # so a noise level borrowed from the DE-scale (O(1)) test above
+        # would swamp a small-range Delta-n1 curve and fail for reasons
+        # that have nothing to do with the fit itself (checked: it does).
+        noise_scale = 0.02 * (clean.max() - clean.min())
+        noisy = clean + rng.normal(0, noise_scale, size=clean.shape)
+
+        fit = flc.fit_curve("growth_dn", K, dose_values, noisy.tolist(), base_params=base_params)
+
+        print(f"true kappa={true_kappa} D0={true_D0} | "
+              f"fit kappa={fit['kappa_fit']:.3f} D0={fit['D0_fit']:.4f} "
+              f"rmse={fit['rmse']:.4f} nrmse={fit['nrmse']:.4f}")
+        assert fit["converged"]
+        assert fit["nrmse"] < 0.05, f"growth_dn fit NRMSE too high on synthetic data: {fit['nrmse']}"
+        assert 0.3 * true_kappa < fit["kappa_fit"] < 3.0 * true_kappa, fit["kappa_fit"]
+        print("growth_dn fit recovers known parameters on synthetic data OK (self-consistency check)")
+    finally:
+        flc.N_X, flc.DX = orig_n_x, orig_dx
+
+
 if __name__ == "__main__":
     test_infer_curve_type_and_K()
     test_load_curve_csv_schema()
     test_fit_recovers_known_parameters_on_synthetic_data()
+    test_growth_dn_fit_recovers_known_parameters_on_synthetic_data()
     print("PASSED")

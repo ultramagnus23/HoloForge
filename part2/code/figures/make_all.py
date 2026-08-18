@@ -122,21 +122,60 @@ def make_F1_pipeline_schematic():
 
 # --------------------------------------------------------------------- F2 (V1)
 def make_F2_twin_validation():
-    csvs_exist = os.path.isdir(os.path.join(HERE, "..", "data", "literature")) and any(
-        f.endswith(".csv") for f in os.listdir(os.path.join(HERE, "..", "data", "literature")))
-    if not csvs_exist:
+    """One panel per digitized-and-fit literature curve: data points vs.
+    the twin's fitted model curve, NRMSE and fit_quality annotated. Shows
+    every fitted curve, not just the good ones (ground rule: never show
+    only the good fits) -- as of this pass there is exactly one real
+    source (Bruder et al. 2017, Bayfol HX, K=8.98 rad/um, two series:
+    simulated-by-the-paper and their own experimental data), and its fit
+    is POOR (see results_literature_fit.json) -- shown as poor, not hidden."""
+    fit_data = _load_json("results_literature_fit.json")
+    if not fit_data or not fit_data.get("fits"):
+        csvs_exist = os.path.isdir(os.path.join(HERE, "..", "data", "literature")) and any(
+            f.endswith(".csv") for f in os.listdir(os.path.join(HERE, "..", "data", "literature")))
         no_data_placeholder(
             os.path.join(OUT_DIR, "F2_twin_validation.pdf"),
             "F2 (V1): twin vs. digitized literature (growth curve, angular selectivity)",
+            "results_literature_fit.json missing or empty -- run "
+            "experiments/fit_literature_curves.py" if csvs_exist else
             "needs digitized CSVs (data/literature/*.csv) from WebPlotDigitizer -- "
             "not yet provided; see data/literature/README.md.")
         return False
-    no_data_placeholder(
-        os.path.join(OUT_DIR, "F2_twin_validation.pdf"),
-        "F2 (V1): twin vs. digitized literature (growth curve, angular selectivity)",
-        "digitized CSVs now exist, but this figure's render code is not "
-        "yet implemented -- add it now that the data is here.")
-    return False
+
+    fits = fit_data["fits"]
+    n = len(fits)
+    ncols = min(n, 3)
+    nrows = math.ceil(n / ncols)
+    fig, axes = new_fig(width="double" if n > 1 else "single",
+                        height_in=2.6 * nrows, ncols=ncols, nrows=nrows, squeeze=False)
+    axes_flat = axes.flatten()
+
+    for ax, fit in zip(axes_flat, fits):
+        x = fit["x"]
+        y_data = fit["y_data"]
+        y_model = fit["y_model"]
+        order = np.argsort(x)
+        x_sorted = np.array(x)[order]
+        ax.scatter(x, y_data, color=COLORS["vermillion"], marker="s",
+                  s=14, label="literature", zorder=3)
+        ax.plot(x_sorted, np.array(y_model)[order], color=COLORS["blue"],
+               marker="o", markersize=3, linewidth=1.0, label="twin (fit)", zorder=2)
+        ax.set_xscale("log")
+        ax.set_xlabel("dose or exposure (source units)")
+        ax.set_ylabel(r"$|\Delta n_1|$ or DE")
+        quality = fit["fit_quality"]
+        q_color = {"GOOD": COLORS["bluish_green"], "MARGINAL": COLORS["orange"],
+                  "POOR": COLORS["vermillion"]}[quality]
+        title = fit["file"].replace(".csv", "")
+        ax.set_title(f"{title}\nK={fit['K']:.2f} rad/um  NRMSE={fit['nrmse']:.2f} ({quality})",
+                    fontsize=6, color=q_color)
+        ax.legend(frameon=False, fontsize=5.5, loc="best")
+
+    for ax in axes_flat[n:]:
+        ax.axis("off")
+
+    savefig(fig, os.path.join(OUT_DIR, "F2_twin_validation.pdf"))
+    return True
 
 
 # --------------------------------------------------------------------- F3a/F3b (V3/V2)

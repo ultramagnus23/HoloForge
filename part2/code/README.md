@@ -41,8 +41,8 @@ python experiments/f2_f3_recovery.py   # long; run on GPU, bump SEEDS/N_ITERS
       `data/literature/README.md`, and `f1_validate_twin.py` will overlay CSVs
       automatically once added.
 - [x] Fill Table 1 parameter ranges with citations — real values from Kelly &
-      Sheridan 2011, Gleeson/Guo 2008, Fomenko & Berneth 2017 (Bayfol),
-      Jeong et al. 2022 (PQ/PMMA); see paper Table 1 and its precision caveat.
+      Sheridan 2011, Gleeson/Guo 2008, Bruder et al. 2017 (Bayfol),
+      Hsieh et al. 2022 (PQ/PMMA); see paper Table 1 and its precision caveat.
 - [~] Bump sweeps to 5 seeds / 800+ iters on GPU — **no GPU in this environment**;
       ran a confirmation-scale rerun instead (n_x=512, 500 iters, 3 seeds,
       `experiments/run_confirm.py`, ~2-4h CPU). Full paper-scale command for a

@@ -8,11 +8,26 @@ structure honestly -- a poor fit is reported as a poor fit (ground rule 4),
 not smoothed over.
 
 Curve type is inferred from the filename (a documented convention, not a
-guess): a filename containing "growth" is a DE-vs-exposure-time curve at
-a fixed spatial frequency K (K given by a "_K<value>" token in the
-filename, e.g. sheridan2011_growth_K6.csv -> K=6 rad/um); a filename
-containing "angular" is a DE-vs-angular-detuning curve. Filenames matching
-neither pattern are skipped with a printed warning rather than guessed at.
+guess): a filename containing "growth_dn" is a raw Delta-n1-vs-dose curve
+at a fixed spatial frequency K (K given by a "_K<value>" token in the
+filename, e.g. bruder2017_growth_dn_K8.98_exp.csv -> K=8.98 rad/um); a
+filename containing "growth" (but not "growth_dn") is a DE-vs-exposure-
+time curve at a fixed K; a filename containing "angular" is a DE-vs-
+angular-detuning curve. Filenames matching none of these are skipped with
+a printed warning rather than guessed at.
+
+growth vs. growth_dn is a real distinction, not a naming nicety: some
+published curves report diffraction efficiency (post-Kogelnik, needs a
+thickness/wavelength to convert from Delta-n), others report the
+recorded refractive-index modulation Delta-n1 directly against a
+physical dose axis (mJ/cm^2) rather than the twin's internal exposure-
+time units. growth_dn fits Delta-n1 directly (NPDDRecorder's raw output,
+no Kogelnik conversion) and treats the dose axis as directly proportional
+to the twin's t_total -- valid because MediumParams.kappa already "folds
+in intensity scale" (see holomedia/npdd.py's docstring: F0 = kappa *
+I_mean^gamma), so fitting kappa against a dose axis with the model's
+exposure amplitude held at 1.0 is absorbing exactly the dose/time-unit
+conversion into the same free parameter already used everywhere else.
 
 Free parameters: kappa (dose sensitivity) and D0 (monomer diffusivity) --
 exactly 2, matching the master prompt's "kappa, plus at most one more."
@@ -41,6 +56,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import numpy as np
 import torch
+import yaml
 from scipy.optimize import least_squares
 
 from holomedia import NPDDRecorder, MediumParams, kogelnik_de
@@ -48,9 +64,56 @@ from holomedia import NPDDRecorder, MediumParams, kogelnik_de
 torch.set_default_dtype(torch.float64)
 
 LITERATURE_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "literature")
+CONFIGS_DIR = os.path.join(os.path.dirname(__file__), "..", "configs", "media")
 CSV_SCHEMA_COLUMNS = ["x", "y", "source_doi", "figure_id", "digitized_by", "date"]
 
-N_X, DX = 512, 0.1  # fit-time grid: lighter than F1's 1024/0.05, adequate for a scalar fit
+# Map a filename prefix (the part before the first "_") to the medium config
+# it should be fit against, instead of the generic PVA/acrylamide-calibrated
+# MediumParams() default. This matters: dn_max is held fixed during fitting
+# (only kappa/D0 are free, per the master prompt's "kappa, plus at most one
+# more"), and dn_max differs by a real physical factor between media
+# families -- fitting a Bayfol HX curve (high-Dn material) against the
+# generic default's dn_max=3.5e-3 caps the model well below the curve's own
+# peak (~0.016) no matter what kappa/D0 are chosen, which looks like a
+# fitting failure but is actually a medium-family mismatch. Discovered by
+# fitting bruder2017's real digitized curve against the generic default and
+# getting a flat, saturated-from-the-start model curve (NRMSE ~0.9) -- see
+# git log for that finding before this mapping was added.
+FILENAME_PREFIX_TO_CONFIG = {
+    "bruder2017": "bayfol_hx_405nm.yaml",
+    "hsieh2022": "pq_pmma_405nm.yaml",
+}
+
+
+def load_medium_config(yaml_name: str) -> MediumParams:
+    path = os.path.join(CONFIGS_DIR, yaml_name)
+    with open(path) as f:
+        raw = yaml.safe_load(f)
+    defaults = MediumParams()
+    known_fields = set(defaults.__dict__.keys())
+    filtered = {k: v for k, v in raw.items() if k in known_fields}
+    ignored = set(raw.keys()) - known_fields
+    if ignored:
+        print(f"[fit_literature_curves] {yaml_name}: ignoring non-MediumParams "
+              f"keys {sorted(ignored)}")
+    return MediumParams(**{**defaults.__dict__, **filtered})
+
+
+def base_params_for_file(filename: str) -> MediumParams:
+    stem = os.path.splitext(os.path.basename(filename))[0]
+    prefix = stem.split("_")[0]
+    yaml_name = FILENAME_PREFIX_TO_CONFIG.get(prefix)
+    if yaml_name is None:
+        return MediumParams()
+    return load_medium_config(yaml_name)
+
+N_X, DX = 512, 0.02  # fit-time grid: 10.24um window. DX tightened from the
+# original 0.1 (checked: 0.1 gives only ~2.5 samples/period at
+# hsieh2022's K=24.94 rad/um, below what a spectral method needs for an
+# accurate amplitude -- 0.02 gives ~12.6). Cost-free: NPDDRecorder's
+# per-step cost scales with N_X (unchanged), not DX; N_X=512 at DX=0.02
+# still covers >>1 non-local kernel width (sigma) for every medium config
+# in configs/media/, so periodicity/boundary effects stay negligible.
 WAVELENGTH_UM = 0.405
 
 
@@ -76,6 +139,8 @@ def infer_curve_type_and_K(filename: str) -> tuple[str, float | None]:
     stem = os.path.splitext(os.path.basename(filename))[0]
     m = re.search(r"_K([\d.]+)", stem)
     K = float(m.group(1)) if m else None
+    if "growth_dn" in stem:
+        return "growth_dn", K
     if "growth" in stem:
         return "growth", K
     if "angular" in stem:
@@ -100,6 +165,35 @@ def simulate_growth_de(t_values, K, kappa, D0, base_params: MediumParams,
         de = float(kogelnik_de(dn1.abs(), thickness_um, wavelength_um))
         des.append(de)
     return np.array(des)
+
+
+def simulate_growth_dn(dose_values, K, kappa, D0, base_params: MediumParams):
+    """Raw |Delta-n1| at spatial frequency K vs a list of physical dose
+    values (e.g. mJ/cm^2), for the given (kappa, D0). No Kogelnik
+    conversion -- this is for curves that report the recorded index
+    modulation directly, not diffraction efficiency. Dose is passed to
+    NPDDRecorder as t_total directly (exposure amplitude held at 1.0);
+    kappa absorbs the physical dose/time-unit conversion, same as every
+    other use of kappa in this codebase."""
+    p = MediumParams(**{**base_params.__dict__, "kappa": kappa, "D0": D0})
+    x = torch.arange(N_X) * DX
+    dns = []
+    for dose in dose_values:
+        # Capped at 500 (NPDDRecorder's own docstring: "200-500 adequate
+        # for the parameter ranges above", IMEX scheme -- stability isn't
+        # tied to raw t_total). The uncapped `20*dose` heuristic this was
+        # copied from was written when dose/t_total values were always
+        # small abstract units (1-18, see f1_validate_twin.py); it breaks
+        # for curves reporting real physical exposure time in seconds
+        # (checked: hsieh2022's t axis runs to 2000s, which would ask for
+        # 40,000 steps uncapped).
+        n_steps = min(max(20, int(20 * max(dose, 1e-3))), 500)
+        rec = NPDDRecorder(N_X, DX, t_total=float(dose), n_steps=n_steps, params=p)
+        exposure = 1.0 + 0.9 * torch.cos(K * x)
+        dn = rec(exposure)
+        dn1 = 2.0 * torch.mean(dn * torch.cos(K * x))
+        dns.append(float(dn1.abs()))
+    return np.array(dns)
 
 
 def simulate_angular_de(dtheta_deg_values, K, kappa, D0, base_params: MediumParams,
@@ -133,26 +227,60 @@ def fit_curve(curve_type: str, K: float, xs: list, ys: list,
 
     if curve_type == "growth":
         model_fn = lambda kappa, D0: simulate_growth_de(xs, K, kappa, D0, base_params, thickness_um)
+    elif curve_type == "growth_dn":
+        model_fn = lambda kappa, D0: simulate_growth_dn(xs, K, kappa, D0, base_params)
     elif curve_type == "angular":
         model_fn = lambda kappa, D0: simulate_angular_de(xs, K, kappa, D0, base_params, thickness_um)
     else:
-        raise ValueError(f"unsupported curve_type {curve_type!r} (expected 'growth' or 'angular')")
+        raise ValueError(f"unsupported curve_type {curve_type!r} (expected 'growth', "
+                         f"'growth_dn', or 'angular')")
 
     def residuals(log_params):
         kappa, D0 = np.exp(log_params)  # fit in log-space: both params are positive, span decades
         return model_fn(kappa, D0) - ys_arr
 
+    # Bounded (method="trf"), not the original unbounded "lm" -- checked on
+    # real data: an unbounded log-space fit on a curve the model structurally
+    # can't reproduce (see hsieh2022's fit, before this fix) ran D0 off to
+    # ~1e300 (a literal overflow, not a real estimate) chasing a residual
+    # that no finite D0 could fix. Bounds start from the physical ranges
+    # documented in holomedia/npdd.py's MediumParams docstring (kappa:
+    # 0.1-10, D0: 1e-3-1e0, written for PVA/AA-like media), but D0's lower
+    # bound is widened well past that: configs/media/pq_pmma_405nm.yaml's
+    # real cited D0=1.24e-6 (PQ/PMMA's transport is "several orders of
+    # magnitude slower than PVA/AA's monomer diffusion" per that file's own
+    # comment) sits below the generic docstring range entirely -- a bound
+    # copied from the generic range without checking every real config's
+    # own base_params.D0 threw "Initial guess is outside of provided
+    # bounds" on exactly this curve. Bounds must contain every medium
+    # config's real starting point, not just the generic default's.
+    KAPPA_BOUNDS = (1e-3, 1e3)
+    D0_BOUNDS = (1e-8, 1e2)
+    log_bounds = (np.log([KAPPA_BOUNDS[0], D0_BOUNDS[0]]),
+                 np.log([KAPPA_BOUNDS[1], D0_BOUNDS[1]]))
+
     x0 = np.log([base_params.kappa, base_params.D0])
-    result = least_squares(residuals, x0, method="lm", max_nfev=200)
+    result = least_squares(residuals, x0, method="trf", bounds=log_bounds, max_nfev=200)
     kappa_fit, D0_fit = np.exp(result.x)
     model_y = model_fn(kappa_fit, D0_fit)
     resid = model_y - ys_arr
     rmse = float(np.sqrt(np.mean(resid ** 2)))
+    y_range = float(ys_arr.max() - ys_arr.min())
+    nrmse = float(rmse / y_range) if y_range > 0 else float("nan")
+
+    # Pinned against a bound is not the same as converged onto a real
+    # optimum -- flag it so param_spread.json (Phase 1.3) can exclude these
+    # rather than silently averaging in a number the optimizer only reached
+    # because it hit a wall.
+    at_bound = (np.isclose(kappa_fit, KAPPA_BOUNDS[0], rtol=1e-2) or
+               np.isclose(kappa_fit, KAPPA_BOUNDS[1], rtol=1e-2) or
+               np.isclose(D0_fit, D0_BOUNDS[0], rtol=1e-2) or
+               np.isclose(D0_fit, D0_BOUNDS[1], rtol=1e-2))
 
     return dict(curve_type=curve_type, K=K, kappa_fit=float(kappa_fit),
-               D0_fit=float(D0_fit), rmse=rmse,
+               D0_fit=float(D0_fit), rmse=rmse, nrmse=nrmse,
                x=xs, y_data=ys, y_model=model_y.tolist(), residuals=resid.tolist(),
-               converged=bool(result.success), n_points=len(xs))
+               converged=bool(result.success), at_bound=bool(at_bound), n_points=len(xs))
 
 
 def main():
@@ -171,17 +299,25 @@ def main():
                   f"'..._angular_K<val>.csv')")
             continue
         data = load_curve_csv(path)
+        base_params = base_params_for_file(path)
         print(f"[fit_literature_curves] fitting {os.path.basename(path)} "
-              f"(type={curve_type}, K={K}, n={len(data['x'])} points) ...")
-        fit = fit_curve(curve_type, K, data["x"], data["y"])
+              f"(type={curve_type}, K={K}, n={len(data['x'])} points, "
+              f"base_params dn_max={base_params.dn_max:.4g}) ...")
+        fit = fit_curve(curve_type, K, data["x"], data["y"], base_params=base_params)
         fit.update(source_doi=data["source_doi"], figure_id=data["figure_id"],
                   digitized_by=data["digitized_by"], date=data["date"],
                   file=os.path.basename(path))
-        quality = ("GOOD" if fit["rmse"] < 0.05 else
-                  "MARGINAL" if fit["rmse"] < 0.15 else "POOR")
+        # NRMSE (RMSE / data range), not raw RMSE, drives the quality bucket --
+        # raw RMSE is not comparable across curve types on very different
+        # scales (DE is O(1), Delta-n1 is O(0.01)); a fixed RMSE threshold
+        # would call a garbage Delta-n1 fit "GOOD" just because the numbers
+        # are small. Thresholds otherwise unchanged from before this fix.
+        quality = ("GOOD" if fit["nrmse"] < 0.05 else
+                  "MARGINAL" if fit["nrmse"] < 0.15 else "POOR")
         fit["fit_quality"] = quality
-        print(f"  kappa={fit['kappa_fit']:.3f} D0={fit['D0_fit']:.4f} "
-              f"RMSE={fit['rmse']:.4f} ({quality})")
+        bound_note = " [AT BOUND -- not a real optimum]" if fit["at_bound"] else ""
+        print(f"  kappa={fit['kappa_fit']:.4g} D0={fit['D0_fit']:.4g} "
+              f"RMSE={fit['rmse']:.4f} NRMSE={fit['nrmse']:.4f} ({quality}){bound_note}")
         reports.append(fit)
 
     out_path = os.path.join(LITERATURE_DIR, "..", "..", "results_literature_fit.json")
