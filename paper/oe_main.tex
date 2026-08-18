@@ -28,14 +28,19 @@
 %    installed to do a real pdflatex compile, so that step still needs
 %    doing by a human before submission).
 % STILL BLOCKING, IN PRIORITY ORDER:
-%  1. TEMPLATE: this uses a generic article class, NOT Optica's real one.
-%     Confirmed abstract word limit (~100 words, met) and that a data-
-%     availability statement is required (see paper/TEMPLATE_NOTES.md) via
-%     live web search, but whether Optics Express uses the legacy
-%     opex3.sty (paper/opex3.sty, fetched) or Optica's newer "universal
-%     manuscript template" (Overleaf/Prism) was NOT resolved with
-%     certainty -- confirm directly via Overleaf's template page or a
-%     Prism submission, then swap \documentclass and re-flow.
+%  1. TEMPLATE: restructured to Optica's real universal-manuscript-template
+%     STRUCTURE (\documentclass{optica-article}, \authormark/\address/
+%     \email, \begin{abstract*}, \begin{backmatter}\bmsection{...}) based
+%     on the actual template .tex the user pasted in-chat -- but the class
+%     file itself, optica-article.cls (and its .bst, opticajnl.bst), is
+%     STILL MISSING. Official download (opg.optica.org) is CAPTCHA-gated;
+%     Overleaf's is behind a JS-rendered button; a third-party GitHub gist
+%     exists but is explicitly an arXiv-only modified variant
+%     (opticaArxiv.cls), not the submission-ready file -- not used here.
+%     UNTESTED: this file has NOT been compiled against the real class,
+%     only checked for structural consistency (see note 4). Get
+%     optica-article.cls + opticajnl.bst from the same Overleaf project
+%     the .tex came from, drop them in this directory, then recompile.
 %  2. refs.bib: gallego2008shrinkage remains genuinely unresolved (its
 %     cited PubMed ID resolves to a different paper entirely -- different
 %     author, journal, year; see the comment in refs.bib for the full
@@ -46,25 +51,40 @@
 %     empty, blocked on digitizing published literature curves
 %     (data/literature/README.md) -- needs a human reading published
 %     figures, not automatable from here.
-%  4. Compile with a real LaTeX installation and proofread the actual
-%     rendered PDF -- nothing in this pipeline has done that.
+%  4. Once the class file lands: recompile with pdflatex/bibtex (this repo
+%     already has a working MiKTeX install, see git log) and proofread the
+%     actual rendered PDF against the previous generic-article compile
+%     (paper/oe_main.pdf, 7 pages, already verified clean under the OLD
+%     class -- the new class may re-flow page/section breaks, figure
+%     placement, and the two \url{} line-wrap fixes differently; re-check
+%     for new Overfull/Underfull \hbox warnings, don't assume the old
+%     fixes still apply verbatim).
 % ============================================================================
 
-\documentclass[10pt]{article}
-\usepackage[margin=1in]{geometry}
-\usepackage{amsmath,amssymb,graphicx,booktabs,hyperref,cite}
+\documentclass{optica-article}
+\journal{opticajournal} % Optics Express is one of the Express-family
+                        % journals this template estimates length for
+                        % (confirmed via a real fetch of opg.optica.org's
+                        % templates page, not a search summary -- see
+                        % TEMPLATE_NOTES.md)
+\articletype{Research Article}
 \input{numbers}  % scripts/make_numbers_tex.py output -- all quantitative macros
+
+\begin{document}
 
 \title{Media-in-the-Loop Holography: Computer-Generated Holography\\
 Through a Differentiable Model of Volume Photopolymer Recording}
-\author{Chaitanya Tripathi$^1$\\
-\small $^1$Ashoka University, Sonipat, India}
-\date{}
 
-\begin{document}
-\maketitle
+\author{Chaitanya Tripathi\authormark{1,*}}
 
-\begin{abstract}
+\address{\authormark{1}Ashoka University, Sonipat, India}
+
+\email{\authormark{*}chaitanya.tripathi\_ug2025@ashoka.edu.in}
+% address/email copied from the Part 1 paper (paper/Final Paper.pdf) for
+% consistency -- CONFIRM this is still the right contact address before
+% submission, not verified against anything live here.
+
+\begin{abstract*}
 % Rewritten from the pre-data skeleton once M1/M2 (real, corrected-
 % pipeline, multi-seed GPU data) landed. The originally hypothesized
 % finding -- a compensation-cliff K* that tracks the analytic Kc(budget)
@@ -86,7 +106,7 @@ predicted by small-signal theory -- instead, gain converges toward an
 oracle ceiling as spatial frequency rises, indicating the medium's
 saturation response, not the optimizer, bounds performance. Code,
 manifests, and results are released.
-\end{abstract}
+\end{abstract*}
 
 \section{Introduction}
 Phase-only CGH computes a modulation pattern whose diffracted field
@@ -382,18 +402,44 @@ docs/s2\_sensitivity\_notes.md). Experimental two-beam closure (recording
 optimized vs. naive exposures in a characterized medium and comparing
 measured reconstructions) is explicitly future work.
 
-\section{Code and Data Availability}
+\begin{backmatter}
+
+\bmsection{Funding}
+% NOT ASSERTED -- I don't know this author's actual funding status and
+% won't guess it. The template's own instructions say this section is
+% auto-generated from Prism submission details at production; if
+% submitting via Prism this can likely be left as a placeholder. If no
+% external funding was received, the honest statement is typically
+% "No funding was received for this work." -- CONFIRM before using it.
+\textbf{[TODO: confirm funding status -- see comment above; do not leave
+this placeholder in the submitted version.]}
+
+\bmsection{Disclosures}
+% NOT ASSERTED for the same reason as Funding above -- this is a factual
+% claim about the author's conflicts of interest that only the author can
+% make. The standard default if genuinely none exist is "The authors
+% declare no conflicts of interest."
+\textbf{[TODO: confirm and state disclosures -- see comment above.]}
+
+\bmsection{Data availability}
 {\sloppy
 All source code, experiment manifests, and raw result JSONs are available
 at \url{https://github.com/ultramagnus23/HoloForge} under
 \texttt{holography\_media/}, released under the Apache 2.0 license.
 \par}
-% TODO (Phase 7.5, blocked on results freeze): a versioned Zenodo DOI
-% archive is prepared at results freeze -- not yet cut, since Phase 3
-% results don't exist yet to freeze. See REPRODUCE.md for the exact
-% regeneration commands once results land.
+% TODO (blocked on results freeze): a versioned Zenodo DOI archive is
+% prepared at results freeze -- not yet cut, since S2/further tiers may
+% still be running. See REPRODUCE.md for the exact regeneration commands
+% once results are frozen.
 \textbf{[TODO: Zenodo DOI -- pending results freeze, see REPRODUCE.md.]}
 
+\end{backmatter}
+
+% NOTE: opticajnl.bst (the Optica-specific BibTeX style) is not available
+% here yet either -- still using the generic "plain" style, which WILL
+% NOT match Optica's reference formatting (numbered-in-brackets vs.
+% Optica's own callout style). Swap to \bibliographystyle{opticajnl} once
+% opticajnl.bst is obtained alongside optica-article.cls.
 \bibliographystyle{plain}
 \bibliography{refs}
 
