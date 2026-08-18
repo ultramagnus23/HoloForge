@@ -1,14 +1,40 @@
 # Literature validation curves — status
 
-**Honest status: not digitized.** True WebPlotDigitizer-style extraction needs
-pixel coordinates picked off the actual published figure image. The papers
-below are real, cited, and (per search) contain the right kind of curve, but
-their full-text/figures sit behind an Optica/Elsevier/RSC paywall that this
-pass could not fetch — abstracts and secondary text do not carry enough
-precision to reconstruct a curve responsibly. Rather than approximate or
-invent points, this directory is left empty of data and this file documents
-exactly what to digitize and how, so it's a 20-minute task once you have PDF
-access (via institutional login or by pasting the figure image to me).
+**Updated 2026-08-18: one real source is now digitized.** Bruder, Fäcke &
+Rölle 2017 (Bayfol HX, MDPI *Polymers*, DOI 10.3390/polym9100472) is CC-BY
+open access. Its full-resolution Figure 3 (Δn₁ vs. average exposure dose
+E_ave, Λ=700 nm i.e. K≈8.98 rad/µm, simulated + experimental series) was
+fetched directly from the publisher CDN (not paywalled) and read visually
+point-by-point — see `source_figures/bruder2017_fig3.png` for the source
+image and `bruder2017_growth_K8.98_{sim,exp}.csv` for the extracted points.
+
+**This is a visual read, not a WebPlotDigitizer pixel-calibrated
+extraction** — no interactive pixel-picking tool was used, so treat the
+x-values (log-scale axis) as accurate to roughly ±10% and y-values to
+roughly ±0.0005 in Δn₁. Good enough to fit against and report an honest
+NRMSE, not good enough to claim WebPlotDigitizer-grade precision in the
+manuscript text. Re-digitizing with WebPlotDigitizer against the same
+source image would tighten this if needed before submission.
+
+**Known integration gap (not yet resolved):** `experiments/fit_literature_curves.py`'s
+`growth` curve type currently fits diffraction efficiency (post-Kogelnik
+conversion) against the twin's internal exposure-*time* units. This new
+CSV reports raw Δn₁ against physical dose (mJ/cm²) — a different
+quantity on a different axis. `MediumParams.kappa` already "folds in
+[the] intensity scale" (see `holomedia/npdd.py`'s docstring), so a
+dose-axis fit is physically sound in principle, but `fit_curve()` needs a
+new `growth_dn` branch that reuses `NPDDRecorder`'s `dn1` output directly
+(skipping the Kogelnik DE conversion `simulate_growth_de` currently
+applies) before this CSV can actually be fit. Not done yet — flagged here
+so it isn't silently skipped.
+
+**Still genuinely blocked by paywall:** the two Optica-published NPDD
+papers below (Kelly & Sheridan 2011, Gleeson et al. 2008) sit behind
+`opg.optica.org`'s subscription wall — confirmed again this pass, not
+just carried over from before. Same options as always: institutional
+access (check whether Ashoka's library has an Optica agreement), or paste
+the figure image directly and it can be digitized the same way Figure 3
+above was.
 
 ## What to digitize
 
