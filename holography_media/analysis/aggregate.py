@@ -36,6 +36,7 @@ import sys
 from collections import defaultdict
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "experiments"))
 from scipy import stats as scipy_stats
 from holomedia import NPDDRecorder, MediumParams
 
@@ -421,6 +422,76 @@ SUB_CLIFF_OLD_VALUES = {  # from results_prelim.json, single effective seed (bug
 }
 
 
+def s1_ablation_summary(grouped: dict) -> dict:
+    """S1: paired gain (MIL-BSGD) per ablation condition, K-averaged over
+    the 3 sub/near/post-cliff points, plus the ratio of each ablation's
+    mean gain to the baseline condition's. Used for the paper's physics-
+    ablation macros (which physics term actually drives the gain)."""
+    from manifest import S1_CONDITIONS
+    rows = [(exp_id, ch) for exp_id, ch in grouped if exp_id == "S1"]
+    if not rows:
+        return dict(status="no_data")
+    by_cond = {}
+    for cond in S1_CONDITIONS:
+        gains = []
+        for exp_id, ch in rows:
+            by_method = grouped[(exp_id, ch)]
+            any_rows = next(iter(by_method.values()), None)
+            if not any_rows or any_rows[0]["config"].get("ablation_condition") != cond:
+                continue
+            pairs = paired_gain(by_method.get("MIL", []), by_method.get("BSGD", []), key="psnr")
+            gains.extend(g for _, g in pairs)
+        stat = mean_std_median_ci95(gains)
+        by_cond[cond] = stat
+    baseline_mean = by_cond.get("baseline", {}).get("mean")
+    ratios = {}
+    if baseline_mean:
+        for cond, stat in by_cond.items():
+            if cond != "baseline" and stat["mean"] is not None:
+                ratios[cond] = stat["mean"] / baseline_mean
+    return dict(status="ok", by_condition=by_cond, ratio_to_baseline=ratios)
+
+
+def s2_sensitivity_summary(grouped: dict) -> dict:
+    """S2: paired gain (MIL-BSGD) K-averaged over the collapse-region
+    K-points, at the extreme (+/-50%) perturbation for each of D0/sigma/
+    kappa, plus the baseline (0%) -- used to report how flat/sensitive
+    the result is to individual NPDD parameter error."""
+    from manifest import S2_PARAMS
+    rows = [(exp_id, ch) for exp_id, ch in grouped if exp_id == "S2"]
+    if not rows:
+        return dict(status="no_data")
+
+    def _gains_for(param, pct):
+        gains = []
+        for exp_id, ch in rows:
+            by_method = grouped[(exp_id, ch)]
+            any_rows = next(iter(by_method.values()), None)
+            if not any_rows:
+                continue
+            cfg = any_rows[0]["config"]
+            if cfg.get("sensitivity_pct") != pct:
+                continue
+            if pct != 0 and cfg.get("sensitivity_param") != param:
+                continue
+            pairs = paired_gain(by_method.get("MIL", []), by_method.get("BSGD", []), key="psnr")
+            gains.extend(g for _, g in pairs)
+        return gains
+
+    baseline_param = S2_PARAMS[0]
+    baseline_stat = mean_std_median_ci95(_gains_for(baseline_param, 0))
+    by_param = {}
+    all_gains = list(_gains_for(baseline_param, 0))
+    for param in S2_PARAMS:
+        lo = mean_std_median_ci95(_gains_for(param, -50))
+        hi = mean_std_median_ci95(_gains_for(param, 50))
+        by_param[param] = dict(minus50=lo, plus50=hi)
+        all_gains += _gains_for(param, -50) + _gains_for(param, 50)
+    overall_range = (min(all_gains), max(all_gains)) if all_gains else (None, None)
+    return dict(status="ok", baseline=baseline_stat, by_param=by_param,
+               overall_min=overall_range[0], overall_max=overall_range[1])
+
+
 def sub_cliff_non_monotonicity_status(grouped: dict) -> dict:
     """Whether the old data's sub-cliff non-monotonicity (+1.65 at
     K=0.98, +0.95 at K=1.96, +2.37 at K=2.62) is noise or structure,
@@ -474,6 +545,8 @@ def build_paper_numbers(results_root: str = RESULTS_ROOT) -> dict:
         m3_cliff_shift=m3_cliff_shift(grouped) if (m1_present and m2_present) else
             [dict(budget=b, status="no_data") for b in BUDGETS],
         sub_cliff_non_monotonicity=sub_cliff_non_monotonicity_status(grouped),
+        s1_ablation_summary=s1_ablation_summary(grouped),
+        s2_sensitivity_summary=s2_sensitivity_summary(grouped),
     )
     return out
 

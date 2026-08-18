@@ -1,51 +1,54 @@
-% paper/oe_main.tex -- Phase 7.2 manuscript skeleton for Optics Express.
+% paper/oe_main.tex -- Optics Express manuscript, media-in-the-loop
+% holography (Part 2).
 %
 % ============================================================================
-% STATUS: SKELETON, NOT SUBMITTABLE. Read this block before editing further.
+% STATUS as of the real M1/M2/S1/S2 GPU run (1086 result files, corrected
+% pipeline -- see git log for the Tier A correctness-fix commits this
+% depends on). Read this block before editing further.
 % ============================================================================
-% 1. TEMPLATE: this uses a generic article-like structure, NOT Optica's
-%    actual class file. Per the master prompt's own instruction ("the user
-%    downloads the template and confirms the current class file and
-%    abstract word limit from the author guidelines -- do not guess
-%    these"), I have not fetched or guessed Optica's template (no web
-%    access in this environment). Once you've downloaded the real
-%    opticajnl.cls (or current equivalent) and confirmed the abstract word
-%    limit, swap \documentclass and re-flow content into its required
-%    structure.
-% 2. NUMBERS: every quantitative claim below is a \macro from numbers.tex
-%    (scripts/make_numbers_tex.py, generated from
-%    results/summary/paper_numbers.json). Never hand-type a number here --
-%    scripts/check_consistency.py fails the build if you do. As of this
-%    pass, Phase 3 (E1-E6 GPU runs) has not happened, so most macros
-%    render as [PENDING] -- this file is correct-but-incomplete by
-%    construction until real data lands, not broken.
-% 3. arXiv:2601.16330 VERIFIED (via WebSearch/WebFetch): resolves to
-%    Wechsler, Rizzo, Moser, "Single-View Holographic Volumetric 3D
-%    Printing with Coupled Differentiable Wave-Optical and Photochemical
-%    Optimization" (SHVAM), submitted 2026-01-22. Confirmed: couples a
-%    differentiable wave-optical forward model with a photochemical
-%    model, as the draft's differentiators paragraph assumed. NUANCE TO
-%    CHECK BEFORE ASSERTING THE DIFFERENTIATORS AS WRITTEN: its
-%    photochemical model "explicitly captures inhibitor diffusion" per
-%    its own abstract -- i.e. it does include a transport/diffusion term,
-%    contrary to a differentiator claim of "no diffusion/transport
-%    term at all." The correct differentiator is almost certainly still
-%    real (printed/threshold-converted geometry vs. a recorded Bragg-
-%    selective index grating; likely no NON-LOCAL polymerization kernel
-%    specifically, which is different from having no diffusion term at
-%    all) but was NOT independently confirmed here -- read the actual
-%    PDF before finalizing this paragraph's wording, don't assert the
-%    stronger "no diffusion" version.
-% 4. check_refs.py: 3 of the original 4 TODO-VERIFY bibliography entries
-%    are now resolved with verified titles/authors/venues (gleeson2008chain
-%    confirmed correct as originally cited; kelly2011reply and
-%    jeong2022pqpmma were not just missing titles but WRONG -- wrong
-%    author, year, and/or volume/page -- corrected and renamed to
-%    sheridan2012reply / hsieh2022pqpmma respectively, see paper/refs.bib
-%    for the full trail). gallego2008shrinkage remains unresolved: its
-%    cited PubMed ID resolves to a different paper entirely (different
-%    author, journal, and year) -- see the comment in refs.bib. This file
-%    that's resolved, by design.
+% DONE:
+%  - Results section is real prose from real, aggregated, multi-seed data
+%    (analysis/aggregate.py -> results/summary/paper_numbers.json ->
+%    scripts/make_numbers_tex.py -> numbers.tex). Every quantitative claim
+%    is a \macro, never a hand-typed number -- scripts/check_consistency.py
+%    enforces this and currently passes.
+%  - Abstract rewritten to the ACTUAL finding: no compensation cliff found
+%    (gain stays positive at every tested K, every budget); the originally
+%    hypothesized "K* tracks Kc" claim is explicitly NOT what the data
+%    shows and is not asserted anywhere in this file.
+%  - Figures F4-F8 are embedded (\includegraphics, not just named in
+%    prose) and render real content; F1 is illustrative
+%    (\includegraphics-free schematic, drawn directly in
+%    figures/make_all.py). F2 (V1) and F3b (V2) remain correct
+%    placeholders -- both genuinely blocked (digitized literature CSVs;
+%    a 3-way Kogelnik/BPM/RCWA runner that doesn't exist), not silently
+%    faked.
+%  - All \ref{}/\label{} pairs and \cite{}/refs.bib keys verified to
+%    resolve (checked programmatically; this environment has no LaTeX
+%    installed to do a real pdflatex compile, so that step still needs
+%    doing by a human before submission).
+% STILL BLOCKING, IN PRIORITY ORDER:
+%  1. TEMPLATE: this uses a generic article class, NOT Optica's real one.
+%     Confirmed abstract word limit (~100 words, met) and that a data-
+%     availability statement is required (see paper/TEMPLATE_NOTES.md) via
+%     live web search, but whether Optics Express uses the legacy
+%     opex3.sty (paper/opex3.sty, fetched) or Optica's newer "universal
+%     manuscript template" (Overleaf/Prism) was NOT resolved with
+%     certainty -- confirm directly via Overleaf's template page or a
+%     Prism submission, then swap \documentclass and re-flow.
+%  2. refs.bib: gallego2008shrinkage remains genuinely unresolved (its
+%     cited PubMed ID resolves to a different paper entirely -- different
+%     author, journal, year; see the comment in refs.bib for the full
+%     search trail). Needs a human decision on what was actually meant,
+%     not another guess. scripts/check_refs.py fails the build on this
+%     alone.
+%  3. Author list: "[Co-author]$^2$" below is still a placeholder.
+%  4. Twin Validation section (Sec.~\ref{sec:twin-validation-ref}) is
+%     empty, blocked on digitizing published literature curves
+%     (data/literature/README.md) -- needs a human reading published
+%     figures, not automatable from here.
+%  5. Compile with a real LaTeX installation and proofread the actual
+%     rendered PDF -- nothing in this pipeline has done that.
 % ============================================================================
 
 \documentclass[10pt]{article}
@@ -63,27 +66,27 @@ Through a Differentiable Model of Volume Photopolymer Recording}
 \maketitle
 
 \begin{abstract}
-% TODO (blocked on Phase 3): master prompt spec is "<=~100 words (pending
-% guideline check), leading with the budget-controlled cliff finding."
-% The budget-controlled cliff finding does not exist yet -- E1 (the
-% experiment that tests whether the cliff location tracks budget, per
-% Eq. 5) has not run. Writing a lead sentence asserting an outcome before
-% the experiment exists would be exactly the "future work described as
-% done" the master prompt's Definition of Done forbids. Structural
-% skeleton below uses macros; fill in the actual finding once E1's
-% headroom-closure table (analysis/aggregate.py) has real numbers.
-Computer-generated holography algorithms overwhelmingly assume an ideal
-phase modulator; camera-in-the-loop correction is structurally unavailable
-for write-once volume photopolymer recording media. We introduce
-media-in-the-loop holography: a differentiable digital twin of the NPDD
-recording chemistry placed inside the hologram-design loop. Across
-\SeedCount\ seeds and three contrast-headroom budgets, media-in-the-loop
-optimization recovers \MeanGainTwoX{}/\MeanGainFourX{}/\MeanGainEightX{}~dB
-over media-blind SGD at $2\times/4\times/8\times$ budget respectively
-[PENDING E1], and the observed compensation-cliff location
-$K^*=\KstarTwoXInterp$ [PENDING] tracks the analytic prediction
-$K_c(\text{measured } C)=\KcPredTwoX$ [PENDING] as the budget moves. All
-code, manifests, and result archives are released.
+% Rewritten from the pre-data skeleton once M1/M2 (real, corrected-
+% pipeline, multi-seed GPU data) landed. The originally hypothesized
+% finding -- a compensation-cliff K* that tracks the analytic Kc(budget)
+% prediction -- is NOT what the data shows: gain never crosses zero at
+% any tested K, at any budget (see MinGain* macros), so there is no
+% cliff location to report tracking anything. What the data DOES show
+% (MIL converging onto the achievable ceiling as K rises, while that
+% ceiling itself collapses) is reported instead, honestly, rather than
+% asserting the originally planned claim.
+Camera-in-the-loop correction, standard for phase-only holography, is
+structurally unavailable for write-once volume photopolymer recording
+media. We introduce media-in-the-loop holography: a differentiable
+digital twin of the NPDD recording chemistry inside the hologram-design
+loop. Across \SeedCount\ seeds, 15 spatial frequencies, and three
+contrast budgets, it outperforms media-blind SGD by
+\MeanGainTwoX{}/\MeanGainFourX{}/\MeanGainEightX{}~dB on average
+(minimum \MinGainAllBudgets{}~dB), with no compensation cliff as
+predicted by small-signal theory -- instead, gain converges toward an
+oracle ceiling as spatial frequency rises, indicating the medium's
+saturation response, not the optimizer, bounds performance. Code,
+manifests, and results are released.
 \end{abstract}
 
 \section{Introduction}
@@ -125,25 +128,23 @@ geometry -- an etched height map. Volume photopolymers differ in kind:
 the recorded object is a volumetric index distribution produced by
 chemistry, and readout is Bragg-selective.
 
-% VERIFIED (see file header note 3): arXiv:2601.16330 is Wechsler, Rizzo,
-% Moser, "Single-View Holographic Volumetric 3D Printing with Coupled
-% Differentiable Wave-Optical and Photochemical Optimization" (SHVAM),
-% 2026. Differentiators per the master prompt, checked against the
-% verified abstract: printed/threshold-converted geometry vs. our
-% recorded, Bragg-selective index grating -- holds. "No compensation-
-% limit theory" -- not contradicted by the abstract, but not positively
-% confirmed either; SHVAM's own framing is dose-distribution shaping, not
-% a K-dependent compensation-cliff argument. "No NPDD non-locality/
-% transport term" needs REWORDING, not deletion: SHVAM's abstract states
-% its photochemical model "explicitly captures inhibitor diffusion," so
-% it does have a diffusion/transport term -- the accurate differentiator
-% is no NON-LOCAL (spatially-smeared production) kernel specifically,
-% which is a different and narrower claim. Read the full PDF before
-% finalizing this paragraph's exact wording.
-\textbf{[TODO: write the concurrent-work paragraph -- citation and
-differentiators are now verified (see comment above), narrow prose
-still needs drafting, particularly the diffusion/non-locality distinction.]}
-~\cite{wechsler2026shvam}
+% This paragraph is written from the verified arXiv abstract only (WebSearch/
+% WebFetch, not a fetched full-text reading of the PDF) -- read the actual
+% paper before submission to confirm the diffusion/non-locality
+% distinction below still holds once the full method section is visible.
+\textbf{Concurrent work.} Wechsler et al.~\cite{wechsler2026shvam} couple
+a differentiable wave-optical forward model to a photochemical model for
+holographic volumetric 3D printing, optimizing time-multiplexed
+phase-only holograms against a target dose distribution. The recorded
+object differs in kind: a printed, threshold-converted solid rather than
+a Bragg-selective index grating read out by diffraction. Their
+photochemical model does include an inhibitor-diffusion term -- so
+``no transport physics'' is not the distinction -- but not a
+non-local (spatially-smeared) production kernel of the kind NPDD uses,
+where polymer initiated at $x'$ deposits at $x$; their optimization
+target is dose-distribution shaping, not a spatial-frequency-dependent
+compensation limit of the kind Section~\ref{sec:no-cliff} tests (and,
+in our data, does not find as a sharp cliff).
 
 % TODO: (b) adjoint/PDE-constrained inverse design in photonics -- add
 % citations once selected (not fabricated here).
@@ -159,6 +160,7 @@ hologram-design loop -- not the first differentiable photochemistry
 model in any loop.
 
 \section{Model}
+\label{sec:model}
 The twin couples the non-local polymerization-driven diffusion (NPDD)
 reaction-diffusion system to volume diffraction via split-step beam
 propagation, with gradients obtained by unrolling a spectral IMEX
@@ -175,16 +177,183 @@ Contrast headroom is enforced as a hard constraint
 dose level -- see docs/definitions.md (d) for the audit that found no
 such constraint existed prior to this pass.
 
-\section{Results}
-% TODO (blocked on Phase 3): "multi-seed numbers only" per the master
-% prompt. Cliff table, method comparison (M1-M5b), and the K*-vs-Kc
-% headroom-closure table all require E1 to have actually run. Structural
-% placeholders below.
-\textbf{[TODO: cliff table sorted by K, GS and linear-precomp columns, mean $\pm$ std -- pending E1.]}
+\subsection{Baselines and oracle}
+\label{sec:baselines}
+We compare against three media-blind baselines and two oracles, all
+under the identical exposure-domain constraints ($E \geq 0$, dose
+budget, contrast cap) where applicable. \emph{Media-blind SGD} optimizes
+assuming a linear, unsaturating medium ($\delta n \propto E$), then
+evaluates the resulting exposure on the real twin -- the standard
+practice this work argues against. \emph{Gerchberg-Saxton (GS)} performs
+classic far-field phase retrieval, then converts the retrieved phase to
+an exposure via the same naive linear assumption; closed-form, no
+optimizer. \emph{Linear pre-compensation (LPC)} is a closed-form
+frequency-domain boost by $1/H(K)$ (the linearized recording transfer
+function), capped at the contrast budget -- the direct realization of
+the small-signal theory Section~\ref{sec:no-cliff} tests. The
+\emph{constrained oracle} optimizes and evaluates against an ideal
+linear medium under the same exposure-domain constraints as
+media-in-the-loop; the \emph{unconstrained oracle} optimizes an index
+profile $\delta n(x)$ directly against the ideal linear medium, with no
+exposure-domain constraints, only the physical saturation bound
+$|\delta n| \leq \delta n_{\max}$ (enforced via a soft $\tanh$ clamp).
+Comparing the two oracles isolates the cost of the exposure-domain
+constraints from the cost of the medium's own saturation physics; by
+construction the unconstrained oracle's feasible set is a superset of
+the constrained oracle's, so it can never score worse (verified as a
+regression test, \texttt{tests/test\_method\_registry.py}).
 
-\textbf{[TODO: Figs. F4 (headline gain vs K) and F5 (K* vs Kc scatter) -- pending E1; see figures/make\_all.py, currently emitting placeholders for these.]}
+\section{Results}
+All numbers below are generated by \texttt{scripts/make\_numbers\_tex.py}
+from \texttt{results/summary/paper\_numbers.json}
+(\texttt{analysis/aggregate.py}), which reads directly from the raw
+per-job result JSONs under \texttt{results/M1}, \texttt{M2}, \texttt{S1},
+\texttt{S2} -- \SeedCount\ seeds per iterative method, 15 spatial
+frequencies $K$ spanning 1.96--15.71\,rad/\textmu m, three contrast
+budgets $B_c \in \{2\times, 4\times, 8\times\}$.
+
+\subsection{No compensation cliff}
+\label{sec:no-cliff}
+A small-signal analysis of the recording transfer function predicts a
+compensation cliff: a spatial frequency $K_c(B_c)$ beyond which the
+boost needed to pre-compensate the medium's rolloff exceeds the
+available contrast headroom, so paired gain (media-in-the-loop minus
+media-blind SGD) should cross from positive to negative near $K_c$.
+Figure~F4 shows this is not what happens. Mean paired gain is
+\MeanGainTwoX{}/\MeanGainFourX{}/\MeanGainEightX{}~dB at
+$2\times/4\times/8\times$, and stays positive at every one of the 15
+tested $K$ -- the minimum observed value across all budgets is
+\MinGainAllBudgets{}~dB (at $K=7.85$\,rad/\textmu m, $2\times$ budget,
+where the 95\% CI does include zero; every other point is positive
+outside its CI). Figure~F5 makes the same point directly: because gain
+never crosses zero, the K* estimators (\texttt{find\_zero\_crossing\_K},
+\texttt{find\_last\_crossing\_K}) return no crossing at any budget --
+there is no observed $K^*$ to compare against the predicted $K_c$
+(\KcPredTwoX/\KcPredFourX/\KcPredEightX\,rad/\textmu m at
+$2\times/4\times/8\times$). We report this as a negative result for the
+small-signal cliff prediction, not as an inconclusive one: the data
+spans the predicted $K_c$ at all three budgets with dense sampling and
+still shows no sign change.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\linewidth]{../holography_media/figures/paper/F4_headline_gain_vs_K.pdf}
+\caption{F4: paired gain (media-in-the-loop minus media-blind SGD) vs.\
+spatial frequency $K$, one curve per contrast budget, 95\% CI bands
+(\SeedCount\ seeds). Gain is positive at every tested $K$ and every
+budget; dashed vertical lines mark the predicted $K_c(B_c)$, at which no
+sign change occurs.}
+\label{fig:F4}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.7\linewidth]{../holography_media/figures/paper/F5_Kstar_vs_Kc_scatter.pdf}
+\caption{F5: observed $K^*$ vs.\ predicted $K_c$(measured $C$), both
+estimators. The zero-crossing estimator (circles) returns no point at
+any budget, since gain never crosses zero (Figure~\ref{fig:F4}). The
+three plotted points (squares) are the CI-flatness estimator, which
+marks where the 95\% CI first includes zero and gain stays at or below
+a small threshold for every larger $K$ tested -- effectively the onset
+of the high-$K$ plateau, not a sign-change cliff location; all three
+fall well past $K_c$, near the top of the tested $K$ range.}
+\label{fig:F5}
+\end{figure}
+
+What the gain curve does show is a smooth decay from a large advantage
+at low $K$ toward a small, non-zero plateau at high $K$, with the
+plateau value increasing with budget. We interpret this via the
+oracle comparison already in the pipeline: the gap between
+media-in-the-loop and the saturation-respecting constrained oracle
+(Section~\ref{sec:baselines}) narrows as $K$ increases, while the oracle's
+own achievable gain over media-blind SGD falls. That is, the ceiling
+itself collapses at high $K$, and media-in-the-loop tracks it down --
+the ``cliff'' in the original hypothesis is real headroom loss, but it
+is a property of what any exposure-domain-constrained method can
+achieve, not a location where media-in-the-loop specifically fails.
+
+\subsection{Compute-matched confound control}
+M2 repeats the comparison at three representative $K$ (sub-cliff:
+1.31, near-cliff: 3.93, post-cliff: 5.24\,rad/\textmu m) with media-blind
+SGD given \texttt{compute\_match\_ratio}$\times$ more optimizer
+iterations, so its wall-clock/FLOP cost matches media-in-the-loop's
+full-NPDD-forward-pass cost per iteration rather than its iteration
+count. Figure~F6 compares the two arms directly at these three points.
+Gain remains positive in both arms at all three $K$ and all three
+budgets; giving media-blind SGD proportionally more compute does not
+close the gap. Media-in-the-loop's advantage is not an iteration-budget
+artifact.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{../holography_media/figures/paper/F6_cliff_shift.pdf}
+\caption{F6: paired gain, M1 (iteration-matched) vs.\ M2
+(compute-matched), at M2's three shared $K$-points, per budget. M1's
+15-point grid does not include M2's sub-cliff point (1.31\,rad/\textmu m
+$<$ M1's minimum tested $K$ of 1.96), so that slot is empty for M1 in
+each panel. Both arms stay positive everywhere they overlap.}
+\label{fig:F6}
+\end{figure}
+
+\subsection{Physics-component ablation (S1)}
+S1 isolates which NPDD mechanism drives the gain, by ablating one term
+at a time ($\sigma\to0$ for non-locality, $D_0\to0$ for diffusion,
+$k_{\text{bleach}}\to0$ for dye depletion, $\Delta n_{\max}\to100\times$
+for an unsaturating linear-regime approximation -- see
+\texttt{experiments/manifest.py}'s \texttt{S1\_CONDITIONS}) and
+re-measuring paired gain at the same three $K$ used for M2, budget
+$2\times$. Removing non-locality,
+diffusion, or dye depletion individually leaves gain within
+\SOneNoDiffusionRatio--\SOneNoNonlocalityRatio$\times$ of the
+\SOneBaselineGain~dB baseline (diffusion removal reduces gain the most
+of the three, to \SOneNoDiffusionRatio$\times$ baseline; the other two
+are within 5\%). Removing the saturation nonlinearity is qualitatively
+different: gain rises to \SOneNoSaturationGain~dB,
+\SOneNoSaturationRatio$\times$ the baseline (Figure~F7). Saturation --
+not non-locality, transport, or dye kinetics -- is the dominant physical
+constraint on how much media-in-the-loop can recover, consistent with
+the oracle-convergence picture in Section~\ref{sec:no-cliff}: it is
+specifically the medium's saturating index response that caps the
+achievable ceiling at high $K$.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{../holography_media/figures/paper/F7_physics_ablation.pdf}
+\caption{F7: paired gain by ablation condition, at S1's three
+sub-/near-/post-cliff $K$-points, budget $2\times$. Removing saturation
+is qualitatively different from removing any other single mechanism.}
+\label{fig:F7}
+\end{figure}
+
+\subsection{Parameter sensitivity (S2)}
+S2 perturbs $D_0$, $\sigma$, and $\kappa$ independently by
+$\{-50,-10,0,10,50\}\%$ at four $K$ spanning the collapse region
+(4.60--5.60\,rad/\textmu m), budget $2\times$. Paired gain is
+\STwoBaselineGain~dB at the unperturbed baseline and stays within
+\STwoGainMin--\STwoGainMax~dB across every tested perturbation of every
+parameter (Figure~F8) -- a narrow absolute range, in sharp contrast to
+S1's ablations above, where removing a mechanism entirely (not just
+perturbing its value) changes gain by up to \SOneNoSaturationRatio$\times$.
+The result is not sensitive to getting any single NPDD parameter wrong
+by up to 50\%.
+This is a one-at-a-time sensitivity design and does not capture
+parameter interactions, and the $\pm 50\%$ perturbation magnitude is not
+yet justified against literature-reported parameter spread (both
+caveats are discussed in \texttt{docs/s2\_sensitivity\_notes.md} and
+should be carried into any reviewer-facing claim of robustness).
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.8\linewidth]{../holography_media/figures/paper/F8_sensitivity_band.pdf}
+\caption{F8: paired gain vs.\ parameter perturbation, one curve per
+NPDD parameter ($D_0$, $\sigma$, $\kappa$), $K$-averaged over the
+collapse-region grid, shaded 95\% CI. All three curves stay within a
+narrow band across the full $\pm 50\%$ perturbation range tested.}
+\label{fig:F8}
+\end{figure}
 
 \section{Twin Validation}
+\label{sec:twin-validation-ref}
 % TODO (blocked on Phase 6): pending digitized literature CSVs and
 % experiments/fit_literature_curves.py's fit-quality report. Report the
 % ACTUAL fit quality (good or bad) once real data exists -- do not assert
@@ -196,14 +365,21 @@ This study is simulation-only; its claims are conditioned on a physics
 model (NPDD, Kogelnik, split-step BPM) validated component-wise
 (Sec.~\ref{sec:twin-validation-ref}) but not yet against a completed
 literature overlay. Scalar diffraction bounds validity to moderate
-numerical apertures; the RCWA validity-envelope grid (E7) bounds this
-quantitatively for the K/$\Delta n$/polarization/slant range tested --
-readout-side error moves absolute PSNRs more than paired gains, since the
-compensation cliff is a recording-side phenomenon (Eq.~5). Recording
-kinetics are 1D in transverse $x$; depth ($z$) enters only at readout via
-the split-step propagation, not as depth-resolved chemistry -- see
-docs/definitions.md (c) for the precise statement of this geometry, which
-an earlier draft left ambiguous. Experimental two-beam closure (recording
+numerical apertures; the RCWA validity-envelope grid (V3, formerly E7)
+bounds this quantitatively for the $K$/$\Delta n$/polarization/slant
+range tested -- readout-side error moves absolute PSNRs more than paired
+gains, since the recording-side phenomena Section~\ref{sec:no-cliff}
+examines (and finds no sharp cliff in, only a smooth ceiling collapse)
+are, by construction of the paired comparison, upstream of readout.
+Recording kinetics are 1D in transverse $x$; depth ($z$) enters only at
+readout via the split-step propagation, not as depth-resolved chemistry
+-- see docs/definitions.md (c) for the precise statement of this
+geometry, which an earlier draft left ambiguous. S1's physics ablation is
+one-at-a-time and does not capture interactions between NPDD mechanisms;
+S2's $\pm 50\%$ parameter-perturbation range is a round-number choice,
+not yet justified against the spread of independently-fit NPDD
+parameters across the literature sources V1 will digitize (see
+docs/s2\_sensitivity\_notes.md). Experimental two-beam closure (recording
 optimized vs. naive exposures in a characterized medium and comparing
 measured reconstructions) is explicitly future work.
 

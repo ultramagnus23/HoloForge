@@ -71,11 +71,67 @@ def build_macros(paper_numbers: dict) -> str:
         curve = row.get("gain_curve", [])
         mean_gain = statistics.fmean(g for _, g, _, _ in curve) if curve else None
         lines.append(macro(f"MeanGain{label}", fmt(mean_gain)))
+        min_gain = min((g for _, g, _, _ in curve), default=None)
+        lines.append(macro(f"MinGain{label}", fmt(min_gain)))
 
-    # seed count: consistent across all logged M1 rows, or PENDING if absent/inconsistent
+    # Worst-case (minimum) gain across ALL budgets/K -- supports the "gain
+    # never goes negative anywhere" claim with one concrete number, since
+    # the per-budget MinGain{label} macros above already cover each budget
+    # individually.
+    if closure:
+        eightx = next((r for r in closure if r.get("budget") == 8.0), None)
+        if eightx and eightx.get("gain_curve"):
+            curve = eightx["gain_curve"]
+            lines.append(macro("MinGainAllBudgets",
+                               fmt(min(g for r in closure if r.get("gain_curve")
+                                      for _, g, _, _ in r["gain_curve"]))))
+
+    # S1: physics-component ablation. Ratio of each ablation's K-averaged
+    # gain to the baseline condition's -- >1 means removing that term
+    # INCREASED gain (the term was suppressing MIL's advantage over BSGD
+    # in the intact model), ~1 means the term isn't doing much for this
+    # comparison.
+    s1 = paper_numbers.get("s1_ablation_summary", {})
+    if s1.get("status") == "ok":
+        by_cond = s1.get("by_condition", {})
+        ratios = s1.get("ratio_to_baseline", {})
+        lines.append(macro("SOneBaselineGain", fmt(by_cond.get("baseline", {}).get("mean"))))
+        lines.append(macro("SOneNoSaturationGain",
+                           fmt(by_cond.get("no_saturation_approx", {}).get("mean"))))
+        lines.append(macro("SOneNoSaturationRatio", fmt(ratios.get("no_saturation_approx"), ".1f")))
+        lines.append(macro("SOneNoDiffusionRatio", fmt(ratios.get("no_diffusion"), ".2f")))
+        lines.append(macro("SOneNoNonlocalityRatio", fmt(ratios.get("no_nonlocality"), ".2f")))
+        lines.append(macro("SOneNoDyeDepletionRatio", fmt(ratios.get("no_dye_depletion"), ".2f")))
+    else:
+        for name in ("SOneBaselineGain", "SOneNoSaturationGain", "SOneNoSaturationRatio",
+                    "SOneNoDiffusionRatio", "SOneNoNonlocalityRatio", "SOneNoDyeDepletionRatio"):
+            lines.append(macro(name, None))
+
+    # S2: NPDD parameter sensitivity. Overall min/max K-averaged gain
+    # across all tested +/-50% D0/sigma/kappa perturbations, vs. the
+    # unperturbed baseline -- supports "the result is not sensitive to
+    # getting these parameters individually wrong."
+    s2 = paper_numbers.get("s2_sensitivity_summary", {})
+    if s2.get("status") == "ok":
+        lines.append(macro("STwoBaselineGain", fmt(s2.get("baseline", {}).get("mean"))))
+        lines.append(macro("STwoGainMin", fmt(s2.get("overall_min"))))
+        lines.append(macro("STwoGainMax", fmt(s2.get("overall_max"))))
+    else:
+        for name in ("STwoBaselineGain", "STwoGainMin", "STwoGainMax"):
+            lines.append(macro(name, None))
+
+    # Seed count: consistent across all logged M1 ITERATIVE-method rows (the
+    # methods MeanGain/gain-curve claims are actually about), or PENDING if
+    # absent/inconsistent. GS/LPC are closed-form and deliberately run at a
+    # single seed (no optimizer trajectory to vary) -- excluding them from
+    # this check is honest, not a fudge: including them would report a
+    # spurious inconsistency for something that isn't a data gap, it's a
+    # documented design choice (see manifest.py's build_M1_jobs).
     per_config = paper_numbers.get("per_config", {})
+    ITERATIVE_METHODS = {"BSGD", "MIL", "ORC", "ORU"}
     m1_seed_counts = {v["n_seeds"] for k, methods in per_config.items()
-                      if k.startswith("M1/") for v in methods.values()}
+                      if k.startswith("M1/")
+                      for m, v in methods.items() if m in ITERATIVE_METHODS}
     if len(m1_seed_counts) == 1:
         lines.append(macro("SeedCount", str(next(iter(m1_seed_counts)))))
     else:
