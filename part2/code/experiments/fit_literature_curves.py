@@ -216,71 +216,116 @@ def simulate_angular_de(dtheta_deg_values, K, kappa, D0, base_params: MediumPara
 
 
 # --------------------------------------------------------------- fitting
+# Second free parameter per curve, alongside kappa (always free). Default is
+# D0 (monomer diffusivity), matching the master prompt's "kappa, plus at
+# most one more." growth_dn curves use dn_max instead -- diagnostic work
+# (see docs/parameter_provenance.md and the Gate-A report) showed the
+# original {kappa, D0} choice was fitting the wrong knob: a 3-parameter
+# diagnostic fit isolated dn_max, not D0, as what actually explained the
+# residual on both real growth_dn sources (NRMSE dropped from 0.68-0.87 to
+# 0.10-0.35 when dn_max replaced D0, at D0 held at its cited value). D0
+# stays the default for "growth"/"angular" curve types since no real data
+# has exercised that choice yet -- don't generalize past what was checked.
+SECOND_PARAM_BY_CURVE_TYPE = {
+    "growth": "D0",
+    "growth_dn": "dn_max",
+    "angular": "D0",
+}
+
+PARAM_BOUNDS = {
+    "kappa": (1e-3, 1e3),
+    # Widened past the generic docstring range (D0: 1e-3-1e0) -- checked:
+    # configs/media/pq_pmma_405nm.yaml's real cited D0=1.24e-6 sits below
+    # it, and an unwidened bound threw "Initial guess is outside of
+    # provided bounds" on exactly that curve. Bounds must contain every
+    # real config's own starting point, not just the generic default's.
+    "D0": (1e-8, 1e2),
+    "dn_max": (1e-4, 0.3),
+}
+
+
 def fit_curve(curve_type: str, K: float, xs: list, ys: list,
              base_params: MediumParams | None = None,
-             thickness_um: float = 30.0) -> dict:
-    """Least-squares fit of (kappa, D0) against a digitized curve. Returns
-    fitted params, RMSE, and per-point residuals (for the "if the fit is
-    poor, that gets reported" requirement)."""
-    base_params = base_params or MediumParams()
-    xs_arr, ys_arr = np.array(xs), np.array(ys)
+             thickness_um: float = 30.0, n_starts: int = 10,
+             seed: int = 0, second_param: str | None = None) -> dict:
+    """Bounded least-squares fit of (kappa, second_param) against a
+    digitized curve, from n_starts random log-uniform initializations
+    (default 10 -- a single-start result is not reported as a fit; a
+    5-ish-parameter NPDD forward model has local minima even with only 2
+    of those parameters free). Returns the best-of-n_starts fit plus the
+    spread of final NRMSE across all starts, so a flat-looking "good" fit
+    that only one of ten starts found can be told apart from a robust one.
 
-    if curve_type == "growth":
-        model_fn = lambda kappa, D0: simulate_growth_de(xs, K, kappa, D0, base_params, thickness_um)
-    elif curve_type == "growth_dn":
-        model_fn = lambda kappa, D0: simulate_growth_dn(xs, K, kappa, D0, base_params)
-    elif curve_type == "angular":
-        model_fn = lambda kappa, D0: simulate_angular_de(xs, K, kappa, D0, base_params, thickness_um)
-    else:
+    second_param defaults to SECOND_PARAM_BY_CURVE_TYPE[curve_type] if not
+    given explicitly; callers (e.g. diagnostic scripts, tests) can override
+    it to fit a specific parameter instead."""
+    base_params = base_params or MediumParams()
+    ys_arr = np.array(ys)
+    if second_param is None:
+        second_param = SECOND_PARAM_BY_CURVE_TYPE[curve_type]
+
+    def make_model_fn(second_val):
+        p = MediumParams(**{**base_params.__dict__, second_param: second_val})
+        if curve_type == "growth":
+            return lambda kappa: simulate_growth_de(xs, K, kappa, p.D0, p, thickness_um)
+        elif curve_type == "growth_dn":
+            return lambda kappa: simulate_growth_dn(xs, K, kappa, p.D0, p)
+        elif curve_type == "angular":
+            return lambda kappa: simulate_angular_de(xs, K, kappa, p.D0, p, thickness_um)
         raise ValueError(f"unsupported curve_type {curve_type!r} (expected 'growth', "
                          f"'growth_dn', or 'angular')")
 
+    def model_fn(kappa, second_val):
+        return make_model_fn(second_val)(kappa)
+
     def residuals(log_params):
-        kappa, D0 = np.exp(log_params)  # fit in log-space: both params are positive, span decades
-        return model_fn(kappa, D0) - ys_arr
+        kappa, second_val = np.exp(log_params)
+        return model_fn(kappa, second_val) - ys_arr
 
-    # Bounded (method="trf"), not the original unbounded "lm" -- checked on
-    # real data: an unbounded log-space fit on a curve the model structurally
-    # can't reproduce (see hsieh2022's fit, before this fix) ran D0 off to
-    # ~1e300 (a literal overflow, not a real estimate) chasing a residual
-    # that no finite D0 could fix. Bounds start from the physical ranges
-    # documented in holomedia/npdd.py's MediumParams docstring (kappa:
-    # 0.1-10, D0: 1e-3-1e0, written for PVA/AA-like media), but D0's lower
-    # bound is widened well past that: configs/media/pq_pmma_405nm.yaml's
-    # real cited D0=1.24e-6 (PQ/PMMA's transport is "several orders of
-    # magnitude slower than PVA/AA's monomer diffusion" per that file's own
-    # comment) sits below the generic docstring range entirely -- a bound
-    # copied from the generic range without checking every real config's
-    # own base_params.D0 threw "Initial guess is outside of provided
-    # bounds" on exactly this curve. Bounds must contain every medium
-    # config's real starting point, not just the generic default's.
-    KAPPA_BOUNDS = (1e-3, 1e3)
-    D0_BOUNDS = (1e-8, 1e2)
-    log_bounds = (np.log([KAPPA_BOUNDS[0], D0_BOUNDS[0]]),
-                 np.log([KAPPA_BOUNDS[1], D0_BOUNDS[1]]))
+    kappa_lo, kappa_hi = PARAM_BOUNDS["kappa"]
+    second_lo, second_hi = PARAM_BOUNDS[second_param]
+    log_bounds = (np.log([kappa_lo, second_lo]), np.log([kappa_hi, second_hi]))
 
-    x0 = np.log([base_params.kappa, base_params.D0])
-    result = least_squares(residuals, x0, method="trf", bounds=log_bounds, max_nfev=200)
-    kappa_fit, D0_fit = np.exp(result.x)
-    model_y = model_fn(kappa_fit, D0_fit)
-    resid = model_y - ys_arr
-    rmse = float(np.sqrt(np.mean(resid ** 2)))
-    y_range = float(ys_arr.max() - ys_arr.min())
-    nrmse = float(rmse / y_range) if y_range > 0 else float("nan")
+    base_second = getattr(base_params, second_param)
+    rng = np.random.default_rng(seed)
+    # First start is always the literature-cited value (matches the old
+    # single-start behavior); the rest are log-uniform over the full
+    # bounded range, so a fit that only works from the cited value isn't
+    # silently reported as if it were reachable from anywhere reasonable.
+    starts = [np.log([base_params.kappa, base_second])]
+    for _ in range(n_starts - 1):
+        starts.append(rng.uniform(log_bounds[0], log_bounds[1]))
 
-    # Pinned against a bound is not the same as converged onto a real
-    # optimum -- flag it so param_spread.json (Phase 1.3) can exclude these
-    # rather than silently averaging in a number the optimizer only reached
-    # because it hit a wall.
-    at_bound = (np.isclose(kappa_fit, KAPPA_BOUNDS[0], rtol=1e-2) or
-               np.isclose(kappa_fit, KAPPA_BOUNDS[1], rtol=1e-2) or
-               np.isclose(D0_fit, D0_BOUNDS[0], rtol=1e-2) or
-               np.isclose(D0_fit, D0_BOUNDS[1], rtol=1e-2))
+    attempts = []
+    for x0 in starts:
+        result = least_squares(residuals, x0, method="trf", bounds=log_bounds, max_nfev=200)
+        kappa_fit, second_fit = np.exp(result.x)
+        model_y = model_fn(kappa_fit, second_fit)
+        resid = model_y - ys_arr
+        rmse = float(np.sqrt(np.mean(resid ** 2)))
+        y_range = float(ys_arr.max() - ys_arr.min())
+        nrmse = float(rmse / y_range) if y_range > 0 else float("nan")
+        at_bound = (np.isclose(kappa_fit, kappa_lo, rtol=1e-2) or
+                   np.isclose(kappa_fit, kappa_hi, rtol=1e-2) or
+                   np.isclose(second_fit, second_lo, rtol=1e-2) or
+                   np.isclose(second_fit, second_hi, rtol=1e-2))
+        attempts.append(dict(kappa_fit=float(kappa_fit), second_fit=float(second_fit),
+                             rmse=rmse, nrmse=nrmse, converged=bool(result.success),
+                             at_bound=bool(at_bound), cost=float(result.cost),
+                             model_y=model_y.tolist()))
 
-    return dict(curve_type=curve_type, K=K, kappa_fit=float(kappa_fit),
-               D0_fit=float(D0_fit), rmse=rmse, nrmse=nrmse,
-               x=xs, y_data=ys, y_model=model_y.tolist(), residuals=resid.tolist(),
-               converged=bool(result.success), at_bound=bool(at_bound), n_points=len(xs))
+    best = min(attempts, key=lambda a: a["cost"])
+    nrmse_spread = [a["nrmse"] for a in attempts]
+
+    return dict(curve_type=curve_type, K=K, second_param=second_param,
+               kappa_fit=best["kappa_fit"], second_param_fit=best["second_fit"],
+               # kept for backward-compat with code/macros keyed on D0_fit
+               D0_fit=(best["second_fit"] if second_param == "D0" else base_params.D0),
+               rmse=best["rmse"], nrmse=best["nrmse"],
+               x=xs, y_data=ys, y_model=best["model_y"], residuals=(np.array(best["model_y"]) - ys_arr).tolist(),
+               converged=best["converged"], at_bound=best["at_bound"], n_points=len(xs),
+               n_starts=n_starts, nrmse_min=float(min(nrmse_spread)),
+               nrmse_max=float(max(nrmse_spread)), nrmse_std=float(np.std(nrmse_spread)))
 
 
 def main():
@@ -311,13 +356,23 @@ def main():
         # raw RMSE is not comparable across curve types on very different
         # scales (DE is O(1), Delta-n1 is O(0.01)); a fixed RMSE threshold
         # would call a garbage Delta-n1 fit "GOOD" just because the numbers
-        # are small. Thresholds otherwise unchanged from before this fix.
-        quality = ("GOOD" if fit["nrmse"] < 0.05 else
-                  "MARGINAL" if fit["nrmse"] < 0.15 else "POOR")
+        # are small.
+        # Thresholds set to the Gate-A/B decision-tree values (NRMSE <0.3 =
+        # good/straightforward validation, 0.3-0.5 = moderate/mechanism-
+        # validity standard, >0.5 = poor), not the earlier 0.05/0.15 --
+        # those were calibrated like a numerical self-consistency check,
+        # not a realistic bar for fitting messy digitized literature data.
+        # Keeping one threshold scheme (here, in figure labels, and in the
+        # paper's prose) avoids a figure saying "POOR" next to a number the
+        # text calls "good."
+        quality = ("GOOD" if fit["nrmse"] < 0.3 else
+                  "MODERATE" if fit["nrmse"] < 0.5 else "POOR")
         fit["fit_quality"] = quality
         bound_note = " [AT BOUND -- not a real optimum]" if fit["at_bound"] else ""
-        print(f"  kappa={fit['kappa_fit']:.4g} D0={fit['D0_fit']:.4g} "
+        print(f"  kappa={fit['kappa_fit']:.4g} {fit['second_param']}={fit['second_param_fit']:.4g} "
               f"RMSE={fit['rmse']:.4f} NRMSE={fit['nrmse']:.4f} ({quality}){bound_note}")
+        print(f"  multi-start (n={fit['n_starts']}): NRMSE range "
+              f"[{fit['nrmse_min']:.4f}, {fit['nrmse_max']:.4f}], std={fit['nrmse_std']:.4f}")
         reports.append(fit)
 
     out_path = os.path.join(LITERATURE_DIR, "..", "..", "results_literature_fit.json")

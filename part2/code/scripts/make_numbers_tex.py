@@ -220,9 +220,42 @@ def build_validation_macros() -> str:
         lines.append(macro("NRMSEBestFit", fmt(best["nrmse"], ".2f")))
         n_good = sum(1 for f in fits if f["fit_quality"] == "GOOD")
         lines.append(macro("NGoodFits", str(n_good)))
+
+        # In-regime-only (K within this paper's own tested M1/S1/S2 grid,
+        # 1.96-15.71 rad/um) worst/best -- the Gate-A/A.5 finding that
+        # K=24.94 (Hsieh) sits outside that range and must not count as
+        # in-regime model-structure evidence. Threshold matches the
+        # K_GRID bounds already used elsewhere (see Results section).
+        in_regime = [f for f in fits if 1.96 <= f["K"] <= 15.71]
+        if in_regime:
+            worst_ir = max(in_regime, key=lambda f: f["nrmse"])
+            best_ir = min(in_regime, key=lambda f: f["nrmse"])
+            lines.append(macro("NRMSEWorstInRegime", fmt(worst_ir["nrmse"], ".2f")))
+            lines.append(macro("NRMSEBestInRegime", fmt(best_ir["nrmse"], ".2f")))
+            lines.append(macro("NInRegimeSources", str(len(in_regime))))
+        else:
+            lines.append(macro("NRMSEWorstInRegime", None))
+            lines.append(macro("NRMSEBestInRegime", None))
+            lines.append(macro("NInRegimeSources", "0"))
+
+        # dn_max disagreement between the two Bayfol series (same paper,
+        # same K, two exposure intensities) -- named directly in Section 6
+        # rather than smoothed over. Only computed when both exist.
+        bayfol = [f for f in fits if "bruder2017" in f.get("file", "")
+                 and f.get("second_param") == "dn_max"]
+        if len(bayfol) == 2:
+            vals = sorted(f["second_param_fit"] for f in bayfol)
+            ratio = vals[1] / vals[0] if vals[0] > 0 else None
+            lines.append(macro("BayfolDnMaxRatio", fmt(ratio, ".1f") if ratio else None))
+        else:
+            lines.append(macro("BayfolDnMaxRatio", None))
     else:
         lines.append(macro("NRMSEWorstFit", None))
         lines.append(macro("NRMSEBestFit", None))
+        lines.append(macro("NRMSEWorstInRegime", None))
+        lines.append(macro("NRMSEBestInRegime", None))
+        lines.append(macro("NInRegimeSources", "0"))
+        lines.append(macro("BayfolDnMaxRatio", None))
         lines.append(macro("NGoodFits", None))
 
     return "".join(lines)

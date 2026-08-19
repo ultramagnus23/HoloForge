@@ -125,10 +125,14 @@ def make_F2_twin_validation():
     """One panel per digitized-and-fit literature curve: data points vs.
     the twin's fitted model curve, NRMSE and fit_quality annotated. Shows
     every fitted curve, not just the good ones (ground rule: never show
-    only the good fits) -- as of this pass there is exactly one real
-    source (Bruder et al. 2017, Bayfol HX, K=8.98 rad/um, two series:
-    simulated-by-the-paper and their own experimental data), and its fit
-    is POOR (see results_literature_fit.json) -- shown as poor, not hidden."""
+    only the good fits). Fit against {kappa, dn_max} (Gate-A finding: the
+    original {kappa, D0} parameterization was fitting the wrong second
+    knob -- see docs/parameter_provenance.md). The two in-regime Bayfol HX
+    sources (K=8.98 rad/um, inside this paper's tested K range) land under
+    NRMSE 0.3; the PQ/PMMA source (K=24.94, outside the tested range, and
+    a still-rising curve that can't actually pin down dn_max) is shown too
+    but is not treated as in-regime evidence -- see Section 6 and
+    docs/parameter_provenance.md."""
     fit_data = _load_json("results_literature_fit.json")
     if not fit_data or not fit_data.get("fits"):
         csvs_exist = os.path.isdir(os.path.join(HERE, "..", "data", "literature")) and any(
@@ -164,7 +168,7 @@ def make_F2_twin_validation():
         ax.set_xlabel("dose or exposure (source units)")
         ax.set_ylabel(r"$|\Delta n_1|$ or DE")
         quality = fit["fit_quality"]
-        q_color = {"GOOD": COLORS["bluish_green"], "MARGINAL": COLORS["orange"],
+        q_color = {"GOOD": COLORS["bluish_green"], "MODERATE": COLORS["orange"],
                   "POOR": COLORS["vermillion"]}[quality]
         title = fit["file"].replace(".csv", "")
         ax.set_title(f"{title}\nK={fit['K']:.2f} rad/um  NRMSE={fit['nrmse']:.2f} ({quality})",

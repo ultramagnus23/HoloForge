@@ -9,7 +9,25 @@ D0: 0.025        # um^2/s, from D_ex = 2.5e-10 cm^2/s (Bruder et al. 2017)
 sigma: 0.0092    # um, from sigma^2 = 85 nm^2 (Bruder et al. 2017)
 kappa: 2.0       # calibration target, not a literature value -- see Table 1 caveat
 gamma: 1.0
-dn_max: 6.0e-3   # um, transmission low-f to reflection max range (4.5e-3 to 9e-3)
+dn_max: 6.0e-3   # RESOLVED as MIS-SCOPED, 2026-08-19 (Phase A.1 citation
+                 # audit, see docs/parameter_provenance.md): the "4.5e-3 to
+                 # 9e-3" range this value sat inside was sourced from
+                 # Bruder et al. 2017's Table 3, which the paper's own text
+                 # states is from a SEPARATE dye/borate-screening
+                 # experiment (Section 4.4) -- confirmed verbatim: "Table
+                 # 3's modulation values come from separate dye-screening
+                 # holographic experiments... not from the Figure 3
+                 # dosage-response curves." Twin Validation (paper Sec. 6)
+                 # fits against Figure 3 (Lambda=700nm, SF=1429 l/mm,
+                 # reflection-type dosage-response), a DIFFERENT condition,
+                 # whose own digitized peak reaches ~0.016 -- no
+                 # independently-stated dn_max exists in the text for that
+                 # specific condition (the peak IS the data). Fitting
+                 # against Figure 3 therefore treats dn_max as free
+                 # (fit_literature_curves.py's growth_dn default second
+                 # parameter, kappa held/fit separately) rather than fixing
+                 # it at this Table-3-sourced value, which does not apply
+                 # to the condition being validated against.
 k_bleach: 0.2
 alpha_D: 1.0
 shrinkage: 0.025 # "below 3%, depending on composition" (Bruder et al. 2017)
