@@ -168,13 +168,24 @@ target is dose-distribution shaping, not a spatial-frequency-dependent
 compensation limit of the kind Section~\ref{sec:no-cliff} tests (and,
 in our data, does not find as a sharp cliff).
 
-% TODO: (b) adjoint/PDE-constrained inverse design in photonics -- add
-% citations once selected (not fabricated here).
-% TODO: (c) proximity-effect correction in e-beam lithography as the
-% conceptual cousin of the compensation cliff -- add citation.
-% TODO: (d) NPDD primary sources Sheridan & Lawrence 2000, Zhao &
-% Mouroulis 1994 -- exact records to be verified by the user (per the
-% master prompt's own instruction), not fabricated here.
+\textbf{Adjoint/PDE-constrained inverse design.} More broadly, treating a
+physical forward model as a differentiable layer inside a design loop is
+established practice in nanophotonic inverse
+design~\cite{hughes2018adjoint}, where adjoint methods compute the
+gradient of a design objective with respect to many structural degrees of
+freedom from two forward simulations. Media-in-the-loop holography is
+this same paradigm applied to a recording chemistry's own governing PDE
+rather than a static structure's electromagnetic response.
+
+\textbf{Correction-limited by physics, elsewhere.} The compensation-cliff
+hypothesis this paper tests -- that a linear pre-correction fails once the
+correction it demands exceeds a physical budget -- has a conceptual
+cousin in proximity-effect correction for electron-beam
+lithography~\cite{li2015proximity}, where dose or shape correction for
+electron scattering is itself bounded by the resist's own response and
+by adjacent-feature interactions; the correction problem is well studied
+there even though the physical mechanism (electron scattering vs.\
+photopolymer index saturation) is unrelated.
 
 Our novelty claim is scoped precisely: the first differentiable
 \emph{recording} model for volume holographic media placed inside a
@@ -184,7 +195,9 @@ model in any loop.
 \section{Model}
 \label{sec:model}
 The twin couples the non-local polymerization-driven diffusion (NPDD)
-reaction-diffusion system to volume diffraction via split-step beam
+reaction-diffusion system~\cite{sheridan2000nonlocal}, itself built on the
+earlier local photopolymerization-driven-diffusion
+model~\cite{zhao1994diffusion}, to volume diffraction via split-step beam
 propagation, with gradients obtained by unrolling a spectral IMEX
 integrator. One modeling note: the non-local term is
 $F\cdot(G_\sigma * u)$, not $G_\sigma * (F\cdot u)$ -- the kernel must
@@ -196,8 +209,10 @@ Given target intensity $I_t$, we optimize the nonnegative, dose-budgeted
 exposure $E(x)$ delivered to the medium, with the twin inside the loss.
 Contrast headroom is enforced as a hard constraint
 (\url{holomedia.optimize.contrast_project}), not merely
-a nominal dose level -- see docs/definitions.md (d) for the audit that
-found no such constraint existed prior to this pass.
+a nominal dose level: every optimized exposure is projected back onto the
+feasible contrast set at every iteration, so the reported gains reflect a
+solution that satisfies the budget throughout optimization, not only at
+convergence.
 
 \subsection{Baselines and oracle}
 \label{sec:baselines}
@@ -317,6 +332,58 @@ each panel. Both arms stay positive everywhere they overlap.}
 \label{fig:F6}
 \end{figure}
 
+\subsection{Baseline completeness}
+\label{sec:baseline-completeness}
+Section~\ref{sec:baselines} defines media-blind GS and linear
+pre-compensation (LPC) alongside SGD, but the results above compare only
+against media-blind SGD. Figure~F4b closes that gap: paired gain of GS
+and LPC over media-blind SGD, alongside media-in-the-loop, at budget
+$2\times$. Both GS and LPC are frequently \emph{worse} than plain
+media-blind SGD (negative paired gain) and swing erratically across $K$
+-- GS ranges from \GSGainMin{} to \GSGainMax{}\,dB, LPC from
+\LPCGainMin{} to \LPCGainMax{}\,dB, with no consistent trend.
+Media-in-the-loop, by contrast, stays non-negative at every tested $K$ in
+this comparison (minimum \MILGainMinAtTwoX{}\,dB), with its largest
+advantage at low $K$ where GS and LPC are at their worst. LPC is the
+direct closed-form realization of the small-signal compensation theory
+Section~\ref{sec:no-cliff} tests; that it does not reliably beat even a
+media-blind optimizer is itself evidence for the paper's thesis, not just
+a missing baseline filled in -- linear pre-compensation is not a
+sufficient substitute for optimizing through the medium's actual
+nonlinear response.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.8\linewidth]{../code/figures/paper/F4b_baseline_comparison.pdf}
+\caption{F4b: paired gain over media-blind SGD for GS, LPC, and
+media-in-the-loop, budget $2\times$. GS and LPC use a single
+deterministic run each (closed-form, no optimizer -- Section~\ref{sec:baselines}),
+compared against BSGD's seed-averaged PSNR at each $K$, so no CI band is
+plotted for those two curves.}
+\label{fig:F4b}
+\end{figure}
+
+\subsection{Is the compute worth it}
+\label{sec:cost-benefit}
+Media-in-the-loop's per-iteration cost is \ComputeMatchRatio$\times$
+media-blind SGD's (Section~\ref{sec:no-cliff}'s M2 compute-matched
+control; a full NPDD forward pass per iteration against one linear
+multiply), and its mean advantage at the lowest budget is only
+\MeanGainTwoX~dB. Whether that trade is worth making depends on what a
+failed exposure costs. In computer-generated holography for a rewritable
+spatial light modulator, a failed exposure costs one more display frame
+-- compute is the only resource spent, and \ComputeMatchRatio$\times$ the
+compute for \MeanGainTwoX~dB is a hard sell. Write-once photopolymer
+recording is different in kind: every exposure consumes physical medium
+that cannot be reused, and a media-blind exposure that turns out wrong is
+not a wasted frame but a wasted, permanently degraded piece of material.
+The relevant comparison for this setting is therefore compute cost
+against wasted-media cost, not compute against compute -- and unlike
+compute, physical medium does not get cheaper by waiting for faster
+hardware. This reframing is specific to write-once recording; it is not
+an argument for spending \ComputeMatchRatio$\times$ the compute in any
+setting where a failed attempt is free to retry.
+
 \subsection{Physics-component ablation (S1)}
 S1 isolates which NPDD mechanism drives the gain, by ablating one term
 at a time ($\sigma\to0$ for non-locality, $D_0\to0$ for diffusion,
@@ -359,10 +426,14 @@ perturbing its value) changes gain by up to \SOneNoSaturationRatio$\times$.
 The result is not sensitive to getting any single NPDD parameter wrong
 by up to 50\%.
 This is a one-at-a-time sensitivity design and does not capture
-parameter interactions, and the $\pm 50\%$ perturbation magnitude is not
-yet justified against literature-reported parameter spread (both
-caveats are discussed in \url{docs/s2_sensitivity_notes.md} and
-should be carried into any reviewer-facing claim of robustness).
+parameter interactions. The $\pm 50\%$ perturbation magnitude was chosen
+as a round number, not derived from a measured literature spread, and it
+still is not: Section~\ref{sec:twin-validation-ref}'s literature fits
+confirm one medium (Bayfol HX) in-regime, not the multiple independent
+sources a real cross-source parameter spread would need, and attempting
+one from two non-independent series of a single figure would overstate
+precision the data does not support. Both limitations are carried
+forward here explicitly rather than into a separate claim of robustness.
 
 \begin{figure}[htbp]
 \centering
@@ -403,10 +474,7 @@ scoping error, not a modeling one. Refitting with $\Delta n_{\max}$ free
 instead of $D_0$ dropped NRMSE from 0.73--0.87 to
 \NRMSEBestInRegime--\NRMSEWorstInRegime\ on the two in-regime Bayfol series
 (Figure~F2), each the best of 10 random-initialized fits (not a single
-start, which a five-parameter NPDD forward model is not safe to trust
---- see \texttt{docs/parameter\_provenance.md} for the full per-parameter
-citation audit and \texttt{docs/validation\_standard.md} for this
-decision's record).
+start, which a five-parameter NPDD forward model is not safe to trust).
 
 Both in-regime fits clear NRMSE $<0.3$ (Figure~F2): the twin, with a
 corrected saturation ceiling, reproduces Bayfol HX's rise-then-decline
@@ -424,8 +492,7 @@ conclusion for two reasons, not one: $K=24.94$\,rad/\textmu m sits
 1.6$\times$ above this paper's own tested grid, and its digitized curve is
 still rising, not yet saturated, at the full extent of the source's own
 plotted data -- a still-rising curve cannot identify $\Delta n_{\max}$ at
-all, so its low NRMSE reflects an under-constrained fit, not agreement
-(\texttt{docs/parameter\_provenance.md}).
+all, so its low NRMSE reflects an under-constrained fit, not agreement.
 
 \begin{figure}[htbp]
 \centering
@@ -477,15 +544,25 @@ range tested -- readout-side error moves absolute PSNRs more than paired
 gains, since the recording-side phenomena Section~\ref{sec:no-cliff}
 examines (and finds no sharp cliff in, only a smooth ceiling collapse)
 are, by construction of the paired comparison, upstream of readout.
-Recording kinetics are 1D in transverse $x$; depth ($z$) enters only at
-readout via the split-step propagation, not as depth-resolved chemistry
--- see docs/definitions.md (c) for the precise statement of this
-geometry, which an earlier draft left ambiguous. S1's physics ablation is
-one-at-a-time and does not capture interactions between NPDD mechanisms;
-S2's $\pm 50\%$ parameter-perturbation range is a round-number choice,
-not yet justified against the spread of independently-fit NPDD
-parameters across the literature sources V1 will digitize (see
-docs/s2\_sensitivity\_notes.md). Experimental two-beam closure (recording
+Recording kinetics are 1D in transverse $x$: the recorded index
+modulation $\Delta n(x)$ is treated as uniform through the slab depth at
+the recording stage, and the model does not implement depth-resolved
+absorption (e.g.\ Beer--Lambert attenuation of exposure or dye
+concentration with depth); depth ($z$) enters only at readout, via
+extrusion of this single transverse profile through the split-step BPM,
+with a depth-dependent lateral shift (not an amplitude change) from
+shrinkage at slant. At the default medium (shrinkage
+\ShrinkagePct\%, slant $\ShrinkageSlantDeg^\circ$, thickness
+$\ShrinkageThicknessUm$\,\textmu m) that shift reaches
+\ShrinkageShiftNm\,nm at full depth -- \ShrinkageFracLowK\% of a grating
+period at the lowest tested $K$ and \ShrinkageFracHighK\% at the highest,
+applied identically to both arms of every paired comparison. S1's physics
+ablation is one-at-a-time and does not capture interactions between NPDD
+mechanisms; S2's $\pm 50\%$ parameter-perturbation range remains a
+round-number choice, not derivable from a cross-source literature spread
+for the reason given in Section~\ref{sec:no-cliff}--\ref{sec:twin-validation-ref}'s
+S2 discussion (one confirmed in-regime medium, not the multiple
+independent sources that claim needs). Experimental two-beam closure (recording
 optimized vs. naive exposures in a characterized medium and comparing
 measured reconstructions) is explicitly future work.
 

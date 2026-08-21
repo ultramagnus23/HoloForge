@@ -215,11 +215,16 @@ def find_ci_includes_zero_K(K_gain_ci: list[tuple],
     return None
 
 
-def gain_curve(grouped: dict, experiment_id: str, budget: float) -> list[tuple]:
+def gain_curve(grouped: dict, experiment_id: str, budget: float,
+               method: str = "MIL") -> list[tuple]:
     """[(K, mean_gain, ci_lo, ci_hi), ...] sorted by K, for one
-    (experiment_id, budget) -- MIL-BSGD paired gain in PSNR. Works for M1
-    (iteration-matched) or M2 (compute-matched) identically; which arm
-    you're looking at is just which experiment_id you pass."""
+    (experiment_id, budget) -- paired gain of `method` over BSGD, in PSNR.
+    Works for M1 (iteration-matched) or M2 (compute-matched) identically;
+    which arm you're looking at is just which experiment_id you pass.
+    `method` defaults to MIL (the paper's headline curve, F4/F5) but
+    accepts any method present in the manifest (GS, LPC) so the same
+    paired-comparison machinery draws the baselines Section 4.1 defines
+    but Section 5 originally never plotted (D.2 in the work spec)."""
     entries = []
     for (exp_id, config_hash), by_method in grouped.items():
         if exp_id != experiment_id:
@@ -230,12 +235,50 @@ def gain_curve(grouped: dict, experiment_id: str, budget: float) -> list[tuple]:
         cfg = any_rows[0]["config"]
         if cfg.get("contrast_cap") != budget:
             continue
-        mil, bsgd = by_method.get("MIL", []), by_method.get("BSGD", [])
-        pairs = paired_gain(mil, bsgd, key="psnr")
+        rows, bsgd = by_method.get(method, []), by_method.get("BSGD", [])
+        pairs = paired_gain(rows, bsgd, key="psnr")
         gains = [g for _, g in pairs]
         stat = mean_std_median_ci95(gains)
         if stat["mean"] is not None:
             entries.append((cfg["K_nominal"], stat["mean"], stat["ci95_lo"], stat["ci95_hi"]))
+    return sorted(entries, key=lambda e: e[0])
+
+
+def gain_vs_bsgd_seed_mean(grouped: dict, experiment_id: str, budget: float,
+                           method: str) -> list[tuple]:
+    """[(K, gain_vs_bsgd_seed_mean, None, None), ...] for a DETERMINISTIC,
+    single-seed method (GS, LPC -- "closed-form, no optimizer" per Sec.
+    4.1) against BSGD's SEED-AVERAGED psnr, not a single BSGD seed drawn
+    via paired_gain's seed-matching.
+
+    Why this exists instead of reusing gain_curve/paired_gain for GS/LPC:
+    GS and LPC are logged under seed=0 only (one deterministic run), while
+    BSGD has its full seed set (3-5 depending on K). paired_gain matches
+    by seed, so calling it on (GS, BSGD) pairs GS against BSGD's seed=0
+    specifically -- one arbitrary noisy draw, not BSGD's actual seed-mean
+    performance. Checked on real data: this produced a visibly noisy,
+    K-non-monotone GS/LPC curve that was an artifact of which BSGD seed
+    happened to be logged as 0 at each K, not a real effect. No CI is
+    returned (None, None) since there is exactly one GS/LPC value per K --
+    reporting a CI on a single point would fabricate precision that
+    doesn't exist, the same reasoning already applied to MIL/BSGD's CI
+    (which comes from real seed-to-seed spread that GS/LPC don't have)."""
+    entries = []
+    for (exp_id, config_hash), by_method in grouped.items():
+        if exp_id != experiment_id:
+            continue
+        any_rows = next(iter(by_method.values()), None)
+        if not any_rows:
+            continue
+        cfg = any_rows[0]["config"]
+        if cfg.get("contrast_cap") != budget:
+            continue
+        rows, bsgd = by_method.get(method, []), by_method.get("BSGD", [])
+        if not rows or not bsgd:
+            continue
+        method_val = rows[0]["psnr"]  # deterministic: exactly one row expected
+        bsgd_mean = sum(r["psnr"] for r in bsgd) / len(bsgd)
+        entries.append((cfg["K_nominal"], method_val - bsgd_mean, None, None))
     return sorted(entries, key=lambda e: e[0])
 
 

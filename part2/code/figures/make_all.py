@@ -16,12 +16,18 @@ change. Summary:
             panel (b) compute-matched (M2) -- panel layout deferred until
             M1 data exists (see the run-order agreement); still a
             single-panel placeholder-or-M1-only render until then
+  F4b       M1: GS and LPC paired gain over BSGD, alongside MIL, at
+            budget=2x -- the baselines Sec. 4.1 defines but Sec. 5
+            originally never plotted (work-spec item D.2)
   F5        M1: observed K* vs predicted Kc scatter
   F6        M3: cliff-location shift (M2-M1) per budget, per-seed band
   F7        S1: physics-component ablation
   F8        S2: cliff-location sensitivity band under NPDD parameter error
   F9a-c     supplementary, real data already committed (gradient-pathway
             ablation, GPU mesh convergence, GPU wavelength detuning)
+  R1        reconstruction figure (work-spec item D.1): target vs.
+            media-blind SGD vs. media-in-the-loop 1D profile overlays
+            plus error, at M2's three shared K points, budget=2x
 
 Old F2/F3 (exposure/reconstruction panels) and F8e (shrinkage-prelim,
 seed-bug-era data) are retired, not renumbered -- see the figure-remapping
@@ -55,7 +61,8 @@ from style import (new_fig, savefig, no_data_placeholder, COLORS,
 from analysis.aggregate import (load_all_results as _load_all_results_raw,
                                 group_by_config,
                                 headroom_closure, gain_curve, BUDGETS,
-                                mean_std_median_ci95, paired_gain)
+                                mean_std_median_ci95, paired_gain,
+                                gain_vs_bsgd_seed_mean)
 import run_manifest as rm
 
 HERE = os.path.dirname(__file__)
@@ -271,6 +278,49 @@ def _render_F4(closure):
     ax.set_xlabel("K (rad/um)"); ax.set_ylabel("paired gain MIL-BSGD (dB)")
     ax.legend(frameon=False)
     savefig(fig, os.path.join(OUT_DIR, "F4_headline_gain_vs_K.pdf"))
+
+
+# --------------------------------------------------------------------- F4b
+def make_F4b_baseline_comparison():
+    """GS and LPC vs. BSGD, alongside MIL vs. BSGD, at budget=2x -- Sec.
+    4.1 defines all three non-oracle methods but the original Results
+    section only ever plotted MIL. MIL uses gain_curve (proper per-seed
+    paired comparison, real CI). GS/LPC use gain_vs_bsgd_seed_mean instead
+    of gain_curve -- checked: GS/LPC are logged at seed=0 only
+    (deterministic, "closed-form, no optimizer" per Sec. 4.1), and
+    gain_curve's seed-matched pairing would compare them against BSGD's
+    single seed=0 draw rather than BSGD's seed-mean, which produced a
+    visibly noisy, non-physical curve on the real data before this fix."""
+    grouped = group_by_config(load_all_results())
+    budget = 2.0
+    curves = {"MIL": gain_curve(grouped, "M1", budget, method="MIL")}
+    for m in ("GS", "LPC"):
+        curves[m] = gain_vs_bsgd_seed_mean(grouped, "M1", budget, method=m)
+    if all(len(c) == 0 for c in curves.values()):
+        no_data_placeholder(
+            os.path.join(OUT_DIR, "F4b_baseline_comparison.pdf"),
+            "F4b (M1): GS/LPC/MIL paired gain over BSGD, budget=2x",
+            "needs M1 manifest results for GS/LPC/MIL at budget=2x.")
+        return False
+
+    fig, ax = new_fig(width="single")
+    for method in ("GS", "LPC", "MIL"):
+        curve = curves[method]
+        if not curve:
+            continue
+        Ks = [c[0] for c in curve]
+        means = [c[1] for c in curve]
+        los = [c[2] for c in curve]
+        his = [c[3] for c in curve]
+        ax.plot(Ks, means, marker=METHOD_MARKERS[method], ls="-",
+                color=METHOD_COLORS[method], ms=2.5, label=METHOD_LABELS[method])
+        if all(lo is not None for lo in los):
+            ax.fill_between(Ks, los, his, color=METHOD_COLORS[method], alpha=0.15, linewidth=0)
+    ax.axhline(0, color=COLORS["black"], lw=0.5)
+    ax.set_xlabel("K (rad/um)"); ax.set_ylabel("paired gain over media-blind SGD (dB), budget=2x")
+    ax.legend(frameon=False, fontsize=6)
+    savefig(fig, os.path.join(OUT_DIR, "F4b_baseline_comparison.pdf"))
+    return True
 
 
 def make_F5_Kstar_vs_Kc_scatter():
@@ -545,13 +595,65 @@ def make_F9c_wavelength_detuning():
     return True
 
 
+# --------------------------------------------------------------------- R1
+def make_R1_reconstructions():
+    """Target vs. media-blind SGD vs. media-in-the-loop, 1D profile
+    overlays (this paper's recording kinetics are 1D in transverse x --
+    said plainly in the caption, not presented as a 2D image), plus an
+    error profile, at M2's three shared K points, budget=2x. Data from
+    experiments/make_r1_reconstructions.py (results_r1_reconstructions.json)."""
+    d = _load_json("results_r1_reconstructions.json")
+    if d is None or not d.get("results"):
+        no_data_placeholder(
+            os.path.join(OUT_DIR, "R1_reconstructions.pdf"),
+            "R1: target / media-blind SGD / media-in-the-loop 1D profiles + error",
+            "needs results_r1_reconstructions.json -- run "
+            "experiments/make_r1_reconstructions.py")
+        return False
+
+    results = d["results"]
+    n = len(results)
+    fig, axes = new_fig(width="double", height_in=2.4 * n, ncols=2, nrows=n, squeeze=False)
+
+    for row, r in enumerate(results):
+        target = np.array(r["target"])
+        recon_bsgd = np.array(r["recon_bsgd"])
+        recon_mil = np.array(r["recon_mil"])
+        x = np.arange(len(target))
+
+        ax_prof = axes[row][0]
+        ax_prof.plot(x, target, color=COLORS["black"], lw=0.8, label="target")
+        ax_prof.plot(x, recon_bsgd, color=METHOD_COLORS["BSGD"], lw=0.8,
+                    label=f"BSGD ({r['psnr_bsgd']:.1f} dB)")
+        ax_prof.plot(x, recon_mil, color=METHOD_COLORS["MIL"], lw=0.8,
+                    label=f"MIL ({r['psnr_mil']:.1f} dB)")
+        ax_prof.set_ylabel("intensity (a.u.)")
+        ax_prof.set_title(f"K={r['K']:.2f} rad/um, budget={r['budget']:.0f}x", fontsize=6.5)
+        ax_prof.legend(frameon=False, fontsize=5.5, loc="upper right")
+
+        ax_err = axes[row][1]
+        ax_err.plot(x, recon_bsgd - target, color=METHOD_COLORS["BSGD"], lw=0.7, label="BSGD error")
+        ax_err.plot(x, recon_mil - target, color=METHOD_COLORS["MIL"], lw=0.7, label="MIL error")
+        ax_err.axhline(0, color=COLORS["black"], lw=0.4)
+        ax_err.set_ylabel("recon - target")
+        ax_err.legend(frameon=False, fontsize=5.5, loc="upper right")
+
+        if row == n - 1:
+            ax_prof.set_xlabel("x (pixels)")
+            ax_err.set_xlabel("x (pixels)")
+
+    savefig(fig, os.path.join(OUT_DIR, "R1_reconstructions.pdf"))
+    return True
+
+
 ALL_FIGURES = [
     make_F1_pipeline_schematic,
     make_F2_twin_validation,
     make_F3a_rcwa_validity_envelope, make_F3b_regime_map,
-    make_F4_headline_gain_vs_K, make_F5_Kstar_vs_Kc_scatter,
+    make_F4_headline_gain_vs_K, make_F4b_baseline_comparison, make_F5_Kstar_vs_Kc_scatter,
     make_F6_cliff_shift, make_F7_physics_ablation, make_F8_sensitivity_band,
     make_F9a_gradient_ablation, make_F9b_mesh_convergence, make_F9c_wavelength_detuning,
+    make_R1_reconstructions,
 ]
 
 

@@ -261,6 +261,87 @@ def build_validation_macros() -> str:
     return "".join(lines)
 
 
+def build_shrinkage_bound_macros() -> str:
+    """Macros for the Discussion's shrinkage-induced lateral-shift bound
+    (D.4 in the work spec: 'named in the intro, never quantified' --
+    closed by computing the exact, already-implemented shrinkage/slant
+    shift formula in holomedia/diffraction.py at the default medium's
+    parameters, not by asserting the effect is negligible without
+    checking, and not by inventing a number)."""
+    import math
+    lines = ["\n% --- shrinkage-induced shift bound (Discussion) macros ---\n"]
+    try:
+        from holomedia import MediumParams
+        p = MediumParams()  # DEFAULT_MEDIUM-equivalent: shrinkage, thickness
+        slant_deg = 20.0  # SlabBPM.forward's own default -- see holomedia/diffraction.py
+        tan_phi = math.tan(math.radians(slant_deg))
+        shift_um = p.shrinkage * tan_phi * p.thickness
+        shift_nm = shift_um * 1000.0
+        K_LO, K_HI = 1.96, 15.71  # this paper's own tested K grid (Results section)
+        # fraction of a grating period = shift / period; period = 2*pi/K, so
+        # LOW K -> long period -> SMALL fraction, HIGH K -> short period ->
+        # LARGE fraction. (Named frac_lo/frac_hi by which K they're AT, not
+        # by which is numerically larger -- checked this isn't swapped.)
+        frac_lo = shift_um / (2 * math.pi / K_LO) * 100.0
+        frac_hi = shift_um / (2 * math.pi / K_HI) * 100.0
+        lines.append(macro("ShrinkagePct", fmt(p.shrinkage * 100, ".1f")))
+        lines.append(macro("ShrinkageSlantDeg", fmt(slant_deg, ".0f")))
+        lines.append(macro("ShrinkageThicknessUm", fmt(p.thickness, ".0f")))
+        lines.append(macro("ShrinkageShiftNm", fmt(shift_nm, ".1f")))
+        lines.append(macro("ShrinkageFracLowK", fmt(frac_lo, ".1f")))
+        lines.append(macro("ShrinkageFracHighK", fmt(frac_hi, ".1f")))
+    except Exception as e:
+        print(f"[make_numbers_tex] WARNING: shrinkage-bound macros failed ({e}); "
+              f"emitting PENDING.")
+        for name in ("ShrinkagePct", "ShrinkageSlantDeg", "ShrinkageThicknessUm",
+                    "ShrinkageShiftNm", "ShrinkageFracLowK", "ShrinkageFracHighK"):
+            lines.append(macro(name, None))
+    return "".join(lines)
+
+
+def build_cost_benefit_macros() -> str:
+    """ComputeMatchRatio for the D.3 cost-benefit paragraph -- pulled
+    directly from experiments/manifest.py's own constant, not retyped."""
+    lines = ["\n% --- cost-benefit (Sec. 5.1) macros ---\n"]
+    try:
+        from manifest import COMPUTE_MATCH_RATIO
+        lines.append(macro("ComputeMatchRatio", fmt(COMPUTE_MATCH_RATIO, ".1f")))
+    except Exception as e:
+        print(f"[make_numbers_tex] WARNING: cost-benefit macros failed ({e}); emitting PENDING.")
+        lines.append(macro("ComputeMatchRatio", None))
+    return "".join(lines)
+
+
+def build_baseline_completeness_macros() -> str:
+    """Macros for Sec. 5.2 (Baseline completeness, F4b): min/max paired
+    gain of GS and LPC over media-blind SGD at budget=2x, and MIL's own
+    min at the same budget for the contrast. Computed directly via
+    analysis.aggregate (not read from a pre-baked paper_numbers.json
+    field, unlike build_macros above) -- still fully regenerated from the
+    raw per-job result JSONs each run, just one aggregation hop shorter;
+    ground rule 1 (no hand-typed numbers in the manuscript) still holds,
+    this is the "goes into a script" the rule requires."""
+    lines = ["\n% --- baseline completeness (Sec. 5.2 / F4b) macros ---\n"]
+    try:
+        from analysis.aggregate import (load_all_results, group_by_config,
+                                        gain_curve, gain_vs_bsgd_seed_mean)
+        grouped = group_by_config(load_all_results())
+        for method, macro_prefix in (("GS", "GSGain"), ("LPC", "LPCGain")):
+            curve = gain_vs_bsgd_seed_mean(grouped, "M1", 2.0, method=method)
+            vals = [v[1] for v in curve]
+            lines.append(macro(f"{macro_prefix}Min", fmt(min(vals), ".2f") if vals else None))
+            lines.append(macro(f"{macro_prefix}Max", fmt(max(vals), ".2f") if vals else None))
+        mil_curve = gain_curve(grouped, "M1", 2.0, method="MIL")
+        mil_vals = [v[1] for v in mil_curve]
+        lines.append(macro("MILGainMinAtTwoX", fmt(min(mil_vals), ".2f") if mil_vals else None))
+    except Exception as e:
+        print(f"[make_numbers_tex] WARNING: baseline-completeness macros failed ({e}); "
+              f"emitting PENDING for all of them.")
+        for name in ("GSGainMin", "GSGainMax", "LPCGainMin", "LPCGainMax", "MILGainMinAtTwoX"):
+            lines.append(macro(name, None))
+    return "".join(lines)
+
+
 def main():
     paper_numbers = {}
     if os.path.exists(PAPER_NUMBERS_PATH):
@@ -270,7 +351,9 @@ def main():
         print(f"[make_numbers_tex] WARNING: {PAPER_NUMBERS_PATH} not found "
               f"-- run analysis/aggregate.py first. Emitting all-PENDING macros.")
 
-    tex = build_macros(paper_numbers) + build_supplement_macros() + build_validation_macros()
+    tex = (build_macros(paper_numbers) + build_supplement_macros()
+          + build_validation_macros() + build_baseline_completeness_macros()
+          + build_shrinkage_bound_macros() + build_cost_benefit_macros())
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     with open(OUT_PATH, "w") as f:
         f.write(tex)
