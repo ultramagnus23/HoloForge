@@ -309,6 +309,26 @@ the ``cliff'' in the original hypothesis is real headroom loss, but it
 is a property of what any exposure-domain-constrained method can
 achieve, not a location where media-in-the-loop specifically fails.
 
+Figure~R1 shows this directly rather than only in aggregate PSNR: target,
+media-blind SGD, and media-in-the-loop reconstructions (1D transverse
+intensity profiles, matching this paper's 1D recording geometry, not 2D
+images) at the same sub-/near-/post-cliff $K$ used by M2, budget
+$2\times$. At low $K$ media-in-the-loop visibly tracks the target's bars
+while media-blind SGD barely modulates around a flat offset; at high $K$
+both reconstructions degrade to comparable fine-fringe error, the same
+ceiling collapse the gain curve shows numerically.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{../code/figures/paper/R1_reconstructions.pdf}
+\caption{R1: target vs.\ media-blind SGD vs.\ media-in-the-loop, 1D
+profile overlays (left) and reconstruction error (right), at the three
+$K$ points M2 shares, budget $2\times$, seed \ROneSeedValue. Illustrative single-seed
+reconstructions, not the statistical claim (Figure~\ref{fig:F4} carries
+that); consistent with it.}
+\label{fig:R1}
+\end{figure}
+
 \subsection{Compute-matched confound control}
 M2 repeats the comparison at three representative $K$ (sub-cliff:
 1.31, near-cliff: 3.93, post-cliff: 5.24\,rad/\textmu m) with media-blind

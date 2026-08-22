@@ -629,14 +629,16 @@ def make_R1_reconstructions():
                     label=f"MIL ({r['psnr_mil']:.1f} dB)")
         ax_prof.set_ylabel("intensity (a.u.)")
         ax_prof.set_title(f"K={r['K']:.2f} rad/um, budget={r['budget']:.0f}x", fontsize=6.5)
-        ax_prof.legend(frameon=False, fontsize=5.5, loc="upper right")
+        ax_prof.legend(frameon=False, fontsize=5.5, loc="upper right", ncol=3,
+                      bbox_to_anchor=(1.0, 1.18))
 
         ax_err = axes[row][1]
         ax_err.plot(x, recon_bsgd - target, color=METHOD_COLORS["BSGD"], lw=0.7, label="BSGD error")
         ax_err.plot(x, recon_mil - target, color=METHOD_COLORS["MIL"], lw=0.7, label="MIL error")
         ax_err.axhline(0, color=COLORS["black"], lw=0.4)
         ax_err.set_ylabel("recon - target")
-        ax_err.legend(frameon=False, fontsize=5.5, loc="upper right")
+        ax_err.legend(frameon=False, fontsize=5.5, loc="upper right", ncol=2,
+                     bbox_to_anchor=(1.0, 1.18))
 
         if row == n - 1:
             ax_prof.set_xlabel("x (pixels)")

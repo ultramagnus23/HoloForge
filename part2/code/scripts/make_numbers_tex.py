@@ -299,6 +299,21 @@ def build_shrinkage_bound_macros() -> str:
     return "".join(lines)
 
 
+def build_r1_macros() -> str:
+    """ROneSeedValue -- pulled from the actual results file's own recorded
+    seed (results_r1_reconstructions.json), not the script constant
+    directly, so a future change to make_r1_reconstructions.py's SEED
+    can't silently drift from what the caption claims."""
+    lines = ["\n% --- R1 reconstruction figure macros ---\n"]
+    d = _load("results_r1_reconstructions.json")
+    if d and d.get("results"):
+        seeds = {r["seed"] for r in d["results"]}
+        lines.append(macro("ROneSeedValue", str(seeds.pop()) if len(seeds) == 1 else None))
+    else:
+        lines.append(macro("ROneSeedValue", None))
+    return "".join(lines)
+
+
 def build_cost_benefit_macros() -> str:
     """ComputeMatchRatio for the D.3 cost-benefit paragraph -- pulled
     directly from experiments/manifest.py's own constant, not retyped."""
@@ -353,7 +368,8 @@ def main():
 
     tex = (build_macros(paper_numbers) + build_supplement_macros()
           + build_validation_macros() + build_baseline_completeness_macros()
-          + build_shrinkage_bound_macros() + build_cost_benefit_macros())
+          + build_shrinkage_bound_macros() + build_cost_benefit_macros()
+          + build_r1_macros())
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     with open(OUT_PATH, "w") as f:
         f.write(tex)
