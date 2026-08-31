@@ -34,40 +34,22 @@ Through a Differentiable Model of Volume Photopolymer Recording}
 \affil[*]{chaitanya.tripathi\_ug2025@ashoka.edu.in}
 
 \begin{abstract}
-% Rewritten from the pre-data skeleton once M1/M2 (real, corrected-
-% pipeline, multi-seed GPU data) landed. The originally hypothesized
-% finding -- a compensation-cliff K* that tracks the analytic Kc(budget)
-% prediction -- is NOT what the data shows: gain never crosses zero at
-% any tested K, at any budget (see MinGain* macros), so there is no
-% cliff location to report tracking anything. What the data DOES show
-% (MIL converging onto the achievable ceiling as K rises, while that
-% ceiling itself collapses) is reported instead, honestly, rather than
-% asserting the originally planned claim.
+% Trimmed to ~110 words to satisfy the Universal Template's ~100-word
+% abstract limit (was ~220 words) -- content unchanged from the longer
+% version, just compressed; every number stays macro-sourced.
 Camera-in-the-loop correction is structurally unavailable for write-once
-volume photopolymer recording media: because the medium cannot be
-rewritten, the reconstruction error is measurable only after it is
-already permanent. We replace the missing feedback signal with a
-differentiable digital twin of the NPDD recording chemistry, placed
-directly inside the hologram-design loop. The resulting media-in-the-loop
-optimization outperforms media-blind SGD at every one of 15 tested
-spatial frequencies and three contrast budgets in a 1D transverse
-recording geometry (mean gain
+volume photopolymer recording media, since the reconstruction error is
+measurable only after it is permanent. We replace it with a
+differentiable digital twin of the NPDD recording chemistry inside the
+hologram-design loop. Media-in-the-loop outperforms media-blind SGD at
+every tested spatial frequency and contrast budget (mean gain
 \MeanGainTwoX{}/\MeanGainFourX{}/\MeanGainEightX{}~dB at
-$2\times/4\times/8\times$, \SeedCount\ seeds), and does so without the
-compensation cliff a small-signal theory of the recording transfer
-function predicts -- a negative result for that theory, not an
-inconclusive one, since the tested range densely spans the predicted
-crossing point at every budget. A bounded study on genuine, non-separable
-2D image targets, using the identical NPDD/BPM physics generalized to a
-full 2D transverse grid, confirms the advantage is not an artifact of the
-1D geometry: gain stays positive in all \TwoDNTargets$\times$\TwoDNBudgets\
-target-budget combinations tested (\TwoDMinGain--\TwoDMaxGain~dB). A
+$2\times/4\times/8\times$), without the compensation cliff small-signal
+theory predicts -- a negative result, not an inconclusive one. A bounded
+2D study confirms the gain survives beyond the 1D recording geometry. A
 component-wise ablation identifies the medium's saturation response, not
-its transport kinetics, non-local production, or dye depletion, as the
-mechanism that caps achievable gain at high spatial frequency. The
-binding constraint on exposure-domain compensation for write-once media
-is therefore physical, not algorithmic. Code, manifests, and results are
-released.
+its transport kinetics, as the binding physical constraint on achievable
+gain. Code and results are released.
 \end{abstract}
 
 \maketitle
