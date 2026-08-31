@@ -648,6 +648,47 @@ def make_R1_reconstructions():
     return True
 
 
+# --------------------------------------------------------------------- R2 (2D)
+def make_R2_2d_reconstructions():
+    """Bounded 2D study (experiments/run_2d.py, experiments/manifest_2d.py):
+    target vs. media-blind SGD vs. media-in-the-loop, actual 2D images, one
+    row per target type, budget=4x, seed=0. Data from
+    experiments/make_2d_reconstructions.py (results_2d_reconstructions.json).
+    The direct answer to "this looks like a grating paper, not a CGH paper"
+    -- unlike R1's 1D profiles, these are real (synthetic) 2D images."""
+    d = _load_json("results_2d_reconstructions.json")
+    if d is None or not d.get("results"):
+        no_data_placeholder(
+            os.path.join(OUT_DIR, "R2_2d_reconstructions.pdf"),
+            "R2: target / media-blind SGD / media-in-the-loop, 2D images",
+            "needs results_2d_reconstructions.json -- run "
+            "experiments/make_2d_reconstructions.py")
+        return False
+
+    by_target = {}
+    for r in d["results"]:
+        by_target.setdefault(r["target_kind"], {})[r["method_id"]] = r
+    order = [k for k in ("disc", "checkerboard", "reschart") if k in by_target]
+    n = len(order)
+
+    fig, axes = new_fig(width="double", height_in=2.0 * n, ncols=3, nrows=n, squeeze=False)
+    for row, kind in enumerate(order):
+        target = np.array(by_target[kind]["BSGD"]["target"])
+        bsgd = np.array(by_target[kind]["BSGD"]["recon"])
+        mil = np.array(by_target[kind]["MIL"]["recon"])
+        vmax = max(target.max(), bsgd.max(), mil.max())
+        for col, (label, img) in enumerate([("target", target), ("BSGD", bsgd), ("MIL", mil)]):
+            ax = axes[row][col]
+            ax.imshow(img, cmap="gray", vmin=0, vmax=vmax)
+            ax.set_xticks([]); ax.set_yticks([])
+            if row == 0:
+                ax.set_title(label, fontsize=7)
+            if col == 0:
+                ax.set_ylabel(kind, fontsize=6.5)
+    savefig(fig, os.path.join(OUT_DIR, "R2_2d_reconstructions.pdf"))
+    return True
+
+
 ALL_FIGURES = [
     make_F1_pipeline_schematic,
     make_F2_twin_validation,
@@ -655,7 +696,7 @@ ALL_FIGURES = [
     make_F4_headline_gain_vs_K, make_F4b_baseline_comparison, make_F5_Kstar_vs_Kc_scatter,
     make_F6_cliff_shift, make_F7_physics_ablation, make_F8_sensitivity_band,
     make_F9a_gradient_ablation, make_F9b_mesh_convergence, make_F9c_wavelength_detuning,
-    make_R1_reconstructions,
+    make_R1_reconstructions, make_R2_2d_reconstructions,
 ]
 
 

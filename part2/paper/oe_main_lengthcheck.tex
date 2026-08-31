@@ -13,26 +13,27 @@
 % target journal is selected at submission time via Prism, not in the
 % LaTeX source.
 
-\documentclass{optica-article}
+% LENGTH-CHECK VARIANT -- uses Optica's dedicated length-check class
+% (opticajnl.cls, 9pt twocolumn twoside) to get an authoritative composed
+% page count for the $300/page-over-10 JOSA A fee, per Optica's own
+% instruction that JOSA A authors should use this template, not the
+% Universal Template, "if a precise length estimate is needed." Content
+% is identical to oe_main.tex; only the preamble/author-block differ.
+\documentclass[9pt,twocolumn,twoside]{opticajnl}
 \journal{opticajournal}
-\articletype{Research Article}
-\input{numbers}  % scripts/make_numbers_tex.py output -- all quantitative macros
+\setboolean{shortarticle}{false}
+\input{numbers}
 
 \begin{document}
 
-\title{Media-in-the-Loop Holography: Computer-Generated Holography\\
+\title{Media-in-the-Loop Holography: Computer-Generated Holography
 Through a Differentiable Model of Volume Photopolymer Recording}
 
-\author{Chaitanya Tripathi\authormark{1,*}}
+\author[1,*]{Chaitanya Tripathi}
+\affil[1]{Ashoka University, Sonipat, India}
+\affil[*]{chaitanya.tripathi\_ug2025@ashoka.edu.in}
 
-\address{\authormark{1}Ashoka University, Sonipat, India}
-
-\email{\authormark{*}chaitanya.tripathi\_ug2025@ashoka.edu.in}
-% address/email copied from the Part 1 paper (paper/Final Paper.pdf) for
-% consistency -- CONFIRM this is still the right contact address before
-% submission, not verified against anything live here.
-
-\begin{abstract*}
+\begin{abstract}
 % Rewritten from the pre-data skeleton once M1/M2 (real, corrected-
 % pipeline, multi-seed GPU data) landed. The originally hypothesized
 % finding -- a compensation-cliff K* that tracks the analytic Kc(budget)
@@ -67,7 +68,9 @@ mechanism that caps achievable gain at high spatial frequency. The
 binding constraint on exposure-domain compensation for write-once media
 is therefore physical, not algorithmic. Code, manifests, and results are
 released.
-\end{abstract*}
+\end{abstract}
+
+\maketitle
 
 \section{Introduction}
 Phase-only CGH computes a modulation pattern whose diffracted field

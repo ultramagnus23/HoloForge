@@ -1,14 +1,12 @@
-%% Renamed 2022/06/16 to opticajnlnt.bst
+%% Renamed 2022/06/16 to opticajnl.bst 
+%% Updated 2018/05/28 remove extra comma before volume 
+%% in @inproceedings.
 %% Updated 2018/04/03 to italicize booktitle for
 %% incollection and inproceedings.
 %% Updated 2017/12/06 to automatically abbreviate journal
 %% titles using the jabbrv package.
-%% This modified .bst file removes the title from the @article class
-%% to produce the abbreviated set of references required for
-%% submissions to Optics Letters. Updated 2015/12/14.
-%% See https://www.osapublishing.org/submit/style/jrnls_style.cfm#refs
-%%
-%% This is file `opticajnlnt.bst',
+%% Updated 2015/12/14.
+%% This is file `opticajnl.bst',
 %% generated with the docstrip utility.
 %%
 %% The original source files were:
@@ -18,7 +16,7 @@
 %% merlin.mbs  (with options: `tail,exlang,seq-no,nm-init,ed-au,yr-par,xmth,tit-qq,bt-qq,jttl-rm,thtit-a,vol-bf,vnum-x,volp-com,num-xser,ser-ed,jnm-x,pub-date,pre-pub,edby,edbyy,blk-com,blknt,english,pp,ed,abr,ednx,ord,jabr,etal-xc,etal-it,nfss,,{}')
 %% ----------------------------------------
 %% *** Optica BibTeX style file ***
-%%
+%% 
 %% Copyright 1994-2005 Patrick W Daly
  % ===============================================================
  % IMPORTANT NOTICE:
@@ -458,7 +456,7 @@ FUNCTION {format.names}
           numnames #4
           > and
             { "others" 't :=
-              #1 'namesleft :=
+              #1 'namesleft := 
             "," *}
             'skip$
            if$
@@ -784,7 +782,6 @@ FUNCTION {format.pages}
     }
   if$
 }
-FUNCTION {first.page} { 't := "" { t empty$ not t #1 #1 substring$ "-" = not and } { t #1 #1 substring$ * t #2 global.max$ substring$ 't := } while$ }
 FUNCTION {format.journal.pages}
 { pages duplicate$ empty$ 'pop$
     { swap$ duplicate$ empty$
@@ -792,7 +789,7 @@ FUNCTION {format.journal.pages}
         {
           ", " *
           swap$
-          first.page
+          n.dashify
           "pages" bibinfo.check
           *
         }
@@ -874,11 +871,13 @@ FUNCTION {format.booktitle}
 %  bt.enquote
   bt.emphasize
 }
+%% Removed extra comma before volume May 28 2018
 FUNCTION {format.in.ed.booktitle}
 { format.booktitle duplicate$ empty$ 'skip$
     {
       format.bvolume duplicate$ empty$ 'pop$
-        { ", " swap$ * * }
+        %{ ", " swap$ * * }
+        { " " swap$ * * }
       if$
       editor "editor" format.names.ed duplicate$ empty$ 'pop$
         {
@@ -1058,6 +1057,7 @@ FUNCTION {format.organization.address}
 { organization "organization" bibinfo.check format.org.or.pub
 }
 
+%% Italicized journal title 28 May 2018
 FUNCTION {format.journal}
 { "{\protect\JournalTitle{" journal * "}}" *
 }
@@ -1065,6 +1065,8 @@ FUNCTION {format.journal}
 FUNCTION {article}
 { output.bibitem
   format.authors "author" output.check
+  format.title "title" output.check
+  end.quote.title
   crossref missing$
     {
 %%      journal
@@ -1192,7 +1194,7 @@ FUNCTION {inproceedings}
           format.publisher.address output
         }
       if$
-      %format.bvolume output
+%      format.bvolume output
       format.number.series output
       format.pages output
     }
@@ -1380,4 +1382,4 @@ FUNCTION {end.bib}
 EXECUTE {end.bib}
 %% End of customized bst file
 %%
-%% End of file `opticajnlnt.bst'.
+%% End of file `opticajnl.bst'.
