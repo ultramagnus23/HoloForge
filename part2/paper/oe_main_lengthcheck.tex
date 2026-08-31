@@ -318,6 +318,32 @@ that); consistent with it.}
 \label{fig:R1}
 \end{figure}
 
+Figure~\ref{fig:R3} shows the mechanism behind R1's outcome: the exposure
+$E(x)$ each method actually commits, and the index profile $\Delta n(x)$
+it produces on the real twin. Media-blind SGD's naive linear assumption
+drives $E(x)$ toward near-binary swings at every tested $K$; at low $K$
+this happens not to conflict with the medium's response, but at high $K$
+it pushes $\Delta n(x)$ to clip against $\Delta n_{\max}$ almost
+everywhere, wasting most of the available contrast budget on an index
+modulation the medium cannot actually deliver. Media-in-the-loop's
+optimized $E(x)$ is visibly less extreme, trading peak exposure for an
+index profile that stays inside the medium's linear-to-saturating
+transition -- the same saturation mechanism S1's ablation
+(Section~\ref{sec:s1-ablation}) identifies as the dominant constraint,
+made visible here as an exposure-domain trade-off rather than only an
+aggregate number.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\linewidth]{../code/figures/paper/R3_exposure_profiles.pdf}
+\caption{R3: exposure $E(x)$ (left) and recorded index profile
+$\Delta n(x)$ (right) for media-blind SGD vs.\ media-in-the-loop, same
+$K$ points and budget as Figure~\ref{fig:R1}, seed \ROneSeedValue.
+Media-blind SGD's exposure saturates $\Delta n(x)$ against
+$\Delta n_{\max}$ at higher $K$; media-in-the-loop's does not.}
+\label{fig:R3}
+\end{figure}
+
 \subsection{Compute-matched confound control}
 M2 repeats the comparison at three representative $K$ (sub-cliff:
 1.31, near-cliff: 3.93, post-cliff: 5.24\,rad/\textmu m) with media-blind

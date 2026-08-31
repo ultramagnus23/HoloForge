@@ -689,6 +689,52 @@ def make_R2_2d_reconstructions():
     return True
 
 
+# --------------------------------------------------------------------- R3
+def make_R3_exposure_profiles():
+    """Phase 3 Tier-1 item 3: the mechanism figure this paper was missing --
+    not just what the reconstructions look like, but what the method
+    actually does. E(x) (optimized exposure) and Delta-n(x) (recorded
+    index profile) for media-blind SGD vs. media-in-the-loop, at the same
+    three K points as R1, budget=2x, seed=0. Data from
+    experiments/make_r1_profiles.py (results_r1_profiles.json)."""
+    d = _load_json("results_r1_profiles.json")
+    if d is None or not d.get("results"):
+        no_data_placeholder(
+            os.path.join(OUT_DIR, "R3_exposure_profiles.pdf"),
+            "R3: exposure E(x) and index profile dn(x), BSGD vs. MIL",
+            "needs results_r1_profiles.json -- run experiments/make_r1_profiles.py")
+        return False
+
+    results = d["results"]
+    n = len(results)
+    fig, axes = new_fig(width="double", height_in=1.9 * n, ncols=2, nrows=n, squeeze=False)
+
+    for row, r in enumerate(results):
+        E_bsgd = np.array(r["E_bsgd"]); E_mil = np.array(r["E_mil"])
+        dn_bsgd = np.array(r["dn_bsgd"]); dn_mil = np.array(r["dn_mil"])
+        x = np.arange(len(E_bsgd))
+
+        ax_E = axes[row][0]
+        ax_E.plot(x, E_bsgd, color=METHOD_COLORS["BSGD"], lw=0.8, label="BSGD")
+        ax_E.plot(x, E_mil, color=METHOD_COLORS["MIL"], lw=0.8, label="MIL")
+        ax_E.set_ylabel("E(x)")
+        ax_E.set_title(f"K={r['K']:.2f} rad/um, budget={r['budget']:.0f}x", fontsize=6.5)
+        ax_E.legend(frameon=False, fontsize=5.5, loc="upper right")
+
+        ax_dn = axes[row][1]
+        ax_dn.plot(x, dn_bsgd, color=METHOD_COLORS["BSGD"], lw=0.8, label="BSGD")
+        ax_dn.plot(x, dn_mil, color=METHOD_COLORS["MIL"], lw=0.8, label="MIL")
+        ax_dn.set_ylabel(r"$\Delta n(x)$")
+        ax_dn.legend(frameon=False, fontsize=5.5, loc="upper right")
+
+        if row == n - 1:
+            ax_E.set_xlabel("x (pixels)")
+            ax_dn.set_xlabel("x (pixels)")
+
+    savefig(fig, os.path.join(OUT_DIR, "R3_exposure_profiles.pdf"))
+    return True
+
+
 ALL_FIGURES = [
     make_F1_pipeline_schematic,
     make_F2_twin_validation,
@@ -696,7 +742,7 @@ ALL_FIGURES = [
     make_F4_headline_gain_vs_K, make_F4b_baseline_comparison, make_F5_Kstar_vs_Kc_scatter,
     make_F6_cliff_shift, make_F7_physics_ablation, make_F8_sensitivity_band,
     make_F9a_gradient_ablation, make_F9b_mesh_convergence, make_F9c_wavelength_detuning,
-    make_R1_reconstructions, make_R2_2d_reconstructions,
+    make_R1_reconstructions, make_R2_2d_reconstructions, make_R3_exposure_profiles,
 ]
 
 
