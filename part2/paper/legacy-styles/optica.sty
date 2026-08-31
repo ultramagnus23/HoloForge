@@ -1,0 +1,29 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{legacy-styles/optica}[2022/10/16 v1.3 Optica Journal color scheme]
+
+% Set journal name for header
+\newcommand*{\journalname}{Optica}
+
+% Set journal article types
+\newcommand*{\journalshorttype}{Letter}
+\newcommand*{\journallongtype}{Research Article}
+
+% Set color for header, authors, table lines
+% For long articles
+\definecolor{color2}{RGB}{59,90,198} % author email, doi
+\definecolor{color2b}{RGB}{16,131,16} % Header, authors, table lines
+
+% Boolean for Optica ONLY: choosing between Letters and Memorandum
+\newboolean{memo}
+
+% Set bibliography style
+\AtBeginDocument{\ifthenelse{\boolean{shortarticle}}
+  {\bibliographystyle{opticajnlnt}
+   \ifthenelse{\boolean{memo}}
+     {\renewcommand*{\journalshorttype}{Memorandum}}
+     {}
+  }
+  {\bibliographystyle{opticajnl}}
+}
+
+\endinput

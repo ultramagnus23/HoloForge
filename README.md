@@ -4,15 +4,15 @@ A simulation framework for a single question: **when you degrade a hologram, doe
 
 HoloForge models the full pipeline of a phase-only holographic display (Angular-Spectrum propagation + Gerchberg-Saxton phase retrieval), then systematically degrades it along the axes a real SLM-based display is constrained by — spatial resolution, phase-quantization bits, colour channels, viewing angle, depth planes, and speckle — and scores each reconstruction with both physical (PSNR, SSIM) and perceptual-proxy (LPIPS-proxy) metrics. The recurring finding: physical and perceptual quality diverge, and that gap is where display engineering budgets should actually be spent.
 
-> **Part 1 preprint published:** *"Systematic Degradation Analysis in Phase-Only Computational Holography: A Simulation Framework"* — [Optica Open](https://preprints.opticaopen.org/articles/preprint/Systematic_Degradation_Analysis_in_Phase-Only_Computational_Holography_A_Simulation_Framework/32874356?file=66233162).
+> **Part 1 preprint published:** *"Systematic Degradation Analysis in Phase-Only Computational Holography: A Simulation Framework"* — [Optica Open](https://preprints.opticaopen.org/articles/preprint/Systematic_Degradation_Analysis_in_Phase-Only_Computational_Holography_A_Simulation_Framework/32874356?file=66233162). Source and code: [`part1/`](part1/).
 >
-> **Part 2 draft in this repo:** *"Media-in-the-Loop Holography: Computer-Generated Holography Through a Differentiable Model of Volume Photopolymer Recording"* — [paper/part2_media_main.tex](paper/part2_media_main.tex), code in [holography_media/](holography_media/). CPU-scale preliminary results; GPU-scale confirmation run scoped in the paper's Limitations section. (RGB + human perceptual study remains a separate, further Part 2 track — targeting arXiv cs.GR / eess.IV.)
+> **Part 2 draft in this repo:** *"Media-in-the-Loop Holography: Computer-Generated Holography Through a Differentiable Model of Volume Photopolymer Recording"* — [`part2/paper/oe_main.tex`](part2/paper/oe_main.tex), code in [`part2/code/`](part2/code/). Real paper-scale, multi-seed GPU results (M1/M2/S1/S2, 1086 result files); no compensation cliff found — media-aware optimization gain stays positive at every tested spatial frequency and dose budget. Formatted for Optica (Optics Express) submission. (A Twin Validation section against digitized literature curves is still pending; see `part2/code/data/literature/README.md`.)
 
 ---
 
 ## What's built
 
-- **Wave-optics core** (`holography_sandbox/core/waveoptics.py`) — Angular-Spectrum Method propagation and an iterative **Gerchberg-Saxton** phase-retrieval solver.
+- **Wave-optics core** (`part1/code/core/waveoptics.py`) — Angular-Spectrum Method propagation and an iterative **Gerchberg-Saxton** phase-retrieval solver.
 - **Degradation suite** (`degradation.py`) — resolution downsampling, phase quantization (8→1 bit), colour reduction, viewing-angle bandwidth limiting, depth-plane reduction, speckle injection.
 - **Metrics** (`metrics.py`) — PSNR, SSIM, and an LPIPS-style perceptual proxy.
 - **Experiment runner** (`run_experiments.py`) — sweeps every knob, emits side-by-side comparison figures and a consolidated `results/metrics_summary.csv`.
@@ -46,7 +46,7 @@ The headline: phase precision and viewing-angle bandwidth are far more forgiving
 ## Quick start
 
 ```bash
-cd holography_sandbox
+cd part1/code
 pip install numpy scipy matplotlib Pillow scikit-image opencv-python
 python run_experiments.py        # full sweep → results/  (~2–5 min at SIZE=256)
 # or:
@@ -56,25 +56,35 @@ jupyter notebook explore.ipynb
 ## Structure
 
 ```
-holography_sandbox/       # Part 1: phase-only CGH degradation study
-├── core/
-│   ├── waveoptics.py    # Angular-Spectrum propagation + Gerchberg-Saxton
-│   ├── degradation.py   # all degradation knobs
-│   ├── metrics.py       # PSNR, SSIM, LPIPS-proxy
-│   └── scenes.py        # synthetic test scenes
-├── run_experiments.py   # full sweep runner → results/
-├── explore.ipynb        # interactive exploration
-└── results/             # generated figures + metrics_summary.csv
+part1/                     # Part 1: phase-only CGH degradation study
+├── code/
+│   ├── core/
+│   │   ├── waveoptics.py    # Angular-Spectrum propagation + Gerchberg-Saxton
+│   │   ├── degradation.py   # all degradation knobs
+│   │   ├── metrics.py       # PSNR, SSIM, LPIPS-proxy
+│   │   └── scenes.py        # synthetic test scenes
+│   ├── run_experiments.py   # full sweep runner → results/
+│   ├── explore.ipynb        # interactive exploration
+│   └── results/              # generated figures + metrics_summary.csv
+└── paper/
+    ├── part1_main.tex       # IEEEtran source, published to Optica Open
+    └── README.md             # build instructions
 
-holography_media/          # Part 2: media-in-the-loop holography
-├── holomedia/            # differentiable NPDD recording twin + optimizer
-├── experiments/          # cliff/sigma/shrinkage sweeps, twin validation
-├── configs/, data/       # medium parameter files, digitized literature curves
-└── results_prelim*.json  # raw results backing paper/part2_media_main.tex
-
-paper/
-├── part1_main.tex
-└── part2_media_main.tex   # media-in-the-loop paper
+part2/                     # Part 2: media-in-the-loop holography
+├── code/
+│   ├── holomedia/         # differentiable NPDD recording twin + optimizer
+│   ├── experiments/       # M1-M3/S1-S2 manifests, twin validation
+│   ├── analysis/          # aggregation → results/summary/paper_numbers.json
+│   ├── figures/           # figure rendering (make_all.py)
+│   ├── configs/, data/    # medium parameter files, digitized literature curves
+│   └── results/           # M1/M2/S1/S2 result JSONs (1086 files)
+└── paper/
+    ├── oe_main.tex         # current manuscript (Optica universal template)
+    ├── oe_supplement.tex
+    ├── refs.bib
+    ├── optica-article.cls, opticajnl.bst, jabbrv*   # vendored template files
+    ├── legacy_template/    # retired OSA-era fallback template, kept for reference
+    └── DRAFT_HISTORY.md    # summary of two retired earlier drafts
 ```
 
 ## Stack

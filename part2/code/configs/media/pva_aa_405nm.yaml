@@ -1,0 +1,49 @@
+# PVA/acrylamide at 405 nm -- see paper Table 1 for sources
+# (Corrected 2026-08-19, parameter-provenance audit: this file still cited
+# two references that were already found wrong and fixed in paper/refs.bib
+# earlier -- this file just hadn't been updated to match. See
+# docs/parameter_provenance.md for the full audit.)
+# D0: Sheridan, Gleeson & Close, "Monomer diffusion rates in photopolymer
+#     material: Part I...: reply," JOSA B 29(2) (2012) -- refs.bib key
+#     sheridan2012reply. (Was cited as "Kelly & Sheridan reply, JOSA B
+#     28(4):658 (2011)" -- wrong on every field: that volume/issue/page is
+#     the ORIGINAL paper being replied to (Close, Gleeson & Sheridan), not
+#     the reply, and no author named Kelly appears on either paper.)
+#     ~1e-10 cm^2/s = 1e-2 um^2/s (low spatial-frequency measurement; used
+#     here as order-of-magnitude anchor)
+# sigma: order 0.01-0.04 um, from CTA chain-length trend (Gleeson, Sabol,
+#     Liu, Close, Kelly & Sheridan, JOSA B 25(3):396 (2008) -- refs.bib
+#     key gleeson2008chain)
+# dn_max: 1.5e-3 to 5e-3 um range (various AA/PVA studies; see Table 1)
+# shrinkage: 1-1.9% -- SOURCE REMOVED, not re-derived. Was cited as
+#     "Gallego et al., Appl. Phys. A, PubMed 21747495" -- that PubMed ID
+#     resolves to a different paper entirely (Moothanchery, Naydenova &
+#     Toal, Optics Express 19(14):13395-13404, 2011), and no matching
+#     Gallego/Applied Physics A/2008 paper was found after two search
+#     passes (see refs.bib's own removal note for gallego2008shrinkage).
+#     This 1-1.9% value is UNSOURCED as of this pass -- treat as a
+#     placeholder consistent with typical AA/PVA shrinkage magnitudes, not
+#     a citable number, until re-derived from a primary source.
+# kappa: NOT a literature constant -- calibrated so the twin's growth-curve onset
+#        dose matches typical reported saturation fluence order-of-magnitude (see Table 1
+#        caveat); not read directly off a paper.
+#
+# NOTE: this file records the literature-anchored values for reference. The
+# MediumParams dataclass DEFAULTS used throughout experiments/ (D0=0.1, sigma=0.08,
+# dn_max=3.5e-3, shrinkage=0.005) are "PVA/AA-like" illustrative points chosen to sit
+# inside the broad prior range (see npdd.py docstring) and to produce the operating
+# regime analyzed in the paper -- they are NOT re-derived from this file, since no
+# code path loads this yaml. D0 here (1e-2) is 10x lower than the sim default (0.1);
+# this is flagged rather than silently changed, since altering D0 would shift the
+# predicted compensation cliff K_c and invalidate the existing cliff-sweep narrative.
+# A literature-exact rerun is future work (see README TODO).
+D0: 0.01
+sigma: 0.03
+kappa: 2.0       # calibration target, not a literature value -- see Table 1 caveat
+gamma: 1.0
+dn_max: 3.5e-3
+k_bleach: 0.2
+alpha_D: 1.0
+shrinkage: 0.015
+thickness: 40.0  # um
+n0: 1.5

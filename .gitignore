@@ -25,7 +25,8 @@ ENV/
 *.lof
 *.lot
 # Keep the source .tex; ignore the compiled PDF (regenerate with pdflatex)
-paper/*.pdf
+part1/paper/*.pdf
+part2/paper/*.pdf
 
 # ─── OS / editor cruft ───────────────────────────────────────────────────────
 .DS_Store
@@ -40,4 +41,4 @@ desktop.ini
 # Figures (.png), metric tables (.csv) and notes (.txt) ARE versioned — they
 # back the paper. The large intermediate .npy arrays are regenerable by
 # run_experiments.py and are not tracked.
-holography_sandbox/results/*.npy
+part1/code/results/*.npy
