@@ -742,6 +742,14 @@ def build_paper_numbers(results_root: str = RESULTS_ROOT) -> dict:
         s2_sensitivity_summary=s2_sensitivity_summary(grouped),
         s3_mismatch_summary=s3_mismatch_summary(grouped),
         sat_surrogate_summary=sat_surrogate_summary(grouped),
+        # M2 carries SAT at the sub-cliff K = 1.31 rad/um, which lies
+        # below M1's grid minimum of 1.96 -- i.e. exactly where
+        # media-in-the-loop's advantage is largest and the cheap
+        # surrogate is most interesting. Reported separately rather than
+        # merged into the M1 summary, because M2's BSGD arm is
+        # compute-matched (~21.7x SAT's iterations) and the two
+        # denominators are therefore not the same quantity.
+        sat_surrogate_summary_m2=sat_surrogate_summary(grouped, "M2"),
     )
     return out
 

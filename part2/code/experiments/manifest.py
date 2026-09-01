@@ -216,6 +216,18 @@ def build_M2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
     cliff (M1 already does that). 3 K's x 3 budgets = 9 cells is a
     complete answer to that confound at ~1/5th the job count. Pass
     K_points=_cliff_K_grid(dx) explicitly for the full grid if you want it.
+
+    SAT is included here for COVERAGE, not for arm-matching, and the
+    distinction matters. The sub-cliff point K = 1.31 rad/um lies BELOW
+    M1's grid minimum of 1.96, so a SAT arm run only on M1 has no
+    sub-cliff data -- precisely where media-in-the-loop's advantage is
+    largest and the surrogate is therefore most interesting. SAT runs at
+    MIL's iteration budget, not BSGD's compute-matched one: it is a
+    cheaper MODEL, not a cheaper budget, so there is nothing to
+    compute-match it to. That means the M2 SAT-vs-BSGD comparison hands
+    BSGD ~21.7x more iterations than SAT gets, which makes it a
+    conservative comparison for the surrogate rather than a flattering
+    one.
     """
     seeds = seeds if seeds is not None else PAPER_SEEDS
     dx = 51.2 / n_x
@@ -236,6 +248,9 @@ def build_M2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
             for seed in seeds:
                 jobs.append(_job("M2", "MIL", seed, mil_config))
                 jobs.append(_job("M2", "BSGD", seed, bsgd_config))
+                # Same config (hence same pairing group) as MIL -- see the
+                # coverage note in this function's docstring.
+                jobs.append(_job("M2", "SAT", seed, mil_config))
     return jobs
 
 

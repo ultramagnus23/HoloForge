@@ -509,15 +509,35 @@ there, so it would lose for reasons of optimizer conditioning rather
 than modeling power -- a straw man, not a baseline.
 
 Calibrated, the surrogate is a real competitor and clearly better than
-the media-blind baselines, but it does not close the gap: it recovers
-\SATFracOfMILTwoX\%, \SATFracOfMILFourX\% and \SATFracOfMILEightX\%
-of media-in-the-loop's mean gain at $2\times/4\times/8\times$
-respectively. Two things follow. The compute argument of
-Section~\ref{sec:cost-benefit} is now evidence-backed rather than
-asserted: roughly half of the achievable gain is available at a small
-fraction of the cost, and a practitioner who cannot afford the full
-twin has a principled cheap option with a known, quantified shortfall.
-And the transport terms carry real information after all, despite
+the media-blind baselines, but it does not close the gap: averaged over
+the headline grid it recovers \SATFracOfMILTwoX\%,
+\SATFracOfMILFourX\% and \SATFracOfMILEightX\% of media-in-the-loop's
+mean gain at $2\times/4\times/8\times$.
+
+That average, however, conceals the result's most useful feature, which
+is that the shortfall is strongly spatial-frequency dependent. Evaluated
+at the three sub-/near-/post-cliff $K$ the compute-matched control
+shares -- the sub-cliff point lies below the headline grid's minimum, so
+only this arm reaches it -- the surrogate recovers
+\SATSubCliffFracMin--\SATSubCliffFracMax\% of media-in-the-loop's gain
+at $K = \SATSubCliffK$\,rad/\textmu m, and that figure is nearly
+independent of budget. By $K = \SATNearCliffK$ it has fallen to about
+\SATNearCliffFrac\%, and at $K = \SATPostCliffK$ it ranges from
+\SATPostCliffFracMin\% to \SATPostCliffFracMax\%, i.e.\ it can fail
+to beat media-blind SGD at all. The reading is physically direct: at low
+spatial frequency the medium's response really is dominated by the
+pointwise saturating nonlinearity, and a model of that nonlinearity
+alone captures most of what there is to capture; at high spatial
+frequency the transport terms are precisely the mechanism that smears
+the recorded fringe, so a model that omits them has nothing to say about
+the regime where the compensation problem is hardest.
+
+Two things follow. The compute argument of
+Section~\ref{sec:cost-benefit} becomes evidence-backed and conditional
+rather than asserted: a practitioner recording coarse features can have
+most of the benefit for a small fraction of the cost, while the full
+recording model earns its keep specifically at fine features. And the
+transport terms carry real information after all, despite
 Section~\ref{sec:s1-ablation} showing each to be individually
 non-critical. Those two findings are not in tension: removing one
 mechanism while the others remain lets them compensate, whereas the

@@ -202,6 +202,59 @@ def build_macros(paper_numbers: dict) -> str:
                      "SATFracOfMILEightX", "SATFitNRMSE", "SATFitAEff"):
             lines.append(macro(name, None))
 
+    # SAT at the sub-cliff K the M1 grid cannot reach (see
+    # sat_surrogate_summary_m2's note in analysis/aggregate.py).
+    satm2 = paper_numbers.get("sat_surrogate_summary_m2", {})
+    if satm2.get("status") == "ok":
+        v = satm2.get("by_budget", {}).get("2.0", {})
+        ok = v.get("status") == "ok"
+        lines.append(macro("SATSubCliffGain",
+                           fmt(v.get("sat_mean_gain")) if ok else None))
+        lines.append(macro("SATSubCliffMILGain",
+                           fmt(v.get("mil_mean_gain")) if ok else None))
+        frac = v.get("fraction_of_mil") if ok else None
+        lines.append(macro("SATSubCliffFracOfMIL",
+                           fmt(100.0 * frac, ".0f") if frac is not None else None))
+        # Per-K structure: the pooled fraction averages away the fact that
+        # the surrogate is strong at low K and weak at high K, which is
+        # the practically useful part of the result.
+        by_K = {}
+        for bud, vv in satm2.get("by_budget", {}).items():
+            if vv.get("status") != "ok":
+                continue
+            for K, f in vv.get("fraction_by_K", {}).items():
+                by_K.setdefault(K, []).append(f)
+        if by_K:
+            Ks = sorted(by_K, key=float)
+            sub, post = Ks[0], Ks[-1]
+            lines.append(macro("SATSubCliffFracMin",
+                               fmt(100.0 * min(by_K[sub]), ".0f")))
+            lines.append(macro("SATSubCliffFracMax",
+                               fmt(100.0 * max(by_K[sub]), ".0f")))
+            lines.append(macro("SATSubCliffK", fmt(float(sub), ".2f")))
+            mid = Ks[len(Ks) // 2]
+            lines.append(macro("SATNearCliffK", fmt(float(mid), ".2f")))
+            lines.append(macro("SATNearCliffFrac",
+                               fmt(100.0 * (sum(by_K[mid]) / len(by_K[mid])), ".0f")))
+            lines.append(macro("SATPostCliffK", fmt(float(post), ".2f")))
+            lines.append(macro("SATPostCliffFracMin",
+                               fmt(100.0 * min(by_K[post]), ".0f")))
+            lines.append(macro("SATPostCliffFracMax",
+                               fmt(100.0 * max(by_K[post]), ".0f")))
+        else:
+            for name in ("SATSubCliffFracMin", "SATSubCliffFracMax",
+                         "SATSubCliffK", "SATNearCliffK", "SATNearCliffFrac",
+                         "SATPostCliffK", "SATPostCliffFracMin",
+                         "SATPostCliffFracMax"):
+                lines.append(macro(name, None))
+    else:
+        for name in ("SATSubCliffGain", "SATSubCliffMILGain",
+                     "SATSubCliffFracOfMIL", "SATSubCliffFracMin",
+                     "SATSubCliffFracMax", "SATSubCliffK", "SATNearCliffK",
+                     "SATNearCliffFrac", "SATPostCliffK",
+                     "SATPostCliffFracMin", "SATPostCliffFracMax"):
+            lines.append(macro(name, None))
+
     # Seed count: consistent across all logged M1 ITERATIVE-method rows (the
     # methods MeanGain/gain-curve claims are actually about), or PENDING if
     # absent/inconsistent. GS/LPC are closed-form and deliberately run at a
