@@ -1,6 +1,20 @@
 # Changelog
 
 ## Unreleased
+- **Analysis pinned to 3 seeds (`ANALYSIS_SEEDS`).** An M1 seed bump
+  (3 -> 8 seeds) was started and stopped at ~16% (146/900 jobs, 8/45
+  configurations). Its results are kept on disk but excluded from the
+  analysis: a partial bump leaves M1 unbalanced, so per-point CIs are not
+  comparable across the grid and no single seed count is true of the
+  study. The filter is explicit and prints what it drops, because a
+  silently narrowed input set is indistinguishable from missing data.
+  This also corrected diffraction-efficiency numbers that the partial bump
+  had contaminated (DENPairs 157 -> 135 = 45 configs x 3 seeds;
+  DEMeanGainTwoX 2.31 -> 1.45). Set ANALYSIS_SEEDS = None after completing
+  the bump for all 45 configurations.
+
+
+## Unreleased
 - **New experiment tier S3 (twin-miscalibration robustness).**
   `experiments/run_s3_mismatch.py` + `build_S3_*` in
   `experiments/manifest.py`. Optimizes the exposure ONCE against the twin

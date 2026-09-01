@@ -76,6 +76,26 @@ saturation-only-surrogate jobs), M2 (54 jobs), S1 (90 jobs), S2 (312
 jobs) and S3 (504 evaluations from 18 designs) have all completed for
 real on GPU -- this is the data behind `oe_main.tex`'s Results section.
 
+### A note on seeds
+
+The analysis uses **3 seeds** per iterative method (`manifest.PAPER_SEEDS`),
+and `analysis/aggregate.py` enforces that with an explicit
+`ANALYSIS_SEEDS = {0, 1, 2}` filter that reports how many files it drops.
+
+`experiments/run_m1_seedbump.py` exists to raise M1 from 3 seeds to 8. It
+was started and then stopped at roughly 16% (146 of 900 jobs, 8 of 45
+configurations). Its output is real and uncorrupted and is kept on disk
+and in version control -- but it is NOT used, because a partial bump makes
+M1 unbalanced: a minority of configurations would carry 8 seeds and the
+rest 3, so per-point confidence intervals would not be comparable across
+the grid and no single seed count would be a true statement about the
+study. Mixing them in also visibly contaminated the diffraction-efficiency
+numbers (`DENPairs` became 157 rather than 45 configs x 3 seeds = 135).
+
+To use 8 seeds, finish the bump for all 45 configurations first (budget
+~52 GPU-hours on a laptop 3050, ~44 of them media-in-the-loop), then set
+`ANALYSIS_SEEDS = None` and re-run steps 2-4.
+
 ## 2. Aggregate statistics
 
 ```bash

@@ -11,6 +11,15 @@ GS and LPC are excluded from the seed bump: they're closed-form, seed-
 independent (manifest.py's build_M1_jobs already only emits seed 0 for
 them), so extra seeds there are meaningless.
 
+STATUS: NOT part of the current analysis. This was started and stopped at
+~16% (146 of 900 jobs, 8 of 45 configurations). Its output is kept on
+disk, but analysis/aggregate.py restricts itself to PAPER_SEEDS via
+ANALYSIS_SEEDS, because a PARTIAL bump is worse than none: it makes M1
+unbalanced, so per-point CIs stop being comparable across the grid and no
+single seed count describes the study. Finish all 45 configurations
+before switching the analysis over -- see REPRODUCE.md's "A note on
+seeds". Budget ~52 GPU-hours on a laptop 3050, ~44 of them MIL.
+
 Usage: python -m experiments.run_m1_seedbump [--max-minutes N]
 """
 from __future__ import annotations

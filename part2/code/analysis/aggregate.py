@@ -52,7 +52,14 @@ REQUIRED_SCHEMA_KEYS = {"experiment_id", "config_hash", "method_id", "seed",
 
 
 # --------------------------------------------------------------- loading
-def load_all_results(results_root: str = RESULTS_ROOT) -> list[dict]:
+# Seeds the analysis is allowed to use. Mirrors manifest.PAPER_SEEDS.
+# None => use every seed found on disk. See this module's seed-filter note
+# on load_all_results for why this is not None today.
+ANALYSIS_SEEDS: set | None = {0, 1, 2}
+
+
+def load_all_results(results_root: str = RESULTS_ROOT,
+                     seeds: set | None = "default") -> list[dict]:
     """Loads every {method_id}_seed{N}.json under results_root, skipping
     (with a warning, not a crash) anything that doesn't match the Phase
     1.2 manifest schema -- results/gpu_reruns/*/results.json predates the
@@ -74,6 +81,22 @@ def load_all_results(results_root: str = RESULTS_ROOT) -> list[dict]:
         print(f"[aggregate] skipped {len(skipped)} non-manifest-schema file(s) "
               f"(e.g. pre-manifest gpu_reruns/ sweeps): {skipped[:3]}"
               f"{'...' if len(skipped) > 3 else ''}")
+
+    # Seed restriction (see this function's docstring note). Reported, not
+    # silent: a quietly narrowed input set looks exactly like missing data
+    # when someone later checks n per cell.
+    allowed = ANALYSIS_SEEDS if seeds == "default" else seeds
+    if allowed is not None:
+        kept = [r for r in out if r["seed"] in allowed]
+        n_dropped = len(out) - len(kept)
+        if n_dropped:
+            dropped_seeds = sorted({r["seed"] for r in out
+                                    if r["seed"] not in allowed})
+            print(f"[aggregate] using only seeds {sorted(allowed)}: dropped "
+                  f"{n_dropped} result file(s) at seed(s) {dropped_seeds} "
+                  f"(incomplete seed bump -- kept on disk, see "
+                  f"ANALYSIS_SEEDS).")
+        out = kept
     return out
 
 
