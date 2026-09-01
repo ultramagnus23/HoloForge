@@ -1,5 +1,54 @@
 # Changelog
 
+## Unreleased
+- **New experiment tier S3 (twin-miscalibration robustness).**
+  `experiments/run_s3_mismatch.py` + `build_S3_*` in
+  `experiments/manifest.py`. Optimizes the exposure ONCE against the twin
+  at nominal parameters, then evaluates that same frozen exposure on
+  perturbed twins with no re-optimization. This is the experiment that
+  can support a robustness claim; S2 cannot, because it re-optimizes both
+  arms on the perturbed medium, keeping the perturbation common to both
+  arms -- the exact condition under which the paper's own
+  paired-comparison argument says a systematic twin error cancels. The
+  manuscript previously stated a robustness claim citing S2; that claim
+  is now stated against S3 and the S2 subsection says explicitly what it
+  does and does not establish.
+  Result: gain survives +/-50% error in D0, sigma, kappa and dn_max; the
+  only failure found is over-estimating dn_max by ~2.7x (+170%), where
+  gain goes negative. dn_max is swept wider than the others because our
+  own literature fits disagree on it by exactly that factor.
+- **New baseline SAT (saturation-only surrogate).**
+  `holomedia.npdd.SaturationOnlyTwin` + `holomedia.optimize.sat_sgd`,
+  registered in `experiments/methods.py` and run on M1's full grid.
+  Answers S1's unanswered follow-up ("if saturation dominates, why the
+  full PDE?") with data: it recovers 28/42/48% of media-in-the-loop's
+  mean gain at 2x/4x/8x, so the transport terms do carry real
+  information despite each being individually non-critical in S1.
+  The surrogate is the EXACT closed-form zero-transport limit of the full
+  twin (regression-tested to 3.4e-5 relative), not an arbitrary sigmoid.
+  Its dose sensitivity is calibrated to the real twin by a one-parameter
+  offline fit before use: the uncalibrated limit is fully saturated at
+  working dose (gradient 3.9e-11 vs the twin's 2.6e-5, six orders down)
+  and an optimizer started there never moves, which would have made the
+  baseline lose on optimizer conditioning rather than modeling power.
+- **FIX (figures, affects a published figure):** `_render_F8` (S2
+  sensitivity band) pooled every K point into one bucket per
+  (param, pct, method) before calling `analysis.aggregate.paired_gain`.
+  That function matches arms by SEED via a dict, so with 3 seeds and N K
+  points it kept only the LAST K's BSGD value per seed and paired every
+  MIL row against it -- comparing MIL at one spatial frequency against
+  BSGD at another. F8's plotted curve consequently did not match
+  `s2_sensitivity_summary`, which pairs correctly inside each config
+  group. Both F8 and the new F10 now pair within K and pool afterwards.
+- **FIX (figures):** the S2/S3 error bands were 95% CIs over pooled
+  (seed, K) gains, so they were dominated by between-K spread -- a real
+  effect being averaged over, not uncertainty about the mean -- and read
+  as enormous seed uncertainty (0.2-3.4 dB around a 1.8 dB mean on S3).
+  Now computed per seed after K-averaging, which is what the axis labels
+  already claimed. Means are unchanged on a balanced grid; only the
+  intervals move.
+
+
 ## v0.4
 - First GPU results for this project (Colab T4; prior passes had no GPU
   access). Two solver-characterization sweeps, single seed each — NOT the

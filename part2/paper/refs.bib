@@ -171,11 +171,23 @@
 % Concurrent work, verified via WebSearch/WebFetch against arxiv.org --
 % see oe_main.tex's file header note 3 for the differentiator check
 % against this paper's actual abstract.
+% Updated from the arXiv preprint to the published version of record.
+% Bibliographic fields verified against Crossref's record for
+% doi:10.1145/3811332 (ACM ToG 45(4), SIGGRAPH 2026), not transcribed
+% from a search snippet. The arXiv id is retained in a note because the
+% Related Work discussion cites specifics of their method section, which
+% was read from the open preprint (arxiv.org/html/2601.16330).
 @article{wechsler2026shvam,
-  author  = {Wechsler, Felix and Rizzo, Riccardo and Moser, Christophe},
-  title   = {Single-View Holographic Volumetric {3D} Printing with Coupled Differentiable Wave-Optical and Photochemical Optimization},
-  journal = {arXiv preprint arXiv:2601.16330},
-  year    = {2026},
+  author    = {Wechsler, Felix and Rizzo, Riccardo and Moser, Christophe},
+  title     = {Single-View Holographic Volumetric {3D} Printing with Coupled Differentiable Wave-Optical and Photochemical Optimization},
+  journal   = {ACM Trans. Graph.},
+  volume    = {45},
+  number    = {4},
+  pages     = {1--16},
+  year      = {2026},
+  publisher = {Association for Computing Machinery},
+  doi       = {10.1145/3811332},
+  note      = {Preprint: arXiv:2601.16330},
 }
 
 % Added 2026-08-22, closing the three Related Work TODOs (b/c/d) that
@@ -227,4 +239,24 @@
   title   = {A Review of Proximity Effect Correction in Electron-beam Lithography},
   journal = {arXiv preprint arXiv:1509.05169},
   year    = {2015},
+}
+
+% Verified via the publisher's full text (Wiley, doi 10.1002/polb.24011):
+% establishes the spatial-frequency-dependent departure from a linear
+% index response in diffusive holographic photopolymers (reaction/
+% in-diffusion coupling at low K; monomer depletion producing harmonic
+% "rabbit-ear" features under strong exposure). Cited for that premise
+% ONLY -- checked explicitly, and the paper says nothing about
+% pre-compensation, pre-distortion or exposure shaping, so it is not
+% cited as a source for the compensation-limit hypothesis this work
+% derives and tests.
+@article{kowalski2016design,
+  author  = {Kowalski, Benjamin A. and McLeod, Robert R.},
+  title   = {Design concepts for diffusive holographic photopolymers},
+  journal = {J. Polym. Sci. B Polym. Phys.},
+  volume  = {54},
+  number  = {11},
+  pages   = {1021--1035},
+  year    = {2016},
+  doi     = {10.1002/polb.24011}
 }

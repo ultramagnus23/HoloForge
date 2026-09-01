@@ -224,3 +224,158 @@ class NPDDRecorder(torch.nn.Module):
         H = self.small_signal_mtf(K, I_mean)
         mask = (1.0 / H) > budget
         return float(K[mask][0]) if mask.any() else float("inf")
+
+
+class SaturationOnlyTwin(NPDDRecorder):
+    """Cheap pointwise saturation-only surrogate for the NPDD twin.
+
+    WHY THIS EXISTS. S1's mechanism ablation shows that removing
+    saturation changes MIL's gain by ~7.5x, while removing non-locality,
+    diffusion or dye depletion each changes it by <=28%. The obvious
+    follow-up -- "then why pay for the full PDE at all?" -- is answered
+    with data by optimizing against THIS model and evaluating the
+    resulting exposure on the real twin (holomedia.optimize.sat_sgd,
+    method code SAT), not with prose.
+
+    THE MODEL. Delete every transport term from the NPDD system:
+    sigma -> 0 (G = identity), D0 -> 0 (no diffusion), k_bleach -> 0
+    (d == 1). What survives is a purely local ODE pair
+
+        du/dt = -F u,   dN/dt = +F u,   F = kappa * I(x)**gamma
+
+    whose solution needs no time stepping at all:
+
+        N(x)  = 1 - exp(-a * I(x)**gamma)
+        dn(x) = dn_max * tanh(1.5 * N(x))
+
+    i.e. ONE monotone saturating map from exposure to index in a handful
+    of elementwise ops -- no n_steps IMEX unroll, no FFTs, and an
+    O(1)-memory backward pass instead of an unrolled adjoint.
+
+    THE SENSITIVITY `a`, AND WHY IT MUST BE CALIBRATED. Setting
+    a = kappa * t_total makes this map the EXACT zero-transport limit of
+    the full recorder (verified to 3.5e-5 relative in
+    tests/test_method_registry.py::
+    test_saturation_only_twin_matches_npdd_in_zero_transport_limit), and
+    that is this class's default. But at the paper's default medium that
+    exact limit is USELESS as a design model: a = kappa * t_total = 20,
+    so at the nominal dose (mean E = 1) the pointwise reaction has
+    already run to completion everywhere, N = 1 - e^-20, and the map is
+    flat. Measured at the optimizer's uniform initialization, d(dn)/dE is
+    3.9e-11 against the full twin's 2.6e-5 -- six orders down. An
+    optimizer started there never leaves it (measured: 800 iterations
+    move realized contrast from 1.00 to 1.04, and the loss not at all).
+
+    That is a real property of the zero-transport limit and is worth
+    stating once -- what keeps the real medium responsive at working dose
+    is precisely the transport this model deletes. But a baseline that
+    lost for that reason would be a straw man: it would be failing from
+    optimization conditioning, not from lack of modeling power, and would
+    answer a question nobody asked. So the SAT baseline calibrates `a`
+    first (see fit_saturation_only), which is what anyone actually
+    shipping a cheap saturating model would do, and is the same
+    fit-once-offline / amortize-forever protocol the neural surrogate in
+    holomedia/surrogate.py already uses. On the default medium the fit
+    returns a ~ 5.3 at NRMSE ~ 0.06 against the full twin: a genuinely
+    good pointwise fit, and a fair opponent.
+
+    WHY NOT LITERALLY dn = dn_max * tanh(kappa * E). Because the form
+    above is not a guess: it is what the full model BECOMES in the
+    zero-transport limit, so SAT-vs-MIL is a clean ablation of the
+    transport terms rather than a comparison against an arbitrarily
+    chosen sigmoid. Same cost class, same single free parameter; this one
+    is just the honest one.
+
+    Everything else -- dn_max, gamma, shrinkage, thickness, n0 -- is the
+    medium's own. SAT is a cheaper MODEL of the same medium, not a
+    differently calibrated medium.
+    """
+
+    def __init__(self, n_x: int, dx: float, t_total: float = 10.0,
+                 n_steps: int = 300, params: MediumParams | None = None,
+                 dtype=torch.float64, a_eff: float | None = None):
+        super().__init__(n_x, dx, t_total=t_total, n_steps=n_steps,
+                         params=params, dtype=dtype)
+        # None => the exact zero-transport limit. See the class docstring
+        # for why the SAT baseline does not use that default.
+        self.a_eff = (self.p.kappa * self.t_total) if a_eff is None else float(a_eff)
+
+    def forward(self, exposure: torch.Tensor, return_history: bool = False):
+        I = torch.clamp(exposure.to(self.dtype), min=0.0)
+        N = 1.0 - torch.exp(-self.a_eff * (I ** self.p.gamma))
+        dn = self.p.dn_max * torch.tanh(1.5 * N)
+        return (dn, []) if return_history else dn
+
+    def forward_checkpointed(self, exposure: torch.Tensor, block: int = 25):
+        """No unrolled trajectory to checkpoint -- the forward pass is
+        already O(1) in memory, so this is just forward()."""
+        return self.forward(exposure)
+
+
+def _sample_band_limited_exposures(n_samples: int, n_x: int, dtype, seed: int,
+                                   dose_budget: float = 1.0):
+    """Random nonnegative band-limited exposures at the given mean dose.
+
+    Same generator family as holomedia.surrogate.train_surrogate's, for
+    the same reason: the fit should see the statistics the optimizer
+    actually explores. (A spatially UNIFORM exposure would be useless as
+    fit data here -- a constant profile drives the full twin to complete
+    conversion regardless of its level, so it carries no information
+    about the dose response at all.)
+    """
+    g = torch.Generator(device="cpu")
+    g.manual_seed(seed)
+    raw = torch.randn(n_samples, n_x, generator=g, dtype=dtype)
+    f = torch.fft.fft(raw, dim=-1)
+    freqs = torch.fft.fftfreq(n_x).to(dtype)
+    cutoff = 0.05 + 0.4 * torch.rand(n_samples, 1, generator=g, dtype=dtype)
+    f = f * torch.exp(-(freqs / cutoff) ** 2).to(f.dtype)
+    smooth = torch.fft.ifft(f, dim=-1).real
+    E = Fnn.softplus(2.0 * smooth) + 1e-3
+    return E * (dose_budget / E.mean(dim=-1, keepdim=True))
+
+
+def fit_saturation_only(recorder: NPDDRecorder, n_samples: int = 48,
+                        seed: int = 0, n_steps_fit: int = 600,
+                        lr: float = 0.05, dose_budget: float = 1.0
+                        ) -> tuple[float, float]:
+    """Calibrate SaturationOnlyTwin's single sensitivity `a` to `recorder`.
+
+    Offline one-parameter least squares of the pointwise map against the
+    full twin's response on `n_samples` random band-limited exposures.
+    Costs n_samples forward passes of the real twin, paid once and
+    amortized over every subsequent optimization -- the same bargain
+    holomedia/surrogate.py's neural surrogate makes, with one parameter
+    instead of a CNN.
+
+    Fitting in log-space keeps `a` positive with no constraint machinery.
+
+    Returns (a_eff, nrmse), with NRMSE normalized by the full twin's own
+    dn range over the fit set. Report that number: it is the residual a
+    purely pointwise model cannot explain -- i.e. exactly the information
+    the transport terms carry -- and it is the honest measure of the
+    handicap SAT runs under before any optimization happens.
+    """
+    dtype = recorder.dtype
+    device = recorder.k2.device
+    Es = _sample_band_limited_exposures(n_samples, recorder.n_x, dtype, seed,
+                                        dose_budget=dose_budget).to(device)
+    with torch.no_grad():
+        dns = torch.stack([recorder(Es[i]) for i in range(n_samples)])
+
+    log_a = torch.zeros((), dtype=dtype, device=device, requires_grad=True)
+    opt = torch.optim.Adam([log_a], lr=lr)
+    dn_max, gamma = recorder.p.dn_max, recorder.p.gamma
+    loss = None
+    for _ in range(n_steps_fit):
+        opt.zero_grad()
+        a = torch.exp(log_a)
+        pred = dn_max * torch.tanh(1.5 * (1.0 - torch.exp(-a * Es ** gamma)))
+        loss = torch.mean((pred - dns) ** 2)
+        loss.backward()
+        opt.step()
+
+    with torch.no_grad():
+        rng = (dns.max() - dns.min()).clamp(min=1e-12)
+        nrmse = float(torch.sqrt(loss.detach()) / rng)
+    return float(torch.exp(log_a.detach())), nrmse

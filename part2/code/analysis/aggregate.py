@@ -535,6 +535,156 @@ def s2_sensitivity_summary(grouped: dict) -> dict:
                overall_min=overall_range[0], overall_max=overall_range[1])
 
 
+def s3_mismatch_summary(grouped: dict) -> dict:
+    """S3: paired gain (MIL-BSGD) when the exposure was designed against
+    the NOMINAL twin and then recorded on a MISCALIBRATED one.
+
+    Read this alongside s2_sensitivity_summary and note that they are not
+    the same measurement. S2 perturbs the medium and lets BOTH arms
+    re-optimize on it, so the perturbation is common to both arms and
+    cancels in the paired difference by the paper's own argument. S3
+    freezes the exposure at theta_nominal and evaluates it at theta', so
+    the error is one-sided and real. Only S3 can support a claim of the
+    form "the advantage survives getting a parameter wrong".
+
+    Reports, per perturbed parameter:
+      by_pct       -- paired-gain stats at each perturbation level
+      worst        -- the level with the lowest mean gain, and that gain
+      sign_flip_pct-- the smallest |pct| at which mean gain goes negative
+                      (None if it never does over the tested range)
+    plus overall min/max across every tested condition. `sign_flip_pct`
+    is the number the robustness sentence must be written against: if it
+    is None across the board, the advantage survives the whole tested
+    range; if it is not, the paper reports where it breaks rather than
+    claiming it does not.
+    """
+    rows = [(exp_id, ch) for exp_id, ch in grouped if exp_id == "S3"]
+    if not rows:
+        return dict(status="no_data")
+
+    # (param, pct) -> per-seed, K-averaged paired gains.
+    #
+    # Pairing happens inside each config group (one K), which is the only
+    # place paired_gain is safe -- it matches arms by seed alone, so
+    # handing it several K at once would silently keep one K's BSGD value
+    # per seed. Each seed's gains are then averaged over K, so the
+    # reported CI is over SEEDS. Pooling (seed, K) instead would make the
+    # interval reflect between-K spread, which is a real effect being
+    # averaged over, not uncertainty about the mean.
+    per_seed: dict = {}
+    for exp_id, ch in rows:
+        by_method = grouped[(exp_id, ch)]
+        any_rows = next(iter(by_method.values()), None)
+        if not any_rows:
+            continue
+        cfg = any_rows[0]["config"]
+        key = (cfg.get("mismatch_param"), cfg.get("mismatch_pct"))
+        for seed, g in paired_gain(by_method.get("MIL", []),
+                                   by_method.get("BSGD", []), key="psnr"):
+            per_seed.setdefault(key, {}).setdefault(seed, []).append(g)
+    buckets = {k: [sum(v) / len(v) for v in seeds.values() if v]
+               for k, seeds in per_seed.items()}
+
+    params = sorted({k[0] for k in buckets if k[0] is not None})
+    # pct=0 (nominal) is emitted under the first parameter only, by
+    # construction in build_S3_conditions -- shared across all curves.
+    nominal_key = next((k for k in buckets if k[1] == 0), None)
+    nominal = mean_std_median_ci95(buckets.get(nominal_key, []))
+
+    by_param, all_gains = {}, list(buckets.get(nominal_key, []))
+    for param in params:
+        pcts = sorted({k[1] for k in buckets if k[0] == param} | {0})
+        by_pct, worst, sign_flip = {}, None, None
+        for pct in pcts:
+            key = nominal_key if pct == 0 else (param, pct)
+            gains = buckets.get(key, [])
+            if not gains:
+                continue
+            stat = mean_std_median_ci95(gains)
+            by_pct[str(pct)] = stat
+            if pct != 0:
+                all_gains += gains
+            if worst is None or stat["mean"] < worst[1]:
+                worst = (pct, stat["mean"])
+            if stat["mean"] < 0 and (sign_flip is None or abs(pct) < abs(sign_flip)):
+                sign_flip = pct
+        by_param[param] = dict(by_pct=by_pct,
+                               worst_pct=worst[0] if worst else None,
+                               worst_mean_gain=worst[1] if worst else None,
+                               sign_flip_pct=sign_flip)
+
+    return dict(status="ok", nominal=nominal, by_param=by_param,
+                overall_min=min(all_gains) if all_gains else None,
+                overall_max=max(all_gains) if all_gains else None,
+                any_sign_flip=any(v["sign_flip_pct"] is not None
+                                  for v in by_param.values()),
+                tested_pct_range=sorted({k[1] for k in buckets
+                                         if k[1] is not None}))
+
+
+def sat_surrogate_summary(grouped: dict, experiment_id: str = "M1",
+                          budgets=BUDGETS) -> dict:
+    """SAT: how much of MIL's advantage a cheap saturation-only surrogate
+    recovers, and at what fraction of the modeling.
+
+    `fraction_of_mil` is the headline: mean SAT gain over BSGD divided by
+    mean MIL gain over BSGD, per budget. It is only meaningful when MIL's
+    own gain is comfortably positive, so it is reported as None where
+    mean MIL gain is at or below zero rather than as a large ratio of two
+    small numbers.
+
+    Also carries the surrogate's own calibration quality (`fit_nrmse`,
+    from the result rows' sat_fit field) -- a SAT number is not
+    interpretable without knowing how well a purely pointwise model could
+    fit the real twin in the first place.
+    """
+    out = dict(status="no_data", by_budget={})
+    have = False
+    for budget in budgets:
+        sat = gain_curve(grouped, experiment_id, budget, method="SAT")
+        mil = gain_curve(grouped, experiment_id, budget, method="MIL")
+        if not sat or not mil:
+            out["by_budget"][str(budget)] = dict(status="no_data")
+            continue
+        have = True
+        sat_means = [c[1] for c in sat]
+        mil_means = [c[1] for c in mil]
+        sat_mean = statistics.fmean(sat_means)
+        mil_mean = statistics.fmean(mil_means)
+        # Per-K fraction as well as ratio-of-means: a single ratio can
+        # hide a surrogate that tracks MIL at low K and collapses at high
+        # K, which is exactly the failure mode worth knowing about.
+        by_K = {}
+        common = {c[0]: c[1] for c in mil}
+        for K, m, _lo, _hi in sat:
+            if K in common and common[K] > 1e-9:
+                by_K[f"{K:.4f}"] = m / common[K]
+        out["by_budget"][str(budget)] = dict(
+            status="ok", sat_mean_gain=sat_mean, mil_mean_gain=mil_mean,
+            sat_min_gain=min(sat_means), sat_max_gain=max(sat_means),
+            fraction_of_mil=(sat_mean / mil_mean if mil_mean > 1e-9 else None),
+            fraction_by_K=by_K,
+            n_K=len(sat))
+    if have:
+        out["status"] = "ok"
+
+    # Surrogate calibration quality, carried on the SAT result rows.
+    nrmses, a_effs = [], []
+    for (exp_id, _ch), by_method in grouped.items():
+        if exp_id != experiment_id:
+            continue
+        for r in by_method.get("SAT", []):
+            fit = r.get("sat_fit") or {}
+            if fit.get("nrmse") is not None:
+                nrmses.append(fit["nrmse"])
+            if fit.get("a_eff") is not None:
+                a_effs.append(fit["a_eff"])
+    if nrmses:
+        out["fit_nrmse"] = mean_std_median_ci95(nrmses)
+        out["fit_a_eff"] = mean_std_median_ci95(a_effs)
+    return out
+
+
 def sub_cliff_non_monotonicity_status(grouped: dict) -> dict:
     """Whether the old data's sub-cliff non-monotonicity (+1.65 at
     K=0.98, +0.95 at K=1.96, +2.37 at K=2.62) is noise or structure,
@@ -590,6 +740,8 @@ def build_paper_numbers(results_root: str = RESULTS_ROOT) -> dict:
         sub_cliff_non_monotonicity=sub_cliff_non_monotonicity_status(grouped),
         s1_ablation_summary=s1_ablation_summary(grouped),
         s2_sensitivity_summary=s2_sensitivity_summary(grouped),
+        s3_mismatch_summary=s3_mismatch_summary(grouped),
+        sat_surrogate_summary=sat_surrogate_summary(grouped),
     )
     return out
 
@@ -608,6 +760,29 @@ def main():
     for row in out["m3_cliff_shift"]:
         print(f"  M3 (cliff shift) budget={row['budget']}: {row.get('status', 'ok')} "
               f"{'' if row.get('status') else row}")
+    s3 = out["s3_mismatch_summary"]
+    if s3.get("status") == "ok":
+        flip = ("gain goes negative somewhere in the tested range"
+                if s3["any_sign_flip"] else
+                "gain stays positive across the whole tested range")
+        print(f"  S3 (twin mismatch): {flip}; "
+              f"gain {s3['overall_min']:.3f}..{s3['overall_max']:.3f} dB "
+              f"(nominal {s3['nominal']['mean']:.3f})")
+        for param, v in s3["by_param"].items():
+            print(f"    {param}: worst {v['worst_mean_gain']:.3f} dB at "
+                  f"{v['worst_pct']}%, sign flip at {v['sign_flip_pct']}")
+    sat = out["sat_surrogate_summary"]
+    if sat.get("status") == "ok":
+        for b, v in sat["by_budget"].items():
+            if v.get("status") != "ok":
+                continue
+            frac = v["fraction_of_mil"]
+            print(f"  SAT budget={b}: mean gain {v['sat_mean_gain']:.3f} dB vs "
+                  f"MIL {v['mil_mean_gain']:.3f} dB"
+                  + (f" ({100 * frac:.0f}% of MIL)" if frac is not None else ""))
+        if "fit_nrmse" in sat:
+            print(f"    surrogate fit: a_eff={sat['fit_a_eff']['mean']:.3f}, "
+                  f"NRMSE={sat['fit_nrmse']['mean']:.4f}")
 
 
 if __name__ == "__main__":

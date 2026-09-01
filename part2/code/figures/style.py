@@ -20,11 +20,13 @@ COLORS = dict(
 METHOD_COLORS = {
     "GS": COLORS["reddish_purple"], "BSGD": COLORS["vermillion"],
     "LPC": COLORS["yellow"], "MIL": COLORS["blue"],
+    "SAT": COLORS["orange"],
     "ORC": COLORS["bluish_green"], "ORU": COLORS["sky_blue"],
 }
 METHOD_LABELS = {
     "GS": "media-blind GS", "BSGD": "media-blind SGD", "LPC": "linear pre-comp",
-    "MIL": "ours (media-in-the-loop)", "ORC": "oracle (constrained)",
+    "MIL": "ours (media-in-the-loop)", "SAT": "saturation-only surrogate",
+    "ORC": "oracle (constrained)",
     "ORU": "oracle (unconstrained)",
 }
 
@@ -34,11 +36,11 @@ METHOD_LABELS = {
 # differs in line style and/or marker shape, not just hue.
 METHOD_LINESTYLES = {
     "GS": "-", "BSGD": "--", "LPC": ":",
-    "MIL": "-", "ORC": "-.", "ORU": (0, (3, 1, 1, 1)),
+    "MIL": "-", "SAT": (0, (5, 2)), "ORC": "-.", "ORU": (0, (3, 1, 1, 1)),
 }
 METHOD_MARKERS = {
     "GS": "o", "BSGD": "s", "LPC": "^",
-    "MIL": "D", "ORC": "v", "ORU": "P",
+    "MIL": "D", "SAT": "X", "ORC": "v", "ORU": "P",
 }
 # Contrast budgets (2x/4x/8x) recur across F4/F5/F6 as a second
 # categorical dimension independent of method -- give them their own

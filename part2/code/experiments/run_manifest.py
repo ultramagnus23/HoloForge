@@ -270,6 +270,9 @@ def run_job(job: dict, device, commit: str, dtype: torch.dtype = DTYPE) -> dict:
         psnr_maxnorm_legacy=result["psnr_maxnorm_legacy"],
         diffraction_efficiency=result["diffraction_efficiency"],
         contrast=result["contrast"],
+        # method-specific provenance (currently only SAT's surrogate
+        # calibration); absent for every other method rather than null.
+        **({"sat_fit": result["sat_fit"]} if "sat_fit" in result else {}),
     )
 
 

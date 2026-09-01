@@ -523,6 +523,131 @@ def oracle_unconstrained(target: torch.Tensor, recorder: NPDDRecorder, bpm: Slab
     return dn.detach(), recon.detach()
 
 
+
+# Calibration cache: the SAT fit depends only on (medium, grid, dtype,
+# dose), never on the target, the seed or the iteration budget -- so a
+# full M1 sweep pays for it once per medium/grid rather than 135 times.
+# This is the amortization that makes the "cheap surrogate" claim true in
+# the harness as well as on paper.
+_SAT_FIT_CACHE: dict = {}
+
+
+def sat_fit_cache_clear() -> None:
+    """Drop the SAT calibration cache (tests; changing fit settings)."""
+    _SAT_FIT_CACHE.clear()
+
+
+def _cached_sat_fit(recorder: NPDDRecorder, fit_samples: int,
+                    dose_budget: float) -> float:
+    from .npdd import fit_saturation_only
+    p = recorder.p
+    key = (recorder.n_x, recorder.dx, recorder.t_total, str(recorder.dtype),
+           str(recorder.k2.device), fit_samples, dose_budget,
+           p.D0, p.sigma, p.kappa, p.gamma, p.dn_max, p.k_bleach, p.alpha_D)
+    if key not in _SAT_FIT_CACHE:
+        a_eff, nrmse = fit_saturation_only(recorder, n_samples=fit_samples,
+                                           dose_budget=dose_budget)
+        _SAT_FIT_CACHE[key] = (a_eff, nrmse)
+    a_eff, nrmse = _SAT_FIT_CACHE[key]
+    sat_sgd.last_fit_nrmse = nrmse
+    sat_sgd.last_a_eff = a_eff
+    return a_eff
+
+
+def sat_sgd(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
+            n_iters: int = 400, lr: float = 5e-2, dose_budget: float = 1.0,
+            seed: int = 0, log_every: int = 50,
+            converge_tol: float | None = None, patience: int = 3,
+            contrast_cap: float | None = None, calibrate: bool = True,
+            a_eff: float | None = None, fit_samples: int = 48):
+    """Saturation-only surrogate optimization (registry code SAT).
+
+    Optimizes the exposure against a CHEAP surrogate twin that keeps only
+    the saturating exposure->index nonlinearity and drops all transport
+    physics (non-locality, monomer diffusion, dye depletion) -- see
+    holomedia.npdd.SaturationOnlyTwin -- then evaluates the resulting
+    exposure on the REAL full-NPDD twin, using exactly the same evaluation
+    protocol as every other method in the registry.
+
+    This is the baseline that answers "if S1 says saturation is the
+    dominant mechanism, why pay for the full PDE?" quantitatively. It sits
+    strictly between BSGD (no medium model at all) and MIL (full medium
+    model) in modeling power, and costs roughly what LPC/GS cost rather
+    than MIL's ~21.7x: the surrogate forward is a handful of elementwise
+    ops with no n_steps unroll, so there is no unrolled adjoint to store
+    or traverse in the backward pass.
+
+    The surrogate keeps the medium's own dn_max/gamma/shrinkage and is
+    scored through the same diffraction stage under the same constraint
+    set (E >= 0, dose budget, contrast_cap -- the identical
+    contrast_project call MIL uses). The ONLY thing separating SAT from
+    MIL is therefore the transport physics.
+
+    CALIBRATION. The surrogate's single sensitivity parameter is fitted
+    to the real twin once, offline, before the loop starts
+    (npdd.fit_saturation_only). This matters: the UNcalibrated
+    zero-transport limit is fully saturated at the working dose and has
+    effectively no gradient there, so an uncalibrated SAT would lose for
+    reasons of optimizer conditioning rather than modeling power -- a
+    straw man. See SaturationOnlyTwin's docstring for the measured
+    numbers. Pass calibrate=False to reproduce that degenerate limit
+    deliberately (it is what the S1-style "keep only saturation" ablation
+    means literally); pass a_eff to skip the fit with a known value.
+
+    The fit costs `fit_samples` forward twin passes, paid once per
+    (medium, grid) and cached across calls -- the amortized-surrogate
+    bargain, not a per-run cost. Returned `fit_nrmse` (via
+    last_fit_nrmse) is the residual the pointwise model cannot explain.
+    """
+    from .npdd import SaturationOnlyTwin, fit_saturation_only
+
+    device = target.device
+    if a_eff is None and calibrate:
+        a_eff = _cached_sat_fit(recorder, fit_samples, dose_budget)
+    surrogate = SaturationOnlyTwin(recorder.n_x, recorder.dx,
+                                   t_total=recorder.t_total, n_steps=1,
+                                   params=recorder.p, dtype=recorder.dtype,
+                                   a_eff=a_eff).to(device)
+    theta = _seeded_init_theta(recorder.n_x, device, recorder.dtype, seed)
+    opt = torch.optim.Adam([theta], lr=lr)
+    history = []
+    prev_loss = None
+    stable_count = 0
+    broke_early = False
+
+    for it in range(n_iters):
+        opt.zero_grad()
+        E = torch.nn.functional.softplus(theta) + 1e-6
+        E = contrast_project(E, dose_budget, contrast_cap)
+        dn = surrogate(E)
+        recon = bpm(dn, shrinkage=surrogate.p.shrinkage)
+        loss = si_mse(recon, target)
+        loss.backward()
+        opt.step()
+        if it % log_every == 0:
+            cur = float(loss.detach())
+            history.append((it, cur))
+            if converge_tol is not None and prev_loss is not None:
+                rel_change = abs(prev_loss - cur) / (abs(prev_loss) + 1e-12)
+                stable_count = stable_count + 1 if rel_change < converge_tol else 0
+                if stable_count >= patience:
+                    broke_early = True
+                    break
+            prev_loss = cur
+
+    if not broke_early and n_iters > 0 and history and history[-1][0] != n_iters - 1:
+        history.append((n_iters - 1, float(loss.detach())))
+
+    # Evaluation is on the REAL twin -- this is the whole point of the
+    # baseline: design against the cheap model, pay the real medium's
+    # price.
+    with torch.no_grad():
+        E = contrast_project(torch.nn.functional.softplus(theta) + 1e-6,
+                             dose_budget, contrast_cap)
+        recon_real = bpm(recorder(E), shrinkage=recorder.p.shrinkage)
+    return E.detach(), recon_real.detach(), history
+
+
 # -------------------------------------------------------------- batched methods
 # Batched counterparts: one (B, n_x) theta run through one Python/Adam loop
 # instead of B separate (n_x,) thetas run in B sequential Python loops.
