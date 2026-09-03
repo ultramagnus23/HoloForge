@@ -42,3 +42,11 @@ desktop.ini
 # back the paper. The large intermediate .npy arrays are regenerable by
 # run_experiments.py and are not tracked.
 part1/code/results/*.npy
+
+# ─── S3 design checkpoints ───────────────────────────────────────────────────
+# experiments/run_s3_mismatch.py checkpoints its optimized exposures here so an
+# interrupted run resumes without repeating the (expensive) design stage. They
+# are regenerable intermediate state, not results -- the 504 evaluation JSONs
+# under results/S3/ are what the paper reads -- and no .pt file is tracked
+# anywhere else in this repo.
+part2/code/results/S3/_designs/

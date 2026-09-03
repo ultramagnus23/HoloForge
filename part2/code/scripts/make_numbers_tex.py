@@ -120,6 +120,141 @@ def build_macros(paper_numbers: dict) -> str:
         for name in ("STwoBaselineGain", "STwoGainMin", "STwoGainMax"):
             lines.append(macro(name, None))
 
+    # S3: twin-MISCALIBRATION robustness. These are the macros the paper's
+    # robustness sentence is written against -- NOT S2's, which cannot
+    # support such a sentence (S2 keeps the perturbation common to both
+    # arms, where the paired design makes it cancel by construction).
+    #
+    # SThreeWorstWithinFifty is the number that matters: the lowest
+    # K-averaged paired gain over EVERY parameter at every perturbation
+    # inside +/-50%. If it is positive, the claim holds over the whole
+    # stated range. SThreeDnMaxFlipPct records where the one parameter
+    # that does eventually fail crosses zero, so the paper states a
+    # located boundary instead of an unbounded claim.
+    s3 = paper_numbers.get("s3_mismatch_summary", {})
+    if s3.get("status") == "ok":
+        by_param = s3.get("by_param", {})
+        lines.append(macro("SThreeNominalGain", fmt(s3.get("nominal", {}).get("mean"))))
+
+        within, outside_worst = [], []
+        for param, v in by_param.items():
+            for pct_s, stat in v.get("by_pct", {}).items():
+                if stat.get("mean") is None:
+                    continue
+                (within if abs(int(pct_s)) <= 50 else outside_worst).append(
+                    (int(pct_s), param, stat["mean"]))
+        if within:
+            lo = min(within, key=lambda t: t[2])
+            hi = max(within, key=lambda t: t[2])
+            lines.append(macro("SThreeWorstWithinFifty", fmt(lo[2])))
+            lines.append(macro("SThreeWorstWithinFiftyParam", lo[1].replace("_", "\\_")))
+            lines.append(macro("SThreeBestWithinFifty", fmt(hi[2])))
+        else:
+            for n in ("SThreeWorstWithinFifty", "SThreeWorstWithinFiftyParam",
+                      "SThreeBestWithinFifty"):
+                lines.append(macro(n, None))
+
+        dn = by_param.get("dn_max", {})
+        lines.append(macro("SThreeDnMaxFlipPct",
+                           str(dn.get("sign_flip_pct")) if dn.get("sign_flip_pct")
+                           is not None else None))
+        lines.append(macro("SThreeDnMaxWorstGain", fmt(dn.get("worst_mean_gain"))))
+        by_pct = dn.get("by_pct", {})
+        lines.append(macro("SThreeDnMaxAtHundred", fmt(by_pct.get("100", {}).get("mean"))))
+        lines.append(macro("SThreeDnMaxAtMinusSixtyThree",
+                           fmt(by_pct.get("-63", {}).get("mean"))))
+        # Whether ANY parameter flips sign inside the +/-50% claim range.
+        flips_within = [v.get("sign_flip_pct") for v in by_param.values()
+                        if v.get("sign_flip_pct") is not None
+                        and abs(v["sign_flip_pct"]) <= 50]
+        lines.append(macro("SThreeAnyFlipWithinFifty",
+                           "yes" if flips_within else "no"))
+    else:
+        for name in ("SThreeNominalGain", "SThreeWorstWithinFifty",
+                     "SThreeWorstWithinFiftyParam", "SThreeBestWithinFifty",
+                     "SThreeDnMaxFlipPct", "SThreeDnMaxWorstGain",
+                     "SThreeDnMaxAtHundred", "SThreeDnMaxAtMinusSixtyThree",
+                     "SThreeAnyFlipWithinFifty"):
+            lines.append(macro(name, None))
+
+    # SAT: how much of media-in-the-loop's advantage the cheap
+    # saturation-only surrogate recovers, per budget, plus the surrogate's
+    # own calibration quality (a SAT number is not interpretable without
+    # knowing how well a purely pointwise model could fit the twin at all).
+    sat = paper_numbers.get("sat_surrogate_summary", {})
+    if sat.get("status") == "ok":
+        bb = sat.get("by_budget", {})
+        for budget, suffix in (("2.0", "TwoX"), ("4.0", "FourX"), ("8.0", "EightX")):
+            v = bb.get(budget, {})
+            ok = v.get("status") == "ok"
+            lines.append(macro(f"SATMeanGain{suffix}",
+                               fmt(v.get("sat_mean_gain")) if ok else None))
+            frac = v.get("fraction_of_mil") if ok else None
+            lines.append(macro(f"SATFracOfMIL{suffix}",
+                               fmt(100.0 * frac, ".0f") if frac is not None else None))
+        lines.append(macro("SATFitNRMSE",
+                           fmt(sat.get("fit_nrmse", {}).get("mean"), ".3f")))
+        lines.append(macro("SATFitAEff",
+                           fmt(sat.get("fit_a_eff", {}).get("mean"), ".2f")))
+    else:
+        for name in ("SATMeanGainTwoX", "SATFracOfMILTwoX", "SATMeanGainFourX",
+                     "SATFracOfMILFourX", "SATMeanGainEightX",
+                     "SATFracOfMILEightX", "SATFitNRMSE", "SATFitAEff"):
+            lines.append(macro(name, None))
+
+    # SAT at the sub-cliff K the M1 grid cannot reach (see
+    # sat_surrogate_summary_m2's note in analysis/aggregate.py).
+    satm2 = paper_numbers.get("sat_surrogate_summary_m2", {})
+    if satm2.get("status") == "ok":
+        v = satm2.get("by_budget", {}).get("2.0", {})
+        ok = v.get("status") == "ok"
+        lines.append(macro("SATSubCliffGain",
+                           fmt(v.get("sat_mean_gain")) if ok else None))
+        lines.append(macro("SATSubCliffMILGain",
+                           fmt(v.get("mil_mean_gain")) if ok else None))
+        frac = v.get("fraction_of_mil") if ok else None
+        lines.append(macro("SATSubCliffFracOfMIL",
+                           fmt(100.0 * frac, ".0f") if frac is not None else None))
+        # Per-K structure: the pooled fraction averages away the fact that
+        # the surrogate is strong at low K and weak at high K, which is
+        # the practically useful part of the result.
+        by_K = {}
+        for bud, vv in satm2.get("by_budget", {}).items():
+            if vv.get("status") != "ok":
+                continue
+            for K, f in vv.get("fraction_by_K", {}).items():
+                by_K.setdefault(K, []).append(f)
+        if by_K:
+            Ks = sorted(by_K, key=float)
+            sub, post = Ks[0], Ks[-1]
+            lines.append(macro("SATSubCliffFracMin",
+                               fmt(100.0 * min(by_K[sub]), ".0f")))
+            lines.append(macro("SATSubCliffFracMax",
+                               fmt(100.0 * max(by_K[sub]), ".0f")))
+            lines.append(macro("SATSubCliffK", fmt(float(sub), ".2f")))
+            mid = Ks[len(Ks) // 2]
+            lines.append(macro("SATNearCliffK", fmt(float(mid), ".2f")))
+            lines.append(macro("SATNearCliffFrac",
+                               fmt(100.0 * (sum(by_K[mid]) / len(by_K[mid])), ".0f")))
+            lines.append(macro("SATPostCliffK", fmt(float(post), ".2f")))
+            lines.append(macro("SATPostCliffFracMin",
+                               fmt(100.0 * min(by_K[post]), ".0f")))
+            lines.append(macro("SATPostCliffFracMax",
+                               fmt(100.0 * max(by_K[post]), ".0f")))
+        else:
+            for name in ("SATSubCliffFracMin", "SATSubCliffFracMax",
+                         "SATSubCliffK", "SATNearCliffK", "SATNearCliffFrac",
+                         "SATPostCliffK", "SATPostCliffFracMin",
+                         "SATPostCliffFracMax"):
+                lines.append(macro(name, None))
+    else:
+        for name in ("SATSubCliffGain", "SATSubCliffMILGain",
+                     "SATSubCliffFracOfMIL", "SATSubCliffFracMin",
+                     "SATSubCliffFracMax", "SATSubCliffK", "SATNearCliffK",
+                     "SATNearCliffFrac", "SATPostCliffK",
+                     "SATPostCliffFracMin", "SATPostCliffFracMax"):
+            lines.append(macro(name, None))
+
     # Seed count: consistent across all logged M1 ITERATIVE-method rows (the
     # methods MeanGain/gain-curve claims are actually about), or PENDING if
     # absent/inconsistent. GS/LPC are closed-form and deliberately run at a
@@ -128,14 +263,42 @@ def build_macros(paper_numbers: dict) -> str:
     # spurious inconsistency for something that isn't a data gap, it's a
     # documented design choice (see manifest.py's build_M1_jobs).
     per_config = paper_numbers.get("per_config", {})
-    ITERATIVE_METHODS = {"BSGD", "MIL", "ORC", "ORU"}
+    ITERATIVE_METHODS = {"BSGD", "MIL", "SAT", "ORC", "ORU"}
     m1_seed_counts = {v["n_seeds"] for k, methods in per_config.items()
                       if k.startswith("M1/")
                       for m, v in methods.items() if m in ITERATIVE_METHODS}
-    if len(m1_seed_counts) == 1:
-        lines.append(macro("SeedCount", str(next(iter(m1_seed_counts)))))
+    #
+    # M1 is no longer a balanced design: a seedbump re-ran seeds 3-7 on a
+    # minority of configurations, so a single "N seeds" is not a true
+    # statement. Rather than pick one number and be wrong about the rest,
+    # emit the range (SeedCountDesc renders "3" when uniform and "3--8"
+    # when not, so the macro stays correct if the grid is ever balanced
+    # again) plus the modal count and how many cells carry extra seeds.
+    if m1_seed_counts:
+        lo, hi = min(m1_seed_counts), max(m1_seed_counts)
+        lines.append(macro("SeedCountMin", str(lo)))
+        lines.append(macro("SeedCountMax", str(hi)))
+        lines.append(macro("SeedCountDesc",
+                           str(lo) if lo == hi else f"{lo}--{hi}"))
+        # Modal count = what most cells actually have.
+        counts = [v["n_seeds"] for k, methods in per_config.items()
+                  if k.startswith("M1/")
+                  for m, v in methods.items() if m in ITERATIVE_METHODS]
+        modal = max(set(counts), key=counts.count)
+        lines.append(macro("SeedCountModal", str(modal)))
+        n_extra = len({k for k, methods in per_config.items()
+                       if k.startswith("M1/")
+                       and any(v["n_seeds"] > modal
+                               for m, v in methods.items()
+                               if m in ITERATIVE_METHODS)})
+        lines.append(macro("SeedCountNExtraConfigs", str(n_extra)))
+        # Kept for any remaining call site: the modal value when uniform,
+        # PENDING otherwise, so nothing silently asserts uniformity.
+        lines.append(macro("SeedCount", str(lo) if lo == hi else None))
     else:
-        lines.append(macro("SeedCount", None))
+        for name in ("SeedCountMin", "SeedCountMax", "SeedCountDesc",
+                     "SeedCountModal", "SeedCountNExtraConfigs", "SeedCount"):
+            lines.append(macro(name, None))
 
     lines.append(macro("NResultFiles", str(paper_numbers.get("n_result_files", 0))))
     return "".join(lines)

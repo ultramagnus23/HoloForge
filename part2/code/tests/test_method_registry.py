@@ -188,6 +188,127 @@ def test_loss_and_metric_are_the_same_objective():
     print("objective/metric alignment OK: psnr_si == -10log10(si_mse), scale-invariant")
 
 
+
+
+# ============================================================ SAT surrogate
+def test_saturation_only_twin_matches_npdd_in_zero_transport_limit():
+    """SaturationOnlyTwin is not an arbitrary sigmoid: it is the exact
+    closed-form solution of the NPDD system once every transport term is
+    switched off. Pin that, because it is the entire justification for
+    calling SAT-vs-MIL an ablation of the transport physics rather than a
+    comparison against some other model that happens to saturate.
+
+    n_steps is set high on the reference so the residual is the IMEX
+    integrator's own time-discretization error, not the surrogate's.
+    """
+    from holomedia import SaturationOnlyTwin
+    p = MediumParams(D0=0.0, sigma=0.0, k_bleach=0.0)
+    full = NPDDRecorder(256, 0.05, t_total=10.0, n_steps=4000, params=p)
+    sat = SaturationOnlyTwin(256, 0.05, t_total=10.0, params=p)
+    torch.manual_seed(0)
+    E = torch.rand(256) * 2.0
+    a, b = full(E), sat(E)
+    rel = float((a - b).abs().max() / b.abs().max())
+    assert rel < 1e-3, f"zero-transport limit mismatch: {rel}"
+    print(f"SaturationOnlyTwin == NPDD in zero-transport limit OK ({rel:.2e} rel)")
+
+
+def test_uncalibrated_surrogate_is_saturated_at_working_dose():
+    """The documented reason SAT calibrates before optimizing.
+
+    At the default medium, a = kappa * t_total = 20, so the exact
+    zero-transport map has already run to completion at mean dose 1 and
+    its slope there is ~0. This test pins the diagnosis so nobody
+    "simplifies" the calibration away and quietly turns the baseline into
+    a straw man that loses on optimizer conditioning rather than on
+    modeling power.
+    """
+    from holomedia import SaturationOnlyTwin
+    from holomedia.npdd import fit_saturation_only
+    p = MediumParams()
+    rec = NPDDRecorder(256, 0.2, params=p)
+    uncal = SaturationOnlyTwin(256, 0.2, params=p)          # a = kappa*t = 20
+    a_eff, nrmse = fit_saturation_only(rec, n_samples=16)
+    cal = SaturationOnlyTwin(256, 0.2, params=p, a_eff=a_eff)
+
+    def slope(model):
+        E = torch.ones(256, requires_grad=True)
+        model(E).sum().backward()
+        return float(E.grad.abs().mean())
+
+    assert slope(cal) > 1000 * slope(uncal), (
+        f"calibration should restore usable gradient: "
+        f"{slope(cal):.3e} vs {slope(uncal):.3e}")
+    assert a_eff < p.kappa * rec.t_total, "fit should reduce the sensitivity"
+    assert nrmse < 0.25, f"pointwise fit unexpectedly poor: {nrmse}"
+    print(f"SAT calibration OK: a_eff={a_eff:.2f} (vs 20 uncalibrated), "
+          f"NRMSE={nrmse:.3f}, slope x{slope(cal)/slope(uncal):.1e}")
+
+
+def test_sat_gain_falls_between_bsgd_and_mil():
+    """SAT has strictly less modeling power than MIL (a pointwise
+    saturating map vs. the full transport PDE) and strictly more than
+    BSGD (which models no medium at all), so its score on the real twin
+    should land between them. If it does not, the harness is wrong --
+    e.g. SAT accidentally optimizing or being evaluated against the wrong
+    twin -- which is exactly the failure this guards.
+
+    Compared with a tolerance rather than exactly: all three are Adam
+    runs on a non-convex objective, so a few hundredths of a dB of
+    crossover is optimizer noise, not a broken ordering.
+    """
+    from experiments.methods import run_method
+    n_x, dx = 256, 0.2
+    p = MediumParams()
+    rec = NPDDRecorder(n_x, dx, params=p)
+    bpm = SlabBPM(n_x, dx, 0.405, p.thickness, n_z=32, n0=p.n0,
+                  dtype=torch.complex128)
+    x = torch.arange(n_x)
+    target = ((x // 8) % 2).double()
+
+    scores = {m: run_method(m, target, rec, bpm, seed=0, n_iters=300,
+                            contrast_cap=2.0)["psnr"]
+              for m in ("BSGD", "SAT", "MIL")}
+    tol = 0.05
+    assert scores["SAT"] >= scores["BSGD"] - tol, scores
+    assert scores["SAT"] <= scores["MIL"] + tol, scores
+    print("SAT between BSGD and MIL OK: "
+          + ", ".join(f"{k}={v:.3f}dB" for k, v in scores.items()))
+
+
+def test_sat_is_evaluated_on_the_real_twin_not_the_surrogate():
+    """SAT designs against the cheap model but must be SCORED on the real
+    one -- that asymmetry is the whole experiment. Verified structurally:
+    re-running the returned exposure through the real recorder must
+    reproduce the returned reconstruction exactly, and the surrogate's
+    own reconstruction must differ from it (otherwise the surrogate is
+    silently standing in for the twin at evaluation time and the
+    comparison is meaningless).
+    """
+    from holomedia import sat_sgd, SaturationOnlyTwin
+    from holomedia.optimize import sat_fit_cache_clear
+    sat_fit_cache_clear()
+    n_x, dx = 128, 0.4
+    p = MediumParams()
+    rec = NPDDRecorder(n_x, dx, params=p)
+    bpm = SlabBPM(n_x, dx, 0.405, p.thickness, n_z=16, n0=p.n0,
+                  dtype=torch.complex128)
+    x = torch.arange(n_x)
+    target = ((x // 8) % 2).double()
+    E, recon, _ = sat_sgd(target, rec, bpm, n_iters=30, contrast_cap=2.0,
+                          fit_samples=8)
+
+    with torch.no_grad():
+        real = bpm(rec(E), shrinkage=rec.p.shrinkage)
+        surr_model = SaturationOnlyTwin(n_x, dx, params=p,
+                                        a_eff=sat_sgd.last_a_eff)
+        surr = bpm(surr_model(E), shrinkage=p.shrinkage)
+    assert torch.allclose(recon, real), "SAT must report the REAL twin's readout"
+    assert not torch.allclose(recon, surr, atol=1e-9), \
+        "surrogate and real twin readouts are identical -- evaluation is not real"
+    print("SAT evaluated on the real twin OK")
+
+
 if __name__ == "__main__":
     test_contrast_project_hits_cap()
     test_contrast_project_none_is_dose_project_only()
@@ -197,4 +318,8 @@ if __name__ == "__main__":
     test_oracle_respects_medium_saturation()
     test_unconstrained_oracle_is_at_least_the_constrained_one()
     test_loss_and_metric_are_the_same_objective()
+    test_saturation_only_twin_matches_npdd_in_zero_transport_limit()
+    test_uncalibrated_surrogate_is_saturated_at_working_dose()
+    test_sat_gain_falls_between_bsgd_and_mil()
+    test_sat_is_evaluated_on_the_real_twin_not_the_surrogate()
     print("PASSED")

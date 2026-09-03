@@ -10,6 +10,8 @@ Registry
 GS   media_blind_gs           -- phase-optimized, naive linear exposure map
 BSGD media_blind_sgd          -- SGD on an ideal linear medium, eval on twin
 LPC  linear_precomp           -- closed-form 1/H(K) pre-compensation
+SAT  sat_sgd                  -- SGD through a saturation-only surrogate twin,
+                                 eval on the real twin (cheap-model control)
 MIL  media_in_the_loop        -- ours
 ORC  oracle_ideal             -- constrained oracle (E>=0, dose+contrast)
 ORU  oracle_unconstrained     -- free dn optimization, only dn_max-bounded
@@ -32,15 +34,16 @@ import torch
 from holomedia import (NPDDRecorder, SlabBPM,
                        media_in_the_loop, media_blind_sgd, media_blind_gs,
                        oracle_ideal, oracle_unconstrained, linear_precomp,
-                       psnr, psnr_si, diffraction_efficiency)
+                       sat_sgd, psnr, psnr_si, diffraction_efficiency)
 
-METHOD_IDS = ["GS", "BSGD", "LPC", "MIL", "ORC", "ORU"]
+METHOD_IDS = ["GS", "BSGD", "LPC", "MIL", "SAT", "ORC", "ORU"]
 
 METHOD_NAMES = {
     "GS": "media_blind_gs",
     "BSGD": "media_blind_sgd",
     "LPC": "linear_precomp",
     "MIL": "media_in_the_loop",
+    "SAT": "sat_sgd",
     "ORC": "oracle_ideal",
     "ORU": "oracle_unconstrained",
 }
@@ -70,6 +73,7 @@ def run_method(method_id: str, target: torch.Tensor, recorder: NPDDRecorder,
     history = []
     early_stop_reason = "n/a"
     iterations_run = n_iters
+    extra = {}
 
     if method_id == "GS":
         E, recon = media_blind_gs(target, recorder, bpm, dose_budget=dose_budget,
@@ -99,6 +103,22 @@ def run_method(method_id: str, target: torch.Tensor, recorder: NPDDRecorder,
         early_stop_reason = ("converge_tol" if (converge_tol is not None and
                              iterations_run < n_iters - 1) else "n_iters_exhausted")
 
+    elif method_id == "SAT":
+        E, recon, history = sat_sgd(target, recorder, bpm, n_iters=n_iters,
+                                    lr=lr, dose_budget=dose_budget, seed=seed,
+                                    log_every=log_every,
+                                    converge_tol=converge_tol,
+                                    contrast_cap=contrast_cap)
+        iterations_run = history[-1][0] if history else 0
+        early_stop_reason = ("converge_tol" if (converge_tol is not None and
+                             iterations_run < n_iters - 1) else "n_iters_exhausted")
+        # Provenance for the surrogate's one-parameter calibration: a
+        # SAT number is only interpretable next to how well the pointwise
+        # model could fit the real twin in the first place, so the fit is
+        # carried in the result row rather than left implicit.
+        extra = dict(sat_fit=dict(a_eff=getattr(sat_sgd, "last_a_eff", None),
+                                  nrmse=getattr(sat_sgd, "last_fit_nrmse", None)))
+
     elif method_id == "ORC":
         E, recon = oracle_ideal(target, recorder, bpm, n_iters=n_iters, lr=lr,
                                 dose_budget=dose_budget, seed=seed,
@@ -124,4 +144,5 @@ def run_method(method_id: str, target: torch.Tensor, recorder: NPDDRecorder,
         loss_history=history, iterations_run=iterations_run,
         early_stop_reason=early_stop_reason,
         contrast=contrast_stats(E),
+        **extra,
     )

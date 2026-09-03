@@ -52,7 +52,13 @@ DEFAULT_MEDIUM = dict(D0=0.1, sigma=0.08, kappa=2.0, gamma=1.0, dn_max=3.5e-3,
 # loop -- see experiments/methods.py for the full registry and why these
 # short codes replaced the earlier M1-M5b naming (collision with these
 # new experiment-tier names).
-ALL_METHODS = ["GS", "BSGD", "LPC", "MIL", "ORC", "ORU"]
+# SAT (sat_sgd) is the saturation-only surrogate control added for S1's
+# unanswered follow-up question ("if saturation is the dominant mechanism,
+# why pay for the full PDE?"). It is in ALL_METHODS -- i.e. it runs on M1's
+# FULL 15-point K x 3-budget grid, not just M2's 3 points -- because it is
+# cheap: its forward is a handful of elementwise ops with no n_steps unroll,
+# so the whole SAT arm costs a small fraction of a single MIL budget column.
+ALL_METHODS = ["GS", "BSGD", "LPC", "MIL", "SAT", "ORC", "ORU"]
 
 # 5 -> 3 seeds (compute-budget reduction, see the run-cost audit that
 # prompted this change): analysis/aggregate.py's CI already uses a
@@ -210,6 +216,18 @@ def build_M2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
     cliff (M1 already does that). 3 K's x 3 budgets = 9 cells is a
     complete answer to that confound at ~1/5th the job count. Pass
     K_points=_cliff_K_grid(dx) explicitly for the full grid if you want it.
+
+    SAT is included here for COVERAGE, not for arm-matching, and the
+    distinction matters. The sub-cliff point K = 1.31 rad/um lies BELOW
+    M1's grid minimum of 1.96, so a SAT arm run only on M1 has no
+    sub-cliff data -- precisely where media-in-the-loop's advantage is
+    largest and the surrogate is therefore most interesting. SAT runs at
+    MIL's iteration budget, not BSGD's compute-matched one: it is a
+    cheaper MODEL, not a cheaper budget, so there is nothing to
+    compute-match it to. That means the M2 SAT-vs-BSGD comparison hands
+    BSGD ~21.7x more iterations than SAT gets, which makes it a
+    conservative comparison for the surrogate rather than a flattering
+    one.
     """
     seeds = seeds if seeds is not None else PAPER_SEEDS
     dx = 51.2 / n_x
@@ -230,6 +248,9 @@ def build_M2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
             for seed in seeds:
                 jobs.append(_job("M2", "MIL", seed, mil_config))
                 jobs.append(_job("M2", "BSGD", seed, bsgd_config))
+                # Same config (hence same pairing group) as MIL -- see the
+                # coverage note in this function's docstring.
+                jobs.append(_job("M2", "SAT", seed, mil_config))
     return jobs
 
 
@@ -338,6 +359,127 @@ def build_S2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
                     for seed in seeds:
                         jobs.append(_job("S2", method_id, seed, config))
     return jobs
+
+
+# =====================================================================
+# S3: twin-MISCALIBRATION robustness. Distinct from S2, and this
+# distinction is the whole point of the tier existing.
+#
+# S2 perturbs the medium and then optimizes AND evaluates both arms on the
+# perturbed medium. That measures how the paired gain varies across media
+# -- it does NOT measure mismatch, because the perturbation stays common
+# to both arms, which is exactly the condition under which Sec. A's own
+# paired-comparison argument says a systematic twin error cancels. So S2
+# cannot support a sentence of the form "MIL survives getting a parameter
+# wrong": under S2 nothing is ever wrong, it is merely different.
+#
+# S3 makes the error real by breaking the arms apart in time:
+#   design time -- optimize E* ONCE against the twin at theta_nominal.
+#   record time -- evaluate that SAME, already-fixed E* on a twin at
+#                  theta' != theta_nominal.
+# No re-optimization at theta'. The exposure never gets to know it was
+# designed for the wrong medium, which is precisely the situation a
+# practitioner is in with a write-once medium and an imperfectly
+# calibrated twin.
+#
+# BSGD is the control arm and needs no special handling: it is media-blind
+# by construction (it optimizes against dn = c*E and its objective is
+# scale-invariant), so its exposure is already theta-independent -- the
+# "designed at theta_nominal" and "designed at theta'" exposures are the
+# same tensor. Evaluating it at theta' is therefore the honest paired
+# baseline at every perturbation.
+#
+# Emitted results carry the EVALUATION medium in config["medium"] (so a
+# result is self-describing about the medium it was scored on) plus
+# design_medium="nominal" and the mismatch_param/mismatch_pct labels. Both
+# arms share those fields, so analysis/aggregate.py's existing pairing
+# key groups MIL and BSGD together at each theta' with no special-casing.
+#
+# Runner: experiments/run_s3_mismatch.py (NOT run_manifest.py -- a job
+# here is "one design + many evaluations", which is not run_job()'s
+# one-config-one-result shape). See that script's docstring.
+# =====================================================================
+S3_PARAMS = ["D0", "sigma", "kappa", "dn_max"]
+
+# +/-50% is the range the paper's robustness claim is stated over, with
+# +/-10/25% filling in the interior so a degradation can be LOCATED rather
+# than just bracketed.
+S3_PERTURBATIONS_PCT = [-50, -25, -10, 0, 10, 25, 50]
+
+# dn_max gets a wider grid than the other three, for an empirical reason
+# specific to this parameter: our own literature fit (Sec. 6,
+# results_literature_fit.json) found two Bayfol dn_max values that
+# disagree by 2.7x -- i.e. about +170% / -63% -- which is far outside the
+# +/-50% band. Testing dn_max only to +/-50% would be testing a range we
+# already know from our own data is too narrow, so the grid is extended
+# to bracket that measured disagreement exactly: 2.7x = +170%, 1/2.7 =
+# -63%.
+DN_MAX_LITERATURE_DISAGREEMENT_FACTOR = 2.7
+S3_PERTURBATIONS_PCT_DN_MAX = [-63, -50, -25, -10, 0, 10, 25, 50, 100, 170]
+
+S3_BUDGET = 2.0
+# Same three sub/near/post-cliff K's as S1/M2, for direct comparability.
+S3_K_POINTS = S1_K_POINTS
+
+
+def s3_perturbations_for(param: str) -> list[int]:
+    return (S3_PERTURBATIONS_PCT_DN_MAX if param == "dn_max"
+            else S3_PERTURBATIONS_PCT)
+
+
+def build_S3_conditions(n_x: int = 1024) -> list[dict]:
+    """The EVALUATION grid: one entry per (param, pct) mismatch condition.
+
+    Returns condition dicts, not run_job()-shaped jobs, because a single
+    optimized exposure is evaluated against every one of these -- the
+    design work is shared across the whole list, which is what makes this
+    tier cost forward passes rather than optimizations.
+    """
+    conds = []
+    for param in S3_PARAMS:
+        for pct in s3_perturbations_for(param):
+            if pct == 0 and param != S3_PARAMS[0]:
+                continue  # nominal is param-independent; emit it once
+            value = DEFAULT_MEDIUM[param] * (1.0 + pct / 100.0)
+            conds.append(dict(mismatch_param=param, mismatch_pct=pct,
+                              medium=dict(DEFAULT_MEDIUM, **{param: value})))
+    return conds
+
+
+def build_S3_designs(n_x: int = 1024, n_iters: int = 800,
+                     converge_tol: float = 1e-4, seeds=None,
+                     methods=None, K_points=None) -> list[dict]:
+    """The DESIGN stage: what must actually be optimized, once each, at
+    theta_nominal. Deliberately tiny (len(methods) x len(K) x len(seeds));
+    everything else in S3 is forward evaluation of these exposures."""
+    seeds = seeds if seeds is not None else PAPER_SEEDS
+    methods = methods if methods is not None else ["BSGD", "MIL"]
+    K_points = K_points if K_points is not None else S3_K_POINTS
+    dx = 51.2 / n_x
+    jobs = []
+    for K in K_points:
+        period_px = period_from_K(K, dx)
+        config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=n_iters,
+                      converge_tol=converge_tol, contrast_cap=S3_BUDGET,
+                      dose_budget=1.0, medium=DEFAULT_MEDIUM,
+                      target=_bars_target_spec(period_px), K_nominal=K,
+                      design_medium="nominal", arm="mismatch_design")
+        for method_id in methods:
+            for seed in seeds:
+                jobs.append(_job("S3", method_id, seed, config))
+    return jobs
+
+
+def s3_result_config(design_config: dict, cond: dict) -> dict:
+    """Config recorded on an S3 RESULT row: the design config with the
+    evaluation medium substituted in and the mismatch labels attached.
+    n_iters is kept (it describes how the exposure was produced) but
+    aggregate.py's pairing key already excludes it, so MIL and BSGD pair
+    correctly even if their design budgets ever differ."""
+    return dict(design_config, medium=cond["medium"],
+                mismatch_param=cond["mismatch_param"],
+                mismatch_pct=cond["mismatch_pct"],
+                design_medium="nominal", arm="mismatch_eval")
 
 
 # =====================================================================

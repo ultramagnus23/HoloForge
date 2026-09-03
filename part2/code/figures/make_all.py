@@ -16,13 +16,21 @@ change. Summary:
             panel (b) compute-matched (M2) -- panel layout deferred until
             M1 data exists (see the run-order agreement); still a
             single-panel placeholder-or-M1-only render until then
-  F4b       M1: GS and LPC paired gain over BSGD, alongside MIL, at
-            budget=2x -- the baselines Sec. 4.1 defines but Sec. 5
-            originally never plotted (work-spec item D.2)
+  F4b       M1: GS, LPC and SAT (saturation-only surrogate) paired gain
+            over BSGD, alongside MIL, at budget=2x -- the baselines Sec.
+            4.1 defines but Sec. 5 originally never plotted (work-spec
+            item D.2), plus the cheap-surrogate control
   F5        M1: observed K* vs predicted Kc scatter
   F6        M3: cliff-location shift (M2-M1) per budget, per-seed band
   F7        S1: physics-component ablation
   F8        S2: cliff-location sensitivity band under NPDD parameter error
+  F10       S3: twin-MISCALIBRATION robustness -- gain when the exposure is
+            designed at theta_nominal and recorded at theta'. Distinct
+            from F8/S2, which lets both arms re-optimize on the perturbed
+            medium (so the perturbation cancels in the paired difference
+            and no mismatch is ever tested). Numbered F10, not F9d: the
+            F9a-c block is the supplementary-data group and this is a
+            main-text result.
   F9a-c     supplementary, real data already committed (gradient-pathway
             ablation, GPU mesh convergence, GPU wavelength detuning)
   R1        reconstruction figure (work-spec item D.1): target vs.
@@ -293,18 +301,22 @@ def make_F4b_baseline_comparison():
     visibly noisy, non-physical curve on the real data before this fix."""
     grouped = group_by_config(load_all_results())
     budget = 2.0
-    curves = {"MIL": gain_curve(grouped, "M1", budget, method="MIL")}
+    curves = {"MIL": gain_curve(grouped, "M1", budget, method="MIL"),
+              # SAT is a seeded optimizer like MIL, so it gets the proper
+              # per-seed paired comparison with a real CI -- unlike GS/LPC
+              # below, which are closed-form single-draw methods.
+              "SAT": gain_curve(grouped, "M1", budget, method="SAT")}
     for m in ("GS", "LPC"):
         curves[m] = gain_vs_bsgd_seed_mean(grouped, "M1", budget, method=m)
     if all(len(c) == 0 for c in curves.values()):
         no_data_placeholder(
             os.path.join(OUT_DIR, "F4b_baseline_comparison.pdf"),
-            "F4b (M1): GS/LPC/MIL paired gain over BSGD, budget=2x",
-            "needs M1 manifest results for GS/LPC/MIL at budget=2x.")
+            "F4b (M1): GS/LPC/SAT/MIL paired gain over BSGD, budget=2x",
+            "needs M1 manifest results for GS/LPC/SAT/MIL at budget=2x.")
         return False
 
     fig, ax = new_fig(width="single")
-    for method in ("GS", "LPC", "MIL"):
+    for method in ("GS", "LPC", "SAT", "MIL"):
         curve = curves[method]
         if not curve:
             continue
@@ -317,7 +329,8 @@ def make_F4b_baseline_comparison():
         if all(lo is not None for lo in los):
             ax.fill_between(Ks, los, his, color=METHOD_COLORS[method], alpha=0.15, linewidth=0)
     ax.axhline(0, color=COLORS["black"], lw=0.5)
-    ax.set_xlabel("K (rad/um)"); ax.set_ylabel("paired gain over media-blind SGD (dB), budget=2x")
+    ax.set_xlabel("K (rad/um)")
+    ax.set_ylabel("paired gain over media-blind SGD (dB)\nbudget = 2x")
     ax.legend(frameon=False, fontsize=6)
     savefig(fig, os.path.join(OUT_DIR, "F4b_baseline_comparison.pdf"))
     return True
@@ -472,6 +485,24 @@ def _render_F7(results):
     savefig(fig, os.path.join(OUT_DIR, "F7_physics_ablation.pdf"))
 
 
+def _k_averaged_seed_gains(by_key, key_prefix, all_K):
+    """Per-seed, K-averaged paired gain (MIL - BSGD).
+
+    Pairs within each K (paired_gain is seed-keyed and silently collapses
+    repeated seeds if handed several K at once), then averages each
+    seed's gains over K. Returns one value per seed, which is the unit
+    the 95% CI should be taken over -- between-K spread is a real effect
+    being averaged, not uncertainty about it.
+    """
+    per_seed = {}
+    for K in all_K:
+        for seed, g in paired_gain(by_key.get(key_prefix + (K, "MIL"), []),
+                                   by_key.get(key_prefix + (K, "BSGD"), []),
+                                   key="psnr"):
+            per_seed.setdefault(seed, []).append(g)
+    return [sum(v) / len(v) for v in per_seed.values() if v]
+
+
 # --------------------------------------------------------------------- F8 (S2)
 def make_F8_sensitivity_band():
     """S2: paired-gain sensitivity to +/-NPDD-parameter error, K-averaged
@@ -499,10 +530,16 @@ def make_F8_sensitivity_band():
 
 def _render_F8(results):
     from manifest import S2_PARAMS
+    # K is part of the key: paired_gain matches arms by seed alone, so
+    # pooling K points into one bucket before pairing would compare MIL
+    # at one spatial frequency against BSGD at another (its seed->value
+    # dict keeps only the last K per seed). Pair within K, pool after.
     by_key = {}
     for r in results:
-        key = (r["config"]["sensitivity_param"], r["config"]["sensitivity_pct"], r["method_id"])
+        key = (r["config"]["sensitivity_param"], r["config"]["sensitivity_pct"],
+               r["config"]["K_nominal"], r["method_id"])
         by_key.setdefault(key, []).append(r)
+    all_K = sorted({r["config"]["K_nominal"] for r in results})
     # baseline (pct=0) is only tagged under S2_PARAMS[0] by construction
     # (build_S2_jobs emits it once, not once per param) -- shared across
     # all three curves below.
@@ -516,21 +553,107 @@ def _render_F8(results):
         means, los, his, xs = [], [], [], []
         for pct in pcts:
             lookup_param = baseline_param if pct == 0 else param
-            mil = by_key.get((lookup_param, pct, "MIL"), [])
-            bsgd = by_key.get((lookup_param, pct, "BSGD"), [])
-            pairs = paired_gain(mil, bsgd, key="psnr")
-            if not pairs:
+            gains = _k_averaged_seed_gains(by_key, (lookup_param, pct), all_K)
+            if not gains:
                 continue
-            stat = mean_std_median_ci95([g for _, g in pairs])
+            stat = mean_std_median_ci95(gains)
             xs.append(pct); means.append(stat["mean"])
             los.append(stat["ci95_lo"]); his.append(stat["ci95_hi"])
         ax.plot(xs, means, marker=markers[param], color=colors[param], ms=3, label=param)
         ax.fill_between(xs, los, his, color=colors[param], alpha=0.15, linewidth=0)
     ax.axvline(0, color=COLORS["black"], lw=0.5, ls=":")
     ax.set_xlabel("parameter perturbation (%)")
-    ax.set_ylabel("paired gain MIL-BSGD (dB), K-averaged over collapse region")
+    ax.set_ylabel("paired gain MIL$-$BSGD (dB)\n(K-averaged, 95% CI over seeds)")
     ax.legend(frameon=False, title="perturbed param")
     savefig(fig, os.path.join(OUT_DIR, "F8_sensitivity_band.pdf"))
+
+
+# --------------------------------------------------------------------- F10 (S3)
+def make_F10_twin_mismatch():
+    """S3: paired gain when the exposure is DESIGNED against the nominal
+    twin and then RECORDED on a miscalibrated one.
+
+    This is the figure that supports a robustness claim; F8/S2 cannot,
+    because it re-optimizes both arms on the perturbed medium, keeping
+    the perturbation common to both arms -- the exact condition under
+    which the paper's own paired-comparison argument says a systematic
+    twin error cancels. Here the exposure is frozen at theta_nominal, so
+    the error is one-sided and real.
+
+    dn_max is plotted over a wider perturbation range than the other
+    three parameters, and that asymmetry is deliberate, not an accident
+    of gridding: our own literature fits (Sec. 6) disagree on Bayfol's
+    dn_max by 2.7x (about +170%/-63%), far outside +/-50%, so testing
+    that parameter only to +/-50% would be testing a range we already
+    know from our own data is too narrow.
+    """
+    results = [r for r in load_all_results() if r["experiment_id"] == "S3"]
+    if not results:
+        no_data_placeholder(
+            os.path.join(OUT_DIR, "F10_twin_mismatch.pdf"),
+            "F10 (S3): robustness to twin miscalibration",
+            "needs S3 results -- run experiments/run_s3_mismatch.py.")
+        return False
+    _render_F10(results)
+    return True
+
+
+def _render_F10(results):
+    # K in the key for the same reason as F8 above -- see this module's
+    # pairing note; paired_gain is seed-keyed and must be called within a
+    # single K, never across a pooled set.
+    buckets = {}
+    for r in results:
+        cfg = r["config"]
+        key = (cfg.get("mismatch_param"), cfg.get("mismatch_pct"),
+               cfg.get("K_nominal"), r["method_id"])
+        buckets.setdefault(key, []).append(r)
+    all_K = sorted({r["config"]["K_nominal"] for r in results})
+
+    params = sorted({k[0] for k in buckets})
+    # pct=0 is emitted under one parameter only (build_S3_conditions), and
+    # is the shared origin of every curve.
+    nominal_param = next(k[0] for k in buckets if k[1] == 0)
+
+    palette = [COLORS["blue"], COLORS["vermillion"], COLORS["bluish_green"],
+               COLORS["reddish_purple"]]
+    markers = ["o", "s", "^", "D"]
+    colors = {p: c for p, c in zip(params, palette)}
+    marks = {p: m for p, m in zip(params, markers)}
+
+    fig, ax = new_fig(width="single")
+    for param in params:
+        pcts = sorted({k[1] for k in buckets if k[0] == param} | {0})
+        xs, means, los, his = [], [], [], []
+        for pct in pcts:
+            lookup = nominal_param if pct == 0 else param
+            gains = _k_averaged_seed_gains(buckets, (lookup, pct), all_K)
+            if not gains:
+                continue
+            stat = mean_std_median_ci95(gains)
+            xs.append(pct); means.append(stat["mean"])
+            los.append(stat["ci95_lo"]); his.append(stat["ci95_hi"])
+        if not xs:
+            continue
+        ax.plot(xs, means, marker=marks[param], color=colors[param], ms=3,
+                label=param)
+        ax.fill_between(xs, los, his, color=colors[param], alpha=0.15,
+                        linewidth=0)
+
+    ax.axhline(0, color=COLORS["black"], lw=0.7)
+    ax.axvline(0, color=COLORS["black"], lw=0.5, ls=":")
+    # Mark the +/-50% band the paper's robustness sentence is stated over,
+    # so a reader can see at a glance that every curve is flat inside it
+    # and that the only excursion is one parameter outside it.
+    ax.axvspan(-50, 50, color=COLORS["black"], alpha=0.05, linewidth=0)
+    ax.annotate("+/-50% (claim range)", xy=(0, 1.0), xycoords=("data", "axes fraction"),
+                ha="center", va="top", fontsize=5.5, color=COLORS["black"])
+    ax.set_xlabel("design-to-record parameter mismatch (%)")
+    ax.set_ylabel("paired gain MIL$-$BSGD (dB)\n"
+                  "(designed at nominal; K-avg, 95% CI over seeds)")
+    ax.legend(frameon=False, title="miscalibrated param", fontsize=6,
+              title_fontsize=6)
+    savefig(fig, os.path.join(OUT_DIR, "F10_twin_mismatch.pdf"))
 
 
 # --------------------------------------------------------------------- F9a-c (supplementary, real data)
@@ -689,14 +812,61 @@ def make_R2_2d_reconstructions():
     return True
 
 
+# --------------------------------------------------------------------- R3
+def make_R3_exposure_profiles():
+    """Phase 3 Tier-1 item 3: the mechanism figure this paper was missing --
+    not just what the reconstructions look like, but what the method
+    actually does. E(x) (optimized exposure) and Delta-n(x) (recorded
+    index profile) for media-blind SGD vs. media-in-the-loop, at the same
+    three K points as R1, budget=2x, seed=0. Data from
+    experiments/make_r1_profiles.py (results_r1_profiles.json)."""
+    d = _load_json("results_r1_profiles.json")
+    if d is None or not d.get("results"):
+        no_data_placeholder(
+            os.path.join(OUT_DIR, "R3_exposure_profiles.pdf"),
+            "R3: exposure E(x) and index profile dn(x), BSGD vs. MIL",
+            "needs results_r1_profiles.json -- run experiments/make_r1_profiles.py")
+        return False
+
+    results = d["results"]
+    n = len(results)
+    fig, axes = new_fig(width="double", height_in=1.9 * n, ncols=2, nrows=n, squeeze=False)
+
+    for row, r in enumerate(results):
+        E_bsgd = np.array(r["E_bsgd"]); E_mil = np.array(r["E_mil"])
+        dn_bsgd = np.array(r["dn_bsgd"]); dn_mil = np.array(r["dn_mil"])
+        x = np.arange(len(E_bsgd))
+
+        ax_E = axes[row][0]
+        ax_E.plot(x, E_bsgd, color=METHOD_COLORS["BSGD"], lw=0.8, label="BSGD")
+        ax_E.plot(x, E_mil, color=METHOD_COLORS["MIL"], lw=0.8, label="MIL")
+        ax_E.set_ylabel("E(x)")
+        ax_E.set_title(f"K={r['K']:.2f} rad/um, budget={r['budget']:.0f}x", fontsize=6.5)
+        ax_E.legend(frameon=False, fontsize=5.5, loc="upper right")
+
+        ax_dn = axes[row][1]
+        ax_dn.plot(x, dn_bsgd, color=METHOD_COLORS["BSGD"], lw=0.8, label="BSGD")
+        ax_dn.plot(x, dn_mil, color=METHOD_COLORS["MIL"], lw=0.8, label="MIL")
+        ax_dn.set_ylabel(r"$\Delta n(x)$")
+        ax_dn.legend(frameon=False, fontsize=5.5, loc="upper right")
+
+        if row == n - 1:
+            ax_E.set_xlabel("x (pixels)")
+            ax_dn.set_xlabel("x (pixels)")
+
+    savefig(fig, os.path.join(OUT_DIR, "R3_exposure_profiles.pdf"))
+    return True
+
+
 ALL_FIGURES = [
     make_F1_pipeline_schematic,
     make_F2_twin_validation,
     make_F3a_rcwa_validity_envelope, make_F3b_regime_map,
     make_F4_headline_gain_vs_K, make_F4b_baseline_comparison, make_F5_Kstar_vs_Kc_scatter,
     make_F6_cliff_shift, make_F7_physics_ablation, make_F8_sensitivity_band,
+    make_F10_twin_mismatch,
     make_F9a_gradient_ablation, make_F9b_mesh_convergence, make_F9c_wavelength_detuning,
-    make_R1_reconstructions, make_R2_2d_reconstructions,
+    make_R1_reconstructions, make_R2_2d_reconstructions, make_R3_exposure_profiles,
 ]
 
 

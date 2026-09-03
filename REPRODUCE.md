@@ -41,6 +41,20 @@ python -m experiments.run_manifest --manifest S1 --max-minutes 170
 python -m experiments.run_manifest --manifest S2 --max-minutes 170
 ```
 
+S3 (twin-miscalibration robustness) does NOT run through
+`run_manifest.py`: a job there is "one design, many evaluations", which is
+not `run_job()`'s one-config-one-result shape. It has its own runner, and
+is cheap -- the only optimization is the design stage (2 methods x 3 K x 3
+seeds); everything else is a single forward pass:
+
+```bash
+python -m experiments.run_s3_mismatch
+```
+
+Resumable the same way: designed exposures are checkpointed under
+`results/S3/_designs/` and each evaluation writes its own content-hashed
+JSON, so re-running the identical command skips whatever is already done.
+
 V3 needs no GPU, runs on CPU (torcwa):
 
 ```bash
@@ -57,9 +71,30 @@ function) is resumable -- re-running the identical command after an
 interruption skips every already-completed job and picks up where it left
 off (see `experiments/run_manifest.py`'s docstring).
 
-As of the current manuscript, M1 (630 jobs), M2 (54 jobs), S1 (90 jobs), and
-S2 (312 jobs) have all completed for real on GPU (1086 result files total)
--- this is the data behind `oe_main.tex`'s Results section.
+As of the current manuscript, M1 (765 jobs, including the 135 SAT
+saturation-only-surrogate jobs), M2 (54 jobs), S1 (90 jobs), S2 (312
+jobs) and S3 (504 evaluations from 18 designs) have all completed for
+real on GPU -- this is the data behind `oe_main.tex`'s Results section.
+
+### A note on seeds
+
+The analysis uses **3 seeds** per iterative method (`manifest.PAPER_SEEDS`),
+and `analysis/aggregate.py` enforces that with an explicit
+`ANALYSIS_SEEDS = {0, 1, 2}` filter that reports how many files it drops.
+
+`experiments/run_m1_seedbump.py` exists to raise M1 from 3 seeds to 8. It
+was started and then stopped at roughly 16% (146 of 900 jobs, 8 of 45
+configurations). Its output is real and uncorrupted and is kept on disk
+and in version control -- but it is NOT used, because a partial bump makes
+M1 unbalanced: a minority of configurations would carry 8 seeds and the
+rest 3, so per-point confidence intervals would not be comparable across
+the grid and no single seed count would be a true statement about the
+study. Mixing them in also visibly contaminated the diffraction-efficiency
+numbers (`DENPairs` became 157 rather than 45 configs x 3 seeds = 135).
+
+To use 8 seeds, finish the bump for all 45 configurations first (budget
+~52 GPU-hours on a laptop 3050, ~44 of them media-in-the-loop), then set
+`ANALYSIS_SEEDS = None` and re-run steps 2-4.
 
 ## 2. Aggregate statistics
 
@@ -70,10 +105,23 @@ python -m analysis.aggregate
 
 ## 3. Generate the LaTeX number macros
 
+`numbers.tex` is assembled by FOUR scripts, and the order matters:
+`make_numbers_tex.py` rewrites the file from scratch, while the other
+three append their own marked blocks to it. Running only the first
+silently drops the DE-confirmation, wasted-media and 2D macros, and the
+manuscript then fails to build with `Undefined control sequence` on
+`\DEMeanGainTwoX` and friends. Run all four, in this order:
+
 ```bash
-python scripts/make_numbers_tex.py
-# writes ../paper/numbers.tex
+python scripts/make_numbers_tex.py   # rewrites ../paper/numbers.tex
+python -m analysis.de_confirmation   # appends DE* macros
+python -m analysis.wasted_media      # appends WastedMedia* macros
+python -m analysis.aggregate_2d      # appends TwoD* macros
 ```
+
+Any macro that cannot be computed from the data present is emitted as a
+red `[PENDING]` flag rather than omitted or guessed, so a missing input
+shows up in the compiled PDF instead of failing silently.
 
 ## 4. Build figures
 
@@ -105,6 +153,13 @@ bibtex oe_main
 pdflatex oe_main.tex && pdflatex oe_main.tex
 pdflatex oe_supplement.tex && pdflatex oe_supplement.tex
 ```
+
+`oe_main_lengthcheck.tex` carries the SAME body as `oe_main.tex` and
+differs only in preamble: it uses Optica's dedicated length-check class
+(`opticajnl`, 9pt/twocolumn/twoside), which is what gives an
+authoritative composed page count against the 10-page fee threshold.
+Editing `oe_main.tex` without re-deriving it makes the page-budget check
+measure a stale manuscript, so re-derive rather than hand-editing both.
 
 This builds against the real Optica universal template
 (`optica-article.cls` / `opticajnl.bst`, both vendored in `part2/paper/`),

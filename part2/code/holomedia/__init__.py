@@ -1,7 +1,8 @@
-from .npdd import NPDDRecorder, MediumParams
+from .npdd import NPDDRecorder, MediumParams, SaturationOnlyTwin
 from .diffraction import SlabBPM, kogelnik_de
 from .optimize import (media_in_the_loop, media_blind_sgd, media_blind_gs,
                        oracle_ideal, oracle_unconstrained, linear_precomp,
+                       sat_sgd,
                        psnr, diffraction_efficiency,
                        si_mse, psnr_si, psnr_si_batch,
                        contrast_project, dose_project,

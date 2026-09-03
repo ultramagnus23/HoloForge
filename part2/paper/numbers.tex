@@ -30,8 +30,41 @@
 \newcommand{\STwoBaselineGain}{0.16}
 \newcommand{\STwoGainMin}{0.12}
 \newcommand{\STwoGainMax}{0.26}
+\newcommand{\SThreeNominalGain}{1.81}
+\newcommand{\SThreeWorstWithinFifty}{1.16}
+\newcommand{\SThreeWorstWithinFiftyParam}{dn\_max}
+\newcommand{\SThreeBestWithinFifty}{1.90}
+\newcommand{\SThreeDnMaxFlipPct}{170}
+\newcommand{\SThreeDnMaxWorstGain}{-0.63}
+\newcommand{\SThreeDnMaxAtHundred}{1.03}
+\newcommand{\SThreeDnMaxAtMinusSixtyThree}{0.86}
+\newcommand{\SThreeAnyFlipWithinFifty}{no}
+\newcommand{\SATMeanGainTwoX}{0.09}
+\newcommand{\SATFracOfMILTwoX}{28}
+\newcommand{\SATMeanGainFourX}{0.27}
+\newcommand{\SATFracOfMILFourX}{42}
+\newcommand{\SATMeanGainEightX}{0.35}
+\newcommand{\SATFracOfMILEightX}{48}
+\newcommand{\SATFitNRMSE}{0.103}
+\newcommand{\SATFitAEff}{7.05}
+\newcommand{\SATSubCliffGain}{1.02}
+\newcommand{\SATSubCliffMILGain}{1.39}
+\newcommand{\SATSubCliffFracOfMIL}{74}
+\newcommand{\SATSubCliffFracMin}{81}
+\newcommand{\SATSubCliffFracMax}{82}
+\newcommand{\SATSubCliffK}{1.31}
+\newcommand{\SATNearCliffK}{3.93}
+\newcommand{\SATNearCliffFrac}{35}
+\newcommand{\SATPostCliffK}{5.24}
+\newcommand{\SATPostCliffFracMin}{-14}
+\newcommand{\SATPostCliffFracMax}{51}
+\newcommand{\SeedCountMin}{3}
+\newcommand{\SeedCountMax}{3}
+\newcommand{\SeedCountDesc}{3}
+\newcommand{\SeedCountModal}{3}
+\newcommand{\SeedCountNExtraConfigs}{0}
 \newcommand{\SeedCount}{3}
-\newcommand{\NResultFiles}{1086}
+\newcommand{\NResultFiles}{1752}
 
 % --- supplement macros (already-real data, not Phase-3-gated) ---
 \newcommand{\AblationCheckpointCosSim}{0.977}
@@ -76,17 +109,13 @@
 % --- R1 reconstruction figure macros ---
 \newcommand{\ROneSeedValue}{0}
 
-% --- bounded 2D study (experiments/run_2d.py) macros ---
-\newcommand{\TwoDNTargets}{3}
-\newcommand{\TwoDNBudgets}{3}
-\newcommand{\TwoDNSeeds}{3}
-\newcommand{\TwoDGridN}{128}
-\newcommand{\TwoDNIters}{800}
-\newcommand{\TwoDMinGain}{0.38}
-\newcommand{\TwoDMeanGain}{1.37}
-\newcommand{\TwoDMaxGain}{2.07}
-\newcommand{\TwoDReconSeed}{0}
-
+% --- diffraction-efficiency confirmation (Sec. 5.1) macros ---
+\newcommand{\DEMeanGainTwoX}{1.45}
+\newcommand{\DEMeanGainFourX}{2.75}
+\newcommand{\DEMeanGainEightX}{3.14}
+\newcommand{\DEMinGainAllBudgets}{-0.007}
+\newcommand{\DENNegative}{1}
+\newcommand{\DENPairs}{135}
 
 % --- wasted-media measurement (Sec. 5.4) macros ---
 \newcommand{\WastedMediaThreshDB}{2}
@@ -98,10 +127,13 @@
 \newcommand{\WastedMediaMILFracThreeDB}{0}
 \newcommand{\WastedMediaNConfigs}{45}
 
-% --- diffraction-efficiency confirmation (Sec. 5.1) macros ---
-\newcommand{\DEMeanGainTwoX}{1.45}
-\newcommand{\DEMeanGainFourX}{2.75}
-\newcommand{\DEMeanGainEightX}{3.14}
-\newcommand{\DEMinGainAllBudgets}{-0.007}
-\newcommand{\DENNegative}{1}
-\newcommand{\DENPairs}{135}
+% --- bounded 2D study (experiments/run_2d.py) macros ---
+\newcommand{\TwoDNTargets}{3}
+\newcommand{\TwoDNBudgets}{3}
+\newcommand{\TwoDNSeeds}{3}
+\newcommand{\TwoDGridN}{128}
+\newcommand{\TwoDNIters}{800}
+\newcommand{\TwoDMinGain}{0.38}
+\newcommand{\TwoDMeanGain}{1.37}
+\newcommand{\TwoDMaxGain}{2.07}
+\newcommand{\TwoDReconSeed}{0}
