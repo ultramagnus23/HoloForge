@@ -16,6 +16,10 @@
 \documentclass{optica-article}
 \journal{opticajournal}
 \articletype{Research Article}
+\usepackage{amsmath}  % align/cases/\text{} for the numbered Model equations (WP1) --
+                      % optica-article.cls loads newtxmath but not amsmath itself;
+                      % plain \begin{equation} is kernel-level and worked without this,
+                      % but \begin{align} and \text{} inside math mode are not.
 \input{numbers}  % scripts/make_numbers_tex.py output -- all quantitative macros
 
 \begin{document}
@@ -185,51 +189,262 @@ case the less useful thing to have established.
 
 \section{Model}
 \label{sec:model}
-The twin couples the non-local polymerization-driven diffusion (NPDD)
-reaction-diffusion system~\cite{sheridan2000nonlocal}, itself built on the
-earlier local photopolymerization-driven-diffusion
-model~\cite{zhao1994diffusion}, to volume diffraction via split-step beam
-propagation, with gradients obtained by unrolling a spectral IMEX
-integrator.
+This section specifies the forward model in full: the exposure and its
+feasible set (\ref{sec:model-exposure}), the recording chemistry
+(\ref{sec:model-npdd}), the numerical integrator that produces the
+gradient (\ref{sec:model-imex}), the readout optics
+(\ref{sec:model-readout}), and the loss/optimizer that drives design
+(\ref{sec:model-loss}). Table~\ref{tab:mediumparams} lists every physical
+constant with its source. Reproducing this section is sufficient to
+reimplement the twin; the released code
+(\texttt{holomedia/npdd.py}, \texttt{holomedia/diffraction.py},
+\texttt{holomedia/optimize.py}) is the reference implementation, not a
+separate description of it.
 
-Four coupled mechanisms determine the recorded index profile from an
-exposure $I(x)$. Local polymerization proceeds at a rate
-$\kappa\,[I(x)\,d(x)]^\gamma$, set by the dose sensitivity $\kappa$ and
-gated by $d(x)$, the fraction of unreacted photoinitiating dye remaining
-at $x$ ($d$ decays by first-order bleaching at rate $k_{\text{bleach}}$,
-so heavily-exposed regions lose sensitivity as recording proceeds). This
-local production term is then spatially smeared by a Gaussian kernel of
-width $\sigma$ before it is deposited as polymerized material: chains
-initiated at $x'$ terminate and deposit at $x$, not at their point of
-initiation, which is the physical content of ``non-local'' in NPDD. The
-non-local term is therefore $G_\sigma * (F\cdot u)$: the kernel smears
-the full, already-formed production term $F\cdot u$, not the bare monomer
-field $u$ before production acts on it, since it is the newly-initiated
-chains that deposit non-locally, not the existing monomer pool. (The
-reversed order leaves $\sigma$ with no effect on the recorded fringe; see
-the repository \texttt{CHANGELOG} for the correction history.) Monomer
-diffuses with an
-effective diffusivity $D_{\text{eff}} = D_0 \exp(-\alpha_D N)$ that
-itself falls as accumulated polymer $N$ builds up, coupling transport to
-the recording's own progress. The accumulated polymer concentration
-finally maps to a refractive-index modulation through a saturating
-$\tanh$ response bounded by $\Delta n_{\max}$, the medium's physical
-saturation ceiling -- the mechanism Section~\ref{sec:s1-ablation}
-identifies as the dominant constraint on achievable gain.
+\subsection{Exposure and the feasible set}
+\label{sec:model-exposure}
+The design variable is the delivered exposure $E(x) \geq 0$, a
+nonnegative intensity pattern over the transverse coordinate $x$. It is
+constrained to a fixed mean dose $E_0$ and a contrast (peak-to-mean)
+budget $B_c$:
+\begin{equation}
+\label{eq:feasible-set}
+\mathcal{E}(E_0, B_c) = \Big\{\, E : x \mapsto \mathbb{R}_{\geq 0} \;\Big|\;
+\overline{E} = E_0,\;\; \frac{\max_x E(x)}{\overline{E}} \leq B_c \,\Big\}.
+\end{equation}
+$B_c$ is what any pre-compensating design can actually spend: boosting
+one spatial-frequency component's exposure to counteract the medium's
+rolloff draws down the headroom available everywhere else. Projection
+onto $\mathcal{E}$ is neither a single Euclidean projection nor a purely
+iterative one but an alternating clip-and-renormalize scheme
+(\texttt{contrast\_project}), applied after \emph{every} optimizer step,
+not only at convergence:
+\begin{align}
+\label{eq:contrast-project}
+E &\leftarrow E \cdot \frac{E_0}{\overline{E} + \epsilon}
+   &&\text{(dose projection)}\\
+E &\leftarrow \min(E,\, B_c E_0)
+   &&\text{(peak clip)}
+\end{align}
+iterated for 20 passes (dose projection, then peak clip, then dose
+projection again). Clipping the peak removes mass, which perturbs the
+mean the next dose-projection pass restores; the two constraints are not
+satisfied simultaneously by a single pass, and convergence is geometric
+in the number of passes (empirically $\sim\!2\times$ error reduction per
+pass on typical intermediate exposures; 20 passes reaches
+$\lesssim 10^{-6}$ relative error on the tested targets). Both operations
+are elementwise and differentiable, so the projection is safe to place
+inside the unrolled optimization loop, which is where every method in
+this paper places it: exposures are re-projected onto $\mathcal{E}$ at
+every iteration, not only reported after a final rescale.
+
+\subsection{Recording: non-local polymerization-driven diffusion (NPDD)}
+\label{sec:model-npdd}
+Three coupled fields evolve on the transverse coordinate $x$ over the
+exposure duration: free monomer $u(x,t)$ (normalized so $u(x,0)=1$),
+immobile polymerized material $N(x,t)$ (with $N(x,0)=0$), and
+unreacted photoinitiating dye $d(x,t)$ (normalized, $d(x,0)=1$). The
+system~\cite{sheridan2000nonlocal}, built on the earlier local
+photopolymerization-driven-diffusion model~\cite{zhao1994diffusion}, is
+\begin{align}
+\frac{\partial u}{\partial t}
+   &= \frac{\partial}{\partial x}\!\left( D_{\text{eff}}(N)\,
+      \frac{\partial u}{\partial x} \right) - G_\sigma * \big(F(x,t)\,u(x,t)\big),
+   \label{eq:npdd-u}\\
+\frac{\partial N}{\partial t} &= + G_\sigma * \big(F(x,t)\,u(x,t)\big),
+   \label{eq:npdd-N}\\
+\frac{\partial d}{\partial t} &= - k_{\text{bleach}}\, I(x)\, d(x,t),
+   \label{eq:npdd-d}
+\end{align}
+with local initiation rate, non-local kernel, and effective diffusivity
+\begin{align}
+F(x,t) &= \kappa\,\big[I(x)\,d(x,t)\big]^\gamma, \label{eq:npdd-F}\\
+G_\sigma(x) &= \frac{1}{\sigma\sqrt{2\pi}}\exp\!\left(-\frac{x^2}{2\sigma^2}\right), \quad
+   \widehat{G_\sigma}(K) = \exp\!\left(-\tfrac{1}{2}K^2\sigma^2\right), \label{eq:npdd-G}\\
+D_{\text{eff}}(N) &= D_0 \exp(-\alpha_D N). \label{eq:npdd-D}
+\end{align}
+The non-local kernel acts on the \emph{production term} $F \cdot u$, not
+on the bare monomer field $u$ before production acts on it --
+$G_\sigma * (F u)$, not $F \cdot (G_\sigma * u)$. This is the physical
+content of ``non-local'' in NPDD: a chain initiated at $x'$ terminates
+and deposits polymer at $x$, so the smearing kernel must act on where
+polymer is \emph{produced}, not on the monomer supply before it reacts;
+applying $G_\sigma$ to $u$ alone leaves $\sigma$ with no effect on the
+recorded fringe contrast, since $u$ is consumed pointwise regardless of
+where the kernel later moves it (a one-line correction note is kept in
+the supplement, not repeated here). Monomer transport itself slows as
+polymer accumulates, Eq.~\eqref{eq:npdd-D}, coupling diffusion to the
+recording's own progress.
+
+The recorded index modulation is a saturating function of accumulated
+polymer, bounded by the medium's physical index budget $\Delta n_{\max}$:
+\begin{equation}
+\label{eq:npdd-dn}
+\Delta n(x) = \Delta n_{\max}\, \tanh\!\big(\beta\, N(x)\big), \qquad \beta = 1.5,
+\end{equation}
+where $\beta$ is a fixed shape constant of the saturating map (not a
+literature-sourced or fitted parameter; every fit in this paper --
+Section~\ref{sec:twin-validation-ref}, the SAT surrogate calibration --
+treats $\beta$ as given and fits $\kappa$, $D_0$, or $\Delta n_{\max}$
+against it). Section~\ref{sec:s1-ablation}'s ablation identifies
+$\Delta n_{\max}$-bounded saturation, not non-locality, diffusion, or dye
+depletion, as the dominant constraint on achievable gain.
+
+\subsection{Spectral IMEX integrator}
+\label{sec:model-imex}
+Equations~\eqref{eq:npdd-u}--\eqref{eq:npdd-d} are integrated over
+$n_{\text{steps}}$ steps of size $\mathrm{d}t = t_{\text{total}} /
+n_{\text{steps}}$ ($t_{\text{total}} = 10\,\mathrm{s}$,
+$n_{\text{steps}} = 300$ throughout this paper) by a first-order
+implicit-explicit (IMEX) splitting per step:
+\begin{enumerate}
+\item \textbf{Explicit reaction half-step}: evaluate $F$
+      (Eq.~\eqref{eq:npdd-F}), the non-local production
+      $G_\sigma * (Fu)$ via one forward/inverse FFT pair using the
+      precomputed kernel $\widehat{G_\sigma}(K)$, and update $u
+      \mathrel{-}= \mathrm{d}t \cdot G_\sigma*(Fu)$, $N \mathrel{+}=
+      \mathrm{d}t \cdot G_\sigma*(Fu)$, $d \mathrel{*}= \exp(-k_{\text{bleach}}
+      I\, \mathrm{d}t)$ (exact for the linear bleaching ODE at fixed
+      $I$); clamp $u \geq 0$.
+\item \textbf{Implicit diffusion step}: with $D_{\text{eff}}$
+      (Eq.~\eqref{eq:npdd-D}) evaluated at the post-reaction $N$ and
+      spatially averaged to a scalar $\bar{D}$ per step, diffusion is
+      applied \emph{exactly} in Fourier space,
+      $u \leftarrow \mathcal{F}^{-1}\!\big[\exp(-\bar{D} K^2\,
+      \mathrm{d}t)\, \widehat{u}\big]$ -- unconditionally stable
+      regardless of $\mathrm{d}t$, unlike an explicit diffusion update.
+\end{enumerate}
+Gradients with respect to the exposure $E(x) = I(x)$ (Eq.~\eqref{eq:npdd-F})
+are obtained by unrolling all $n_{\text{steps}}$ and backpropagating
+through the full trajectory (reverse-mode automatic differentiation
+through the FFT-based operators above), i.e. the discrete adjoint of the
+integrator just described, not a continuous adjoint of
+Eqs.~\eqref{eq:npdd-u}--\eqref{eq:npdd-d}. A checkpointed variant trades
+recompute for memory (\texttt{forward\_checkpointed}); gradients from the
+two are not bit-identical (measured cosine similarity
+$\AblationCheckpointCosSim$ against the full unrolled gradient, vs.\
+$\AblationSurrogateCosSim$ for a neural-surrogate gradient on the same
+probe, Section~\ref{sec:s1-ablation}'s supplement) because the FFT
+recomputation inside checkpointing's backward pass does not retrace the
+identical floating-point path, not because the adjoint itself differs.
+
+\subsection{Readout: split-step beam propagation}
+\label{sec:model-readout}
+The recorded transverse profile $\Delta n(x)$ is extruded uniformly
+through the slab thickness $T$ (no depth-resolved recording chemistry;
+Section~\ref{sec:discussion} states this scope precisely) and read out by
+scalar split-step beam propagation (BPM) at readout wavelength $\lambda$
+and background index $n_0$: the slab is sliced into $n_z$ steps of
+thickness $\mathrm{d}z = T/n_z$ ($n_z = 32$), and each step applies a
+transmission phase kick $\exp\!\big(i k_0\, \Delta n(x, z)\, \mathrm{d}z_{\text{eff}}\big)$,
+$k_0 = 2\pi/\lambda$, followed by band-limited angular-spectrum
+propagation over $\mathrm{d}z$ at index $n_0$; after the slab, one
+angular-spectrum step propagates the field to the reconstruction plane,
+and intensity is formed as $|E|^2$. Post-exposure shrinkage $s$
+detunes a fringe slanted at angle $\phi$ to the surface normal via a
+depth-dependent \emph{lateral} shift of the recorded pattern,
+$\delta x(z) = s \tan(\phi)\, z$ (applied as an exact per-slice Fourier
+shift, and $\mathrm{d}z_{\text{eff}} = \mathrm{d}z\,(1-s)$ for the
+longitudinal compression) -- at this paper's default slant
+($\phi = 20^\circ$, Table~\ref{tab:mediumparams}), this is a real but
+bounded effect, quantified in Section~\ref{sec:discussion}. Kogelnik
+coupled-wave theory~\cite{kogelnik1969coupled} is used only as
+closed-form validation context for pure sinusoidal gratings, cross-checked
+against RCWA (Section~\ref{sec:discussion}); BPM is the model that
+actually sits inside every optimization loop and every reported
+reconstruction, and covers the intermediate-diffraction regime some of
+the tested conditions fall into (below).
+
+\textbf{Diffraction regime.} The Klein--Cook parameter
+$Q = 2\pi\lambda T / (n_0 \Lambda^2)$, $\Lambda = 2\pi/K$, separates thin
+(Raman--Nath, $Q \ll 1$), intermediate, and thick (Bragg, $Q \gg 10$)
+volume-grating regimes. At this paper's default medium
+($\lambda = 0.405\,\mu\mathrm{m}$, $T = 30\,\mu\mathrm{m}$, $n_0 = 1.5$),
+$Q$ crosses 10 at $K \approx 2.79\,\mathrm{rad}/\mu\mathrm{m}$: the two
+lowest tested $K$ points, $1.96$ and $2.62\,\mathrm{rad}/\mu\mathrm{m}$
+($Q = 4.97$ and $8.84$), sit \emph{below} $Q \approx 10$, in the
+intermediate regime, not deep Bragg (the standard unslanted-incidence
+form of $Q$ is used here as a regime indicator; this paper's $20^\circ$
+slant is not folded into it, so treat the crossover $K$ as approximate,
+not exact). This is not a side note -- Section~\ref{sec:no-cliff} finds
+media-in-the-loop's largest gains precisely at these low-$K$,
+intermediate-$Q$ points, where a purely Kogelnik-regime intuition would
+least apply and BPM's full treatment of non-Bragg diffraction orders is
+doing real work.
+
+\subsection{Loss and optimizer}
+\label{sec:model-loss}
+The loss is scale-invariant MSE between the readout intensity $R = |E|^2$
+(bpm output) and target intensity $I_t$: writing
+$\alpha^\star = \langle R, I_t\rangle / \langle R, R\rangle$ (closed-form,
+differentiable), the loss is
+\begin{equation}
+\label{eq:si-mse}
+\mathcal{L}(R, I_t) = \frac{1}{n_x}\big\| \alpha^\star R - I_t \big\|_2^2 \Big/ \max(I_t)^2,
+\end{equation}
+reported as $\mathrm{PSNR}_{\text{si}} = -10\log_{10}\mathcal{L}$. This
+replaces an earlier max-normalized PSNR metric that was not the same
+objective every optimizer minimized (a sum-normalized internal loss vs. a
+max-normalized reported score); loss and metric are now the same function
+up to a monotone transform, so an optimizer cannot minimize what it is
+asked to minimize and still score worse on what is reported.
+Optimization is Adam, learning rate $5\times 10^{-2}$, $n_{\text{iters}} =
+800$ (M1/M2; other tiers as noted at first use), on a softplus
+parameterization $E = \mathrm{softplus}(\theta) + 10^{-6}$ that enforces
+nonnegativity without a hard constraint, with $\mathcal{E}$-projection
+(Eq.~\eqref{eq:contrast-project}) applied after every step. The seed
+enters \emph{only} at initialization: $\theta_0 = \epsilon\, z$, $z \sim
+\mathcal{N}(0, I)$, $\epsilon = 10^{-2}$, drawn from a seeded generator;
+the forward model, loss, and optimizer updates are otherwise
+deterministic given $\theta$, so seed variation measures sensitivity to
+starting point, not to any other source of randomness.
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{MediumParams}: every physical constant of the default
+medium (\texttt{experiments/manifest.py}'s \texttt{DEFAULT\_MEDIUM}, used
+throughout M1--S3 and the 2D study) and its source. Values are
+PVA/acrylamide-\emph{like} illustrative points chosen inside the cited
+literature ranges to produce the operating regime this paper analyzes,
+not a literature-exact refit of one specific published medium: where the
+default differs from a directly literature-anchored value (e.g.\ $D_0$,
+$\sigma$), both are given.}
+\label{tab:mediumparams}
+\begin{tabularx}{\linewidth}{l l X}
+\hline
+Parameter & Default & Source \\
+\hline
+$D_0$ & $0.1\,\mu\mathrm{m}^2/\mathrm{s}$ &
+  illustrative; literature-anchored PVA/AA value $0.01$,
+  Sheridan et al.~\cite{sheridan2012reply} \\
+$\sigma$ & $0.08\,\mu\mathrm{m}$ &
+  illustrative; literature range $0.01$--$0.04\,\mu\mathrm{m}$,
+  Gleeson et al.~\cite{gleeson2008chain} \\
+$\kappa$ & $2.0$ & calibration target, not literature-read \\
+$\gamma$ & $1.0$ & bimolecular-termination limit ($\gamma=0.5$--$1.0$) \\
+$\Delta n_{\max}$ & $3.5\times 10^{-3}$ &
+  illustrative; literature range $1.5$--$5\times 10^{-3}$ (AA/PVA studies) \\
+$k_{\text{bleach}}$ & $0.2$ & order-of-magnitude, not independently sourced \\
+$\alpha_D$ & $1.0$ & order-of-magnitude, not independently sourced \\
+$s$ (shrinkage) & $0.5\%$ &
+  unsourced placeholder (see Section~\ref{sec:discussion}); typical
+  AA/PVA magnitude \\
+$T$ (thickness) & $30\,\mu\mathrm{m}$ & operating-point choice \\
+$n_0$ & $1.5$ & typical polymer bulk index \\
+$\phi$ (slant) & $20^\circ$ & \texttt{SlabBPM} default geometry \\
+\hline
+\end{tabularx}
+\end{table}
 
 \section{Media-in-the-Loop Optimization}
-Given target intensity $I_t$, we optimize the nonnegative, dose-budgeted
-exposure $E(x)$ delivered to the medium, with the twin inside the loss.
-The contrast budget $B_c$ is the ratio of the largest permissible
-exposure to the mean exposure, $\max_x E(x) / \overline{E}$: it is the
-dynamic range the exposure system can actually deliver at a fixed total
-dose, and it is what bounds how much a pre-compensating design may boost
-any one spatial-frequency component. Contrast headroom is enforced as a
-hard constraint (\url{holomedia.optimize.contrast_project}), not merely
-a nominal dose level: every optimized exposure is projected back onto the
-feasible contrast set at every iteration, so the reported gains reflect a
-solution that satisfies the budget throughout optimization, not only at
-convergence.
+Given target intensity $I_t$, we optimize the exposure $E(x)$ over the
+feasible set $\mathcal{E}(E_0, B_c)$ (Eq.~\eqref{eq:feasible-set}), with
+the twin (Section~\ref{sec:model-npdd}) inside the loss
+(Eq.~\eqref{eq:si-mse}). What follows defines the baselines and oracles
+compared against this optimization; the exposure parameterization,
+projection, loss, and optimizer are all as specified in
+Section~\ref{sec:model-loss} and used identically across every method
+below unless stated otherwise.
 
 \subsection{Baselines and oracle}
 \label{sec:baselines}
@@ -842,6 +1057,7 @@ genuinely independent second medium family) remain paywalled; see
 \texttt{data/literature/README.md} for what closing that gap needs.
 
 \section{Discussion and Limitations}
+\label{sec:discussion}
 This study is simulation-only; its claims are conditioned on a physics
 model (NPDD, Kogelnik coupled-wave theory~\cite{kogelnik1969coupled}, split-step BPM). A literature
 overlay (Sec.~\ref{sec:twin-validation-ref}) reproduces the saturating,
