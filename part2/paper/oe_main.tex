@@ -1155,6 +1155,95 @@ smoothing of the recorded fringe rather than by the saturation ceiling,
 and a fit that reproduces the peak height but not the decline has not
 identified the transport parameters at all.
 
+\appendix
+\section{Small-signal compensation-cliff derivation}
+\label{sec:appendix-cliff}
+This appendix derives the linearized recording transfer function
+$H(K)$ (Section~\ref{sec:model-imex} states $H$ as given; here it is
+derived), defines $K_c(B_c)$ precisely as it is actually computed in the
+pipeline, and verifies that the derivation reproduces the reported
+values \KcPredTwoX/\KcPredFourX/\KcPredEightX\,rad/\textmu m at
+$B_c \in \{2,4,8\}$ to three decimal places -- not approximately, exactly,
+once the correct definition of $K_c$ is used.
+
+\subsection*{Linearizing the recording equations}
+Consider a spatially uniform mean exposure $I_{\text{mean}}$ with a small
+sinusoidal perturbation, $I(x) = I_{\text{mean}}\big(1 + m\cos(Kx)\big)$,
+$m \ll 1$. Two simplifications make the linearization closed-form and are
+stated explicitly rather than left implicit: (i) dye depletion is
+neglected, $d(x,t) \approx 1$, valid in the small-signal onset of
+exposure this prediction targets, before bleaching has run appreciably;
+(ii) the diffusivity is held at its bare value $D_0$ rather than the
+accumulated-polymer-dependent $D_{\text{eff}}(N) = D_0
+\exp(-\alpha_D N)$ (Eq.~\eqref{eq:npdd-D}) -- i.e. the derivation
+linearizes around the \emph{start} of the recording trajectory, not
+around its N-dependent, time-varying diffusivity. Under these two
+simplifications the zeroth-order (spatially uniform) fields obey
+$\dot{u}_0 = -F_0 u_0$, $\dot{N}_0 = F_0 u_0$ with $F_0 = \kappa\,
+I_{\text{mean}}^\gamma$ (Eq.~\eqref{eq:npdd-F} at $d=1$), giving
+$u_0(t) = e^{-F_0 t}$. The first-order Fourier component at $K$ is driven
+by this decaying mean field; adiabatically eliminating its fast
+relaxation relative to the mean trajectory (quasi-steady balance,
+$\dot{\widetilde{u}} \approx 0$) gives the fraction of the driving
+perturbation that survives non-local smearing and deposits into $N$
+before diffusing away:
+\begin{equation}
+\label{eq:H-of-K}
+H(K) = \frac{\widehat{G_\sigma}(K)}{1 + D_0 K^2 / F_0}
+     = \frac{\exp(-\tfrac{1}{2}K^2\sigma^2)}{1 + D_0 K^2 / F_0},
+\end{equation}
+exactly the closed form implemented in
+\texttt{NPDDRecorder.small\_signal\_mtf}. $H(K)$ is the fraction of a
+small-signal exposure modulation at spatial frequency $K$ that survives
+into recorded contrast: the Gaussian numerator is non-local smearing's
+low-pass response, and the $1 + D_0 K^2/F_0$ denominator is diffusion's
+own high-$K$ rolloff relative to the local reaction rate $F_0$.
+Compensating a medium with response $H(K) < 1$ at frequency $K$ requires
+pre-boosting the exposure there by $1/H(K)$; if $1/H(K)$ exceeds the
+contrast budget $B_c$ actually available, that frequency cannot be fully
+compensated, motivating a compensation-cliff hypothesis $K_c(B_c)$: the
+frequency beyond which $1/H(K) > B_c$.
+
+\subsection*{What $K_c(B_c)$ actually means in this pipeline}
+A naive reading -- solve $1/H(K) = B_c$ for the \emph{nominal} budget
+$B_c$ -- does \emph{not} reproduce the values reported in
+Section~\ref{sec:no-cliff}: at the default medium
+(Table~\ref{tab:mediumparams}), this gives $K_c(2) = 4.22$,
+$K_c(4) = 6.96$, $K_c(8) = 9.86\,\mathrm{rad}/\mu\mathrm{m}$ -- the third
+value is $33\%$ off the reported \KcPredEightX. The pipeline's actual
+definition (\texttt{analysis.aggregate.\_self\_consistent\_Kc}) compares
+$1/H(K)$ not against the nominal budget but against the contrast
+\emph{actually realized by the optimizer at that same measured} $K$,
+$C(K)$ -- the smallest measured $K$ where $1/H(K)$ first exceeds $C(K)$,
+linearly interpolated between grid points. This is a self-consistency
+check against real optimizer behavior, not a closed-form function of
+$B_c$ alone, and it is what Figure~\ref{fig:F4}'s dashed lines and
+Figure~\ref{fig:F5} both plot. Recomputing it from the logged per-$K$
+realized contrast reproduces $K_c = 4.254$, $6.963$,
+$7.387\,\mathrm{rad}/\mu\mathrm{m}$ at $B_c \in \{2,4,8\}$ -- matching
+\KcPredTwoX/\KcPredFourX/\KcPredEightX{} to three decimal places. The
+reported values are correct as printed; they are the self-consistent
+definition, not the naive one, and this appendix's first attempt at the
+naive form is retained above as the wrong number a reader would get by
+the obvious misreading, not smoothed over.
+
+\subsection*{Why $K_c$ saturates between $B_c=4$ and $B_c=8$}
+The reported $K_c$ scales $\times 1.638$ from $B_c=2\to4$ but only
+$\times 1.061$ from $B_c=4\to8$ -- far more saturating than the Gaussian
+kernel alone predicts (a pure-Gaussian-limited $H$ would give
+$\times 1.41$, $\times 1.22$ under the same doubling). The cause is not a
+property of $H(K)$'s functional shape: it is that the self-consistent
+definition depends on \emph{realized}, not nominal, contrast, and the
+optimizer's realized contrast tracks the nominal budget closely at
+$B_c=2$ and $4$ (mean realized $2.03$, $3.98$ against nominal $2$, $4$)
+but falls far short of nominal at $B_c=8$ (mean realized $6.03$, up to
+$4.2$ below nominal at individual $K$ points). A budget the optimizer
+cannot actually spend does not extend the compensable range the way the
+same nominal number would under perfect realization -- the same
+saturating-ceiling mechanism Section~\ref{sec:no-cliff} identifies
+directly in the paired-gain curve is visible here too, in why the
+\emph{predicted} cliff location itself stops moving.
+
 \begin{backmatter}
 
 \bmsection{Funding}
