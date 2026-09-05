@@ -520,6 +520,45 @@ def build_baseline_completeness_macros() -> str:
     return "".join(lines)
 
 
+def build_wp3_baseline_macros() -> str:
+    """WP3 (Applied Optics revision) macros: paired-gain range for the two
+    new baselines (RSGD, GPC) over BSGD at budget=2x, alongside SAT's, so
+    the revised Sec. 5.2 text can state where the cheap surrogate and the
+    two new baselines land without hand-typing. RSGD is a seeded optimizer
+    (gain_curve); GPC is closed-form/seed=0-only like GS/LPC
+    (gain_vs_bsgd_seed_mean) -- same split make_F4b_baseline_comparison
+    uses, for the same reason (see figures/make_all.py)."""
+    lines = ["\n% --- WP3 baseline (RSGD/GPC, Sec. 5.2) macros ---\n"]
+    try:
+        from analysis.aggregate import (load_all_results, group_by_config,
+                                        gain_curve, gain_vs_bsgd_seed_mean)
+        grouped = group_by_config(load_all_results())
+        rsgd_curve = gain_curve(grouped, "M1", 2.0, method="RSGD")
+        rsgd_vals = [v[1] for v in rsgd_curve]
+        lines.append(macro("RSGDGainMin", fmt(min(rsgd_vals), ".2f") if rsgd_vals else None))
+        lines.append(macro("RSGDGainMax", fmt(max(rsgd_vals), ".2f") if rsgd_vals else None))
+        gpc_curve = gain_vs_bsgd_seed_mean(grouped, "M1", 2.0, method="GPC")
+        gpc_vals = [v[1] for v in gpc_curve]
+        lines.append(macro("GPCGainMin", fmt(min(gpc_vals), ".2f") if gpc_vals else None))
+        lines.append(macro("GPCGainMax", fmt(max(gpc_vals), ".2f") if gpc_vals else None))
+        # Degeneracy check: max abs(GPC-LPC) paired gain at this budget,
+        # to back the "frequently near-identical to LPC" claim with a
+        # real computed number rather than the smoke-test anecdote.
+        lpc_curve = gain_vs_bsgd_seed_mean(grouped, "M1", 2.0, method="LPC")
+        lpc_by_K = {k: v for k, v, *_ in lpc_curve}
+        gpc_by_K = {k: v for k, v, *_ in gpc_curve}
+        common_Ks = sorted(set(lpc_by_K) & set(gpc_by_K))
+        diffs = [abs(gpc_by_K[k] - lpc_by_K[k]) for k in common_Ks]
+        lines.append(macro("GPCLPCMaxAbsDiffTwoX", fmt(max(diffs), ".2f") if diffs else None))
+    except Exception as e:
+        print(f"[make_numbers_tex] WARNING: WP3 baseline macros failed ({e}); "
+              f"emitting PENDING for all of them.")
+        for name in ("RSGDGainMin", "RSGDGainMax", "GPCGainMin", "GPCGainMax",
+                     "GPCLPCMaxAbsDiffTwoX"):
+            lines.append(macro(name, None))
+    return "".join(lines)
+
+
 def main():
     paper_numbers = {}
     if os.path.exists(PAPER_NUMBERS_PATH):
@@ -532,7 +571,7 @@ def main():
     tex = (build_macros(paper_numbers) + build_supplement_macros()
           + build_validation_macros() + build_baseline_completeness_macros()
           + build_shrinkage_bound_macros() + build_cost_benefit_macros()
-          + build_r1_macros())
+          + build_r1_macros() + build_wp3_baseline_macros())
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     with open(OUT_PATH, "w") as f:
         f.write(tex)

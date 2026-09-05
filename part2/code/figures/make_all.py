@@ -16,10 +16,12 @@ change. Summary:
             panel (b) compute-matched (M2) -- panel layout deferred until
             M1 data exists (see the run-order agreement); still a
             single-panel placeholder-or-M1-only render until then
-  F4b       M1: GS, LPC and SAT (saturation-only surrogate) paired gain
+  F4b       M1: GS, LPC, SAT (saturation-only surrogate), RSGD
+            (TV-regularized SGD) and GPC (gamma pre-comp) paired gain
             over BSGD, alongside MIL, at budget=2x -- the baselines Sec.
             4.1 defines but Sec. 5 originally never plotted (work-spec
-            item D.2), plus the cheap-surrogate control
+            item D.2), plus the cheap-surrogate control and the two
+            Applied-Optics-revision (WP3) baselines
   F5        M1: observed K* vs predicted Kc scatter
   F6        M3: cliff-location shift (M2-M1) per budget, per-seed band
   F7        S1: physics-component ablation
@@ -290,33 +292,48 @@ def _render_F4(closure):
 
 # --------------------------------------------------------------------- F4b
 def make_F4b_baseline_comparison():
-    """GS and LPC vs. BSGD, alongside MIL vs. BSGD, at budget=2x -- Sec.
-    4.1 defines all three non-oracle methods but the original Results
-    section only ever plotted MIL. MIL uses gain_curve (proper per-seed
-    paired comparison, real CI). GS/LPC use gain_vs_bsgd_seed_mean instead
-    of gain_curve -- checked: GS/LPC are logged at seed=0 only
-    (deterministic, "closed-form, no optimizer" per Sec. 4.1), and
+    """GS, LPC, RSGD and GPC vs. BSGD, alongside SAT and MIL vs. BSGD, at
+    budget=2x -- Sec. 4.1 defines all these non-oracle methods but the
+    original Results section only ever plotted MIL. MIL/SAT/RSGD use
+    gain_curve (proper per-seed paired comparison, real CI) since all
+    three are seeded optimizers. GS/LPC/GPC use gain_vs_bsgd_seed_mean
+    instead of gain_curve -- checked: GS/LPC/GPC are logged at seed=0
+    only (deterministic, "closed-form, no optimizer" per Sec. 4.1), and
     gain_curve's seed-matched pairing would compare them against BSGD's
     single seed=0 draw rather than BSGD's seed-mean, which produced a
-    visibly noisy, non-physical curve on the real data before this fix."""
+    visibly noisy, non-physical curve on the real data before this fix.
+
+    RSGD (regularized/TV-penalized media-blind SGD) and GPC (closed-form
+    gamma pre-compensation) were added for the Applied Optics revision
+    (WP3): RSGD tests whether the media-blind-SGD straw-man is an
+    artifact of unregularized exposures; GPC is the standard pointwise
+    display-gamma analogue of LPC, inverting the full saturating
+    nonlinearity rather than LPC's linearized H(K). At this target
+    family/budget the two are frequently near-identical (see
+    holomedia/optimize.py's gamma_precomp docstring and the WP3 commit
+    for the investigated, target-dependent degeneracy) -- shown here
+    rather than hidden, sharing GPC's color with LPC in figures/style.py
+    to make that visually legible."""
     grouped = group_by_config(load_all_results())
     budget = 2.0
     curves = {"MIL": gain_curve(grouped, "M1", budget, method="MIL"),
-              # SAT is a seeded optimizer like MIL, so it gets the proper
-              # per-seed paired comparison with a real CI -- unlike GS/LPC
-              # below, which are closed-form single-draw methods.
-              "SAT": gain_curve(grouped, "M1", budget, method="SAT")}
-    for m in ("GS", "LPC"):
+              # SAT/RSGD are seeded optimizers like MIL, so they get the
+              # proper per-seed paired comparison with a real CI --
+              # unlike GS/LPC/GPC below, which are closed-form
+              # single-draw methods.
+              "SAT": gain_curve(grouped, "M1", budget, method="SAT"),
+              "RSGD": gain_curve(grouped, "M1", budget, method="RSGD")}
+    for m in ("GS", "LPC", "GPC"):
         curves[m] = gain_vs_bsgd_seed_mean(grouped, "M1", budget, method=m)
     if all(len(c) == 0 for c in curves.values()):
         no_data_placeholder(
             os.path.join(OUT_DIR, "F4b_baseline_comparison.pdf"),
-            "F4b (M1): GS/LPC/SAT/MIL paired gain over BSGD, budget=2x",
-            "needs M1 manifest results for GS/LPC/SAT/MIL at budget=2x.")
+            "F4b (M1): GS/LPC/SAT/RSGD/GPC/MIL paired gain over BSGD, budget=2x",
+            "needs M1 manifest results for GS/LPC/SAT/RSGD/GPC/MIL at budget=2x.")
         return False
 
     fig, ax = new_fig(width="single")
-    for method in ("GS", "LPC", "SAT", "MIL"):
+    for method in ("GS", "LPC", "SAT", "RSGD", "GPC", "MIL"):
         curve = curves[method]
         if not curve:
             continue

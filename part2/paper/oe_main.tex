@@ -698,6 +698,39 @@ a missing baseline filled in -- linear pre-compensation is not a
 sufficient substitute for optimizing through the medium's actual
 nonlinear response.
 
+Two further baselines close two remaining straw-man objections. The
+first is that media-blind SGD's exposures might simply be poorly
+regularized -- driven to sharp, binary-like swings that needlessly clip
+against $\Delta n_{\max}$ -- rather than media-blindness itself being the
+limitation. We test this directly with a total-variation-penalized
+variant of the same optimizer (RSGD), with the penalty weight selected
+per budget by a small grid search evaluated on the real twin (twin-tuned,
+disclosed rather than presented as unsupervised). At the two lower
+budgets the tuned weight is exactly zero -- the search found no
+regularization strength that helps, so RSGD is numerically identical to
+plain media-blind SGD there (paired gain \RSGDGainMin{} to
+\RSGDGainMax{}\,dB, i.e.\ 0 by construction). At $8\times$, the one
+budget where a nonzero weight was selected, the gain is still centered
+on zero (a few tenths of a dB in either direction across $K$) -- within
+the tuning grid's own noise floor. Regularizing the exposure is not a
+substitute for media awareness on this target family.
+
+The second is the standard pointwise ``gamma correction'' recipe from
+display calibration: invert the medium's saturating exposure$\to$index
+map directly in real space, rather than LPC's linearized frequency-domain
+inverse. We add this as GPC, sharing SAT's calibrated single-parameter
+fit. Its paired gain ranges from \GPCGainMin{} to \GPCGainMax{}\,dB --
+better than LPC's worst case but still frequently negative, and at low
+$K$/heavy clipping it is numerically close to LPC (\GPCLPCMaxAbsDiffTwoX{}\,dB
+maximum absolute difference at this budget): once the shared
+contrast-projection step hard-clips both methods' pre-boosted exposures
+to the same budget, a real degeneracy, not a coincidence -- any monotonic
+pre-boost survives that clip identically. Like LPC, GPC inverts a model
+of the medium's response, but a pointwise one; that it does no better is
+further evidence that the transport terms LPC and GPC both ignore, not
+just the saturating nonlinearity they both invert, are what
+media-in-the-loop's advantage is coming from.
+
 \paragraph{Is the full recording model necessary?} Section~\ref{sec:s1-ablation}
 finds saturation dominant and the transport terms individually
 non-critical, which invites the obvious economy: keep the saturating
@@ -757,12 +790,17 @@ latter answers whether the full model earns its cost.
 \centering
 \includegraphics[width=0.8\linewidth]{../code/figures/paper/F4b_baseline_comparison.pdf}
 \caption{Paired gain over media-blind SGD for GS, LPC, the
-saturation-only surrogate, and media-in-the-loop, budget $2\times$. GS
-and LPC use a single deterministic run each (closed-form, no optimizer
--- Section~\ref{sec:baselines}), compared against BSGD's seed-averaged
-PSNR at each $K$, so no CI band is plotted for those two curves. The
-surrogate is a seeded optimizer and gets the same per-seed paired
-treatment as media-in-the-loop.}
+saturation-only surrogate (SAT), TV-regularized SGD (RSGD), gamma
+pre-compensation (GPC), and media-in-the-loop, budget $2\times$. GS,
+LPC and GPC use a single deterministic run each (closed-form, no
+optimizer -- Section~\ref{sec:baselines}), compared against BSGD's
+seed-averaged PSNR at each $K$, so no CI band is plotted for those
+three curves. SAT and RSGD are seeded optimizers and get the same
+per-seed paired treatment as media-in-the-loop; RSGD is flat at zero
+here because its tuned regularization weight at this budget is zero
+(Section~\ref{sec:baseline-completeness}), so it coincides exactly with
+BSGD. GPC shares LPC's color (with a distinct marker/line style) to
+flag where the two nearly coincide.}
 \label{fig:F4b}
 \end{figure}
 

@@ -123,8 +123,18 @@ def _pairing_key(config: dict) -> str:
     perturbations remain separate groups. For M1 (where n_iters IS
     uniform across methods within a group already), this key produces
     the exact same grouping as config_hash -- confirmed no M1 result
-    changed after this fix."""
-    stripped = {k: v for k, v in config.items() if k != "n_iters"}
+    changed after this fix.
+
+    Same bug, same fix, second occurrence (WP3): RSGD's config carries a
+    tv_weight field no other method has (build_M1_jobs only sets it for
+    RSGD), which put every RSGD job in its own group with zero BSGD
+    counterpart -- gain_curve("RSGD") silently returned [] for all 45
+    configs despite the data existing on disk. Caught because the WP3
+    macro build emitted PENDING for RSGDGainMin/Max instead of a number,
+    not because it was anticipated -- stripped here for the same reason
+    n_iters is: it varies the OPTIMIZER's behavior, not the physical
+    condition being compared."""
+    stripped = {k: v for k, v in config.items() if k not in ("n_iters", "tv_weight")}
     canon = json.dumps(stripped, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canon.encode()).hexdigest()[:16]
 
