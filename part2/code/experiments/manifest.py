@@ -39,6 +39,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 
 # PVA/AA-like defaults, matching holomedia.npdd.MediumParams() exactly --
 # duplicated here (not imported) so a manifest's config is self-contained
@@ -58,7 +59,13 @@ DEFAULT_MEDIUM = dict(D0=0.1, sigma=0.08, kappa=2.0, gamma=1.0, dn_max=3.5e-3,
 # FULL 15-point K x 3-budget grid, not just M2's 3 points -- because it is
 # cheap: its forward is a handful of elementwise ops with no n_steps unroll,
 # so the whole SAT arm costs a small fraction of a single MIL budget column.
-ALL_METHODS = ["GS", "BSGD", "LPC", "MIL", "SAT", "ORC", "ORU"]
+# RSGD (regularized_media_blind_sgd) and GPC (gamma_precomp) are WP3's two
+# new baselines (regularized-media-blind and gamma-precompensated-linear),
+# added to ALL_METHODS the same way SAT was: RSGD costs the same class as
+# BSGD (~80s/job at production settings, measured), GPC is closed-form and
+# shares SAT's calibration cache (one ~28s fit total for the whole grid,
+# then <1s/job) -- both affordable on the full 15x3 grid, not just a subset.
+ALL_METHODS = ["GS", "BSGD", "RSGD", "LPC", "GPC", "MIL", "SAT", "ORC", "ORU"]
 
 # 5 -> 3 seeds (compute-budget reduction, see the run-cost audit that
 # prompted this change): analysis/aggregate.py's CI already uses a
@@ -160,14 +167,36 @@ def _cliff_K_grid(dx: float) -> list[float]:
 # message for the explicit interpretation call this rests on.
 # =====================================================================
 def build_M1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
-                  seeds=None, methods=None) -> list[dict]:
+                  seeds=None, methods=None,
+                  rsgd_tv_weight: dict[float, float] | None = None) -> list[dict]:
     """Cliff x budget grid, ITERATION-matched arms: BSGD (media-unaware)
     and MIL (media-aware) both get the same n_iters budget. This is the
     original cliff/budget design (formerly build_E1_jobs), unchanged
     science -- only the experiment_id changed (E1 -> M1) and the method
     registry codes changed (M2/M4 -> BSGD/MIL) to avoid the tier-name
     collision.
+
+    rsgd_tv_weight: {budget: tv_weight}, the per-budget regularization
+    strength selected by experiments/tune_regularized_sgd.py's small
+    grid search (WP3 item 1, tuned ON THE TWIN -- disclosed, not hidden).
+    Only consulted for method_id="RSGD". If not passed explicitly
+    (None), auto-loaded from results/summary/rsgd_tv_weight.json if that
+    file exists -- so BUILDERS["M1"] (run_manifest.py's generic
+    dispatch, which does not know about this kwarg) still picks up the
+    real tuned values once tune_regularized_sgd.py has been run, without
+    every call site needing to be updated. Falls back to tv_weight=0.0
+    (plain BSGD) per budget if the file does not exist yet.
     """
+    if rsgd_tv_weight is None:
+        _tv_path = os.path.join(os.path.dirname(__file__), "..",
+                                "results", "summary", "rsgd_tv_weight.json")
+        if os.path.exists(_tv_path):
+            with open(_tv_path) as _f:
+                _loaded = json.load(_f)
+            # JSON keys are strings; budgets are floats everywhere else
+            # in this file (2.0, 4.0, 8.0) -- convert back on load so a
+            # dict.get(budget) lookup with a float budget actually hits.
+            rsgd_tv_weight = {float(k): v for k, v in _loaded["best_per_budget"].items()}
     seeds = seeds if seeds is not None else PAPER_SEEDS
     methods = methods if methods is not None else ALL_METHODS
     dx = 51.2 / n_x  # fixed physical window, matches gpu_npdd_mesh_convergence_sweep.py convention
@@ -186,7 +215,10 @@ def build_M1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
                     target=_bars_target_spec(period_px), K_nominal=K,
                     arm="iteration_matched",
                 )
-                if method_id in ("GS", "LPC"):
+                if method_id == "RSGD":
+                    base_config["tv_weight"] = (
+                        (rsgd_tv_weight or {}).get(budget, 0.0))
+                if method_id in ("GS", "LPC", "GPC"):
                     for_seeds = [0]  # closed-form, no seed dependence worth repeating
                 else:
                     for_seeds = seeds

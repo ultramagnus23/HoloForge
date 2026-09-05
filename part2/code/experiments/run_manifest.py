@@ -243,7 +243,8 @@ def run_job(job: dict, device, commit: str, dtype: torch.dtype = DTYPE) -> dict:
     result = run_method(job["method_id"], target, rec, bpm, seed=job["seed"],
                         n_iters=cfg["n_iters"], dose_budget=cfg["dose_budget"],
                         contrast_cap=cfg.get("contrast_cap"),
-                        converge_tol=cfg.get("converge_tol"))
+                        converge_tol=cfg.get("converge_tol"),
+                        tv_weight=cfg.get("tv_weight", 0.0))
     if device.type == "cuda":
         torch.cuda.synchronize(device)
     wall_s = time.time() - t0

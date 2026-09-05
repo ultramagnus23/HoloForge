@@ -34,14 +34,17 @@ import torch
 from holomedia import (NPDDRecorder, SlabBPM,
                        media_in_the_loop, media_blind_sgd, media_blind_gs,
                        oracle_ideal, oracle_unconstrained, linear_precomp,
-                       sat_sgd, psnr, psnr_si, diffraction_efficiency)
+                       sat_sgd, gamma_precomp, regularized_media_blind_sgd,
+                       psnr, psnr_si, diffraction_efficiency)
 
-METHOD_IDS = ["GS", "BSGD", "LPC", "MIL", "SAT", "ORC", "ORU"]
+METHOD_IDS = ["GS", "BSGD", "RSGD", "LPC", "GPC", "MIL", "SAT", "ORC", "ORU"]
 
 METHOD_NAMES = {
     "GS": "media_blind_gs",
     "BSGD": "media_blind_sgd",
+    "RSGD": "regularized_media_blind_sgd",
     "LPC": "linear_precomp",
+    "GPC": "gamma_precomp",
     "MIL": "media_in_the_loop",
     "SAT": "sat_sgd",
     "ORC": "oracle_ideal",
@@ -62,7 +65,8 @@ def contrast_stats(E: torch.Tensor) -> dict:
 def run_method(method_id: str, target: torch.Tensor, recorder: NPDDRecorder,
               bpm: SlabBPM, seed: int, n_iters: int = 800, lr: float = 5e-2,
               dose_budget: float = 1.0, contrast_cap: float | None = None,
-              converge_tol: float | None = None, log_every: int = 50) -> dict:
+              converge_tol: float | None = None, log_every: int = 50,
+              tv_weight: float = 0.0) -> dict:
     """Run one method, return a dict with everything the Phase-1.2 schema
     needs EXCEPT git hash / device / wall-clock (added by the caller, since
     those are orchestration concerns, not physics ones)."""
@@ -87,11 +91,31 @@ def run_method(method_id: str, target: torch.Tensor, recorder: NPDDRecorder,
                                             contrast_cap=contrast_cap, log_every=log_every)
         early_stop_reason = "n_iters_exhausted"
 
+    elif method_id == "RSGD":
+        E, recon, history = regularized_media_blind_sgd(
+            target, recorder, bpm, n_iters=n_iters, lr=lr,
+            dose_budget=dose_budget, seed=seed, contrast_cap=contrast_cap,
+            tv_weight=tv_weight, log_every=log_every)
+        early_stop_reason = "n_iters_exhausted"
+        extra = dict(tv_weight=tv_weight)
+
     elif method_id == "LPC":
         E, recon = linear_precomp(target, recorder, bpm, dose_budget=dose_budget,
                                   contrast_cap=contrast_cap)
         iterations_run = 0
         early_stop_reason = "closed_form_no_optimization"
+
+    elif method_id == "GPC":
+        from holomedia.optimize import _cached_sat_fit as _gpc_sat_fit
+        gpc_a_eff = _gpc_sat_fit(recorder, 48, dose_budget)
+        E, recon = gamma_precomp(target, recorder, bpm, dose_budget=dose_budget,
+                                 contrast_cap=contrast_cap, a_eff=gpc_a_eff)
+        iterations_run = 0
+        early_stop_reason = "closed_form_no_optimization"
+        # Same calibration SAT uses (shared cache) -- provenance carried
+        # in the result row for the same reason SAT's is: a_eff is a
+        # fitted number, not read off a spec sheet.
+        extra = dict(sat_fit=dict(a_eff=gpc_a_eff))
 
     elif method_id == "MIL":
         E, recon, history = media_in_the_loop(target, recorder, bpm, n_iters=n_iters,

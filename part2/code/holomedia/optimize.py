@@ -370,6 +370,103 @@ def linear_precomp(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
     return E, recon
 
 
+def gamma_precomp(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
+                  dose_budget: float = 1.0, contrast_cap: float | None = None,
+                  a_eff: float | None = None, fit_samples: int = 48):
+    """Gamma-precompensated linear (WP3 item 2) -- closed-form, zero
+    optimization, the cheapest media-AWARE competitor in the registry
+    (cheaper than LPC: elementwise inversion, no FFT).
+
+    Where LPC (linear_precomp) inverts the LINEARIZED small-signal
+    transfer function H(K) in frequency space, this baseline inverts the
+    FULL pointwise saturating nonlinearity directly, in real space -- the
+    standard "gamma correction" recipe: given a calibrated forward map
+    E -> dn = f(E) (here, SaturationOnlyTwin's calibrated pointwise map,
+    the same one/same fit sat_sgd (SAT) uses), and a desired index profile
+    dn_desired(x), solve elementwise for E(x) = f^{-1}(dn_desired(x)) so
+    that f(E(x)) = dn_desired(x) exactly under the CALIBRATED model (not
+    the real twin -- this is a media-blind-to-transport-physics baseline,
+    same spirit as LPC and BSGD, just with a better single-point
+    nonlinearity than either).
+
+    dn_desired is built the same way LPC treats its target (target taken
+    as directly proportional to the desired profile, not run through an
+    optimizer), rescaled into this medium's own achievable range
+    (0, dn_max) since the recorder's dn is strictly nonnegative by
+    construction (dn = dn_max*tanh(...), N >= 0) -- clipped strictly
+    below dn_max to keep the tanh inversion finite.
+
+    a_eff reuses SAT's own calibration cache (_cached_sat_fit) rather than
+    re-fitting -- same fitted sensitivity, same fit cost amortization,
+    consistent with sat_sgd's own a_eff handling.
+    """
+    device = target.device
+    dtype = recorder.dtype
+    if a_eff is None:
+        a_eff = _cached_sat_fit(recorder, fit_samples, dose_budget)
+    dn_max, gamma_exp = recorder.p.dn_max, recorder.p.gamma
+
+    t = target.to(dtype)
+    t_norm = (t / (t.max() + 1e-12)).clamp(min=0.0, max=0.999)
+    dn_desired = dn_max * t_norm
+
+    # Invert dn = dn_max * tanh(1.5*N)  =>  N = artanh(dn/dn_max) / 1.5
+    N = torch.atanh((dn_desired / dn_max).clamp(max=0.999)) / 1.5
+    # Invert N = 1 - exp(-a*E^gamma)  =>  E = (-ln(1-N)/a)^(1/gamma)
+    E = (-torch.log((1.0 - N).clamp(min=1e-12)) / a_eff).clamp(min=0.0) ** (1.0 / gamma_exp)
+
+    E = contrast_project(E, dose_budget, contrast_cap)
+    with torch.no_grad():
+        dn = recorder(E)
+        recon = bpm(dn, shrinkage=recorder.p.shrinkage)
+    return E, recon
+
+
+def regularized_media_blind_sgd(target: torch.Tensor, recorder: NPDDRecorder,
+                                bpm: SlabBPM, n_iters: int = 400, lr: float = 5e-2,
+                                dose_budget: float = 1.0, seed: int = 0,
+                                contrast_cap: float | None = None,
+                                tv_weight: float = 0.0, log_every: int = 50):
+    """media_blind_sgd (WP3 item 1) plus a total-variation penalty on the
+    exposure, to neutralize the "straw man" objection that unregularized
+    media-blind SGD drives exposures to binary swings that saturate
+    dn_max regardless of medium. Identical to media_blind_sgd in every
+    other respect (same naive linear dn_ideal = c_lin*(E-mean(E))
+    assumption, same evaluation-on-the-real-twin protocol) -- tv_weight=0
+    reproduces media_blind_sgd exactly.
+
+    tv_weight is tuned ON THE TWIN (selected by realized PSNR against the
+    real recorder+BPM, not against the naive linear proxy the optimizer
+    itself minimizes) by a small grid search at the call site
+    (experiments/tune_regularized_sgd.py) -- stated explicitly per the
+    work order's requirement that twin-tuned regularization be disclosed,
+    not presented as if the naive optimizer discovered it unsupervised.
+    """
+    device = target.device
+    theta = _seeded_init_theta(recorder.n_x, device, recorder.dtype, seed)
+    opt = torch.optim.Adam([theta], lr=lr)
+    c_lin = recorder.p.dn_max
+    history = []
+
+    for it in range(n_iters):
+        opt.zero_grad()
+        E = torch.nn.functional.softplus(theta) + 1e-6
+        E = contrast_project(E, dose_budget, contrast_cap)
+        dn_ideal = c_lin * (E - E.mean())
+        recon = bpm(dn_ideal, shrinkage=0.0)
+        tv = torch.mean(torch.abs(E[1:] - E[:-1]))
+        loss = si_mse(recon, target) + tv_weight * tv
+        loss.backward()
+        opt.step()
+        if it % log_every == 0:
+            history.append((it, float(loss.detach())))
+
+    with torch.no_grad():
+        E = contrast_project(torch.nn.functional.softplus(theta) + 1e-6, dose_budget, contrast_cap)
+        recon_real = bpm(recorder(E), shrinkage=recorder.p.shrinkage)
+    return E.detach(), recon_real.detach(), history
+
+
 def media_blind_gs(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
                    n_iters: int = 200, dose_budget: float = 1.0, seed: int = 0,
                    contrast_cap: float | None = None):
