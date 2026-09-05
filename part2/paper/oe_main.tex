@@ -652,6 +652,50 @@ eliminates. Under this criterion media-in-the-loop does not merely score
 a higher mean PSNR -- it essentially eliminates the exposures that would
 have had to be thrown away.
 
+Table~\ref{tab:failure-rate} extends the same measurement to every
+non-oracle baseline defined in Section~\ref{sec:baselines}, including
+the two added for this revision (RSGD, GPC). None of the added
+baselines closes the gap to media-in-the-loop: RSGD's failure rate
+tracks BSGD's closely at every threshold (expected, since the two
+coincide exactly at two of the three budgets, Section~\ref{sec:baseline-completeness}),
+and GPC's tracks LPC's closely, consistent with the same near-degeneracy.
+The saturation-only surrogate (SAT) is the closest any cheap baseline
+gets to media-in-the-loop by this measure at the two looser thresholds --
+lowest failure rate of any baseline at 2\,dB and matching media-in-the-loop's
+0\% at 3\,dB -- but at the stricter 1\,dB bar it fails as often as plain
+media-blind SGD (\WastedMediaSATFracOneDB\% vs.\ \WastedMediaBSGDFracOneDB\%),
+both well above media-in-the-loop's \WastedMediaMILFracOneDB\%. No baseline
+overtakes media-in-the-loop at any threshold tested, and the closed-form
+methods (GS, LPC, GPC) are consistently among the worst of the group at
+1\,dB and 2\,dB, never better than any seeded optimizer at either
+threshold.
+
+\begin{table}[htbp]
+\centering
+\caption{Failure rate (\% of the \WastedMediaNConfigs\ $(K,\text{budget})$
+configurations in the headline M1 grid whose PSNR falls more than the
+column threshold below the constrained oracle's ceiling at the same
+$(K,\text{budget})$), for every non-oracle method. GS, LPC and GPC are
+single deterministic runs per configuration (closed-form, no optimizer
+seed -- Section~\ref{sec:baselines}); BSGD, SAT, RSGD and MIL are
+averaged over the same three seeds Section~\ref{sec:failure-rate} uses
+first.}
+\label{tab:failure-rate}
+\begin{tabular}{lccc}
+\hline
+Method & 1\,dB & 2\,dB & 3\,dB \\
+\hline
+GS & \WastedMediaGSFracOneDB\% & \WastedMediaGSFrac\% & \WastedMediaGSFracThreeDB\% \\
+LPC & \WastedMediaLPCFracOneDB\% & \WastedMediaLPCFrac\% & \WastedMediaLPCFracThreeDB\% \\
+GPC & \WastedMediaGPCFracOneDB\% & \WastedMediaGPCFrac\% & \WastedMediaGPCFracThreeDB\% \\
+BSGD & \WastedMediaBSGDFracOneDB\% & \WastedMediaBSGDFrac\% & \WastedMediaBSGDFracThreeDB\% \\
+RSGD & \WastedMediaRSGDFracOneDB\% & \WastedMediaRSGDFrac\% & \WastedMediaRSGDFracThreeDB\% \\
+SAT & \WastedMediaSATFracOneDB\% & \WastedMediaSATFrac\% & \WastedMediaSATFracThreeDB\% \\
+MIL (ours) & \WastedMediaMILFracOneDB\% & \WastedMediaMILFrac\% & \WastedMediaMILFracThreeDB\% \\
+\hline
+\end{tabular}
+\end{table}
+
 \subsection{Compute-matched confound control}
 \label{sec:compute-matched}
 A compute-matched arm repeats the comparison at three representative $K$
