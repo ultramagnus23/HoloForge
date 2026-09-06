@@ -767,6 +767,54 @@ def s3_mismatch_summary(grouped: dict) -> dict:
                                          if k[1] is not None}))
 
 
+def s6_joint_mismatch_summary(grouped: dict) -> dict:
+    """S6 (WP5): paired gain (MIL-BSGD) across S6_N_DRAWS independent
+    JOINT parameter-perturbation Monte Carlo draws (all four NPDD
+    parameters wrong simultaneously per draw, vs. S3's one-at-a-time).
+    Reuses S3's cached design exposures, so this is purely about how the
+    gain distributes across draws.
+
+    Reports, per draw: the K-averaged, seed-averaged paired gain (K/seed
+    averaged the same way s3_mismatch_summary does -- pair within each
+    config group, average over K per seed, then over seeds), plus the
+    fraction of draws where that mean gain stays positive -- the single
+    number this tier exists to produce: does joint miscalibration ever
+    flip the sign, and how often."""
+    rows = [(exp_id, ch) for exp_id, ch in grouped if exp_id == "S6"]
+    if not rows:
+        return dict(status="no_data")
+
+    per_seed_by_draw: dict = {}
+    for exp_id, ch in rows:
+        by_method = grouped[(exp_id, ch)]
+        any_rows = next(iter(by_method.values()), None)
+        if not any_rows:
+            continue
+        cfg = any_rows[0]["config"]
+        draw_id = cfg.get("draw_id")
+        for seed, g in paired_gain(by_method.get("MIL", []),
+                                   by_method.get("BSGD", []), key="psnr"):
+            per_seed_by_draw.setdefault(draw_id, {}).setdefault(seed, []).append(g)
+
+    if not per_seed_by_draw:
+        return dict(status="no_data")
+
+    draw_means = {}
+    for draw_id, by_seed in per_seed_by_draw.items():
+        seed_means = [sum(v) / len(v) for v in by_seed.values() if v]
+        if seed_means:
+            draw_means[draw_id] = sum(seed_means) / len(seed_means)
+
+    gains = list(draw_means.values())
+    n_negative = sum(1 for g in gains if g < 0)
+    return dict(status="ok", n_draws=len(gains),
+               stats=dict(mean_std_median_ci95(gains), **bootstrap_ci(gains)),
+               n_negative=n_negative,
+               frac_negative=n_negative / len(gains) if gains else None,
+               worst_draw_gain=min(gains) if gains else None,
+               best_draw_gain=max(gains) if gains else None)
+
+
 def sat_surrogate_summary(grouped: dict, experiment_id: str = "M1",
                           budgets=BUDGETS) -> dict:
     """SAT: how much of MIL's advantage a cheap saturation-only surrogate
@@ -888,6 +936,7 @@ def build_paper_numbers(results_root: str = RESULTS_ROOT) -> dict:
         s3_mismatch_summary=s3_mismatch_summary(grouped),
         s4_target_ensemble_summary=s4_target_ensemble_summary(grouped),
         s5_noise_robustness_summary=s5_noise_robustness_summary(grouped),
+        s6_joint_mismatch_summary=s6_joint_mismatch_summary(grouped),
         sat_surrogate_summary=sat_surrogate_summary(grouped),
         # M2 carries SAT at the sub-cliff K = 1.31 rad/um, which lies
         # below M1's grid minimum of 1.96 -- i.e. exactly where

@@ -608,6 +608,37 @@ def build_wp4_macros() -> str:
     return "".join(lines)
 
 
+def build_wp5_macros() -> str:
+    """WP5 (Applied Optics revision, joint miscalibration Monte Carlo)
+    macros: S6's paired-gain distribution across joint (all-four-
+    parameter) perturbation draws."""
+    lines = ["\n% --- WP5 (joint miscalibration Monte Carlo, Sec. 5.x) macros ---\n"]
+    try:
+        from analysis.aggregate import load_all_results, group_by_config, s6_joint_mismatch_summary
+        grouped = group_by_config(load_all_results())
+        s6 = s6_joint_mismatch_summary(grouped)
+        if s6["status"] == "ok":
+            lines.append(macro("S6NDraws", str(s6["n_draws"])))
+            lines.append(macro("S6MeanGain", fmt(s6["stats"]["mean"], ".2f")))
+            lines.append(macro("S6BootCILo", fmt(s6["stats"]["boot_ci_lo"], ".2f")))
+            lines.append(macro("S6BootCIHi", fmt(s6["stats"]["boot_ci_hi"], ".2f")))
+            lines.append(macro("S6NNegative", str(s6["n_negative"])))
+            lines.append(macro("S6WorstDrawGain", fmt(s6["worst_draw_gain"], ".2f")))
+            lines.append(macro("S6BestDrawGain", fmt(s6["best_draw_gain"], ".2f")))
+            from manifest import S6_PCT_RANGE
+            lines.append(macro("S6PctRange", fmt(S6_PCT_RANGE, ".0f")))
+        else:
+            for name in ("S6NDraws", "S6MeanGain", "S6BootCILo", "S6BootCIHi",
+                        "S6NNegative", "S6WorstDrawGain", "S6BestDrawGain", "S6PctRange"):
+                lines.append(macro(name, None))
+    except Exception as e:
+        print(f"[make_numbers_tex] WARNING: WP5 macros failed ({e}); emitting PENDING.")
+        for name in ("S6NDraws", "S6MeanGain", "S6BootCILo", "S6BootCIHi",
+                    "S6NNegative", "S6WorstDrawGain", "S6BestDrawGain", "S6PctRange"):
+            lines.append(macro(name, None))
+    return "".join(lines)
+
+
 def main():
     paper_numbers = {}
     if os.path.exists(PAPER_NUMBERS_PATH):
@@ -620,7 +651,8 @@ def main():
     tex = (build_macros(paper_numbers) + build_supplement_macros()
           + build_validation_macros() + build_baseline_completeness_macros()
           + build_shrinkage_bound_macros() + build_cost_benefit_macros()
-          + build_r1_macros() + build_wp3_baseline_macros() + build_wp4_macros())
+          + build_r1_macros() + build_wp3_baseline_macros() + build_wp4_macros()
+          + build_wp5_macros())
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     with open(OUT_PATH, "w") as f:
         f.write(tex)

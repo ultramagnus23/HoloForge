@@ -478,6 +478,60 @@ def build_S3_conditions(n_x: int = 1024) -> list[dict]:
     return conds
 
 
+# =====================================================================
+# S6: JOINT twin-miscalibration Monte Carlo (WP5, Applied Optics
+# revision). S3 perturbs exactly ONE NPDD parameter at a time -- a real
+# calibration error is never that clean; every parameter is uncertain
+# simultaneously. S6 asks whether the design/evaluate split S3 already
+# established (optimize once at theta_nominal, evaluate the SAME fixed
+# exposure at theta_prime) survives when all four parameters (D0, sigma,
+# kappa, dn_max) are wrong AT ONCE, drawn independently per Monte Carlo
+# trial rather than one at a time.
+#
+# Deliberately reuses S3's cached designs (results/S3/_designs/*.pt) --
+# the SAME exposures S3 already paid to optimize -- rather than
+# re-optimizing anything: a joint miscalibration draw is exactly as valid
+# an evaluation of an S3 design as a single-parameter one is (both are
+# "some theta_prime the design didn't know about"), so re-running the
+# expensive design stage here would be pure waste. Cost is therefore
+# forward passes only (run_s6_joint_mismatch.py), same as S3's own
+# evaluation stage.
+S6_PARAMS = S3_PARAMS
+S6_N_DRAWS = 30
+S6_PCT_RANGE = 25.0  # each param drawn independently, Uniform(-25%, +25%)
+                     # -- same magnitude S2/S3 already test one-at-a-time,
+                     # not a new number invented for this tier.
+
+
+def build_S6_joint_conditions(n_draws: int = S6_N_DRAWS, pct_range: float = S6_PCT_RANGE,
+                              seed: int = 0) -> list[dict]:
+    """N_DRAWS independent joint perturbations, one Uniform(-pct_range,
+    +pct_range)% draw per parameter per trial, fully reproducible (fixed
+    numpy seed) -- rerunning this function always returns the identical
+    set of conditions."""
+    import numpy as np
+    rng = np.random.RandomState(seed)
+    conds = []
+    for draw_id in range(n_draws):
+        pct_by_param = {p: float(rng.uniform(-pct_range, pct_range)) for p in S6_PARAMS}
+        medium = dict(DEFAULT_MEDIUM)
+        for p, pct in pct_by_param.items():
+            medium[p] = DEFAULT_MEDIUM[p] * (1.0 + pct / 100.0)
+        conds.append(dict(draw_id=draw_id, pct_by_param=pct_by_param, medium=medium))
+    return conds
+
+
+def s6_result_config(design_config: dict, cond: dict) -> dict:
+    """Same shape as s3_result_config: the design config with the joint-
+    perturbed evaluation medium substituted in and the draw's per-
+    parameter percentages attached (as a sorted-key-stable string, since
+    config_hash needs a JSON-stable, not a Python dict-ordering-dependent,
+    representation)."""
+    pct_str = ",".join(f"{p}={cond['pct_by_param'][p]:.4f}" for p in sorted(S6_PARAMS))
+    return dict(design_config, medium=cond["medium"], draw_id=cond["draw_id"],
+               pct_by_param_str=pct_str, design_medium="nominal", arm="joint_mismatch_eval")
+
+
 def build_S3_designs(n_x: int = 1024, n_iters: int = 800,
                      converge_tol: float = 1e-4, seeds=None,
                      methods=None, K_points=None) -> list[dict]:
