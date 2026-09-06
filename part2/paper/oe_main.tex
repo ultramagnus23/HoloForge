@@ -918,6 +918,20 @@ establishes is that the compensation advantage identified in the 1D
 geometry is not an artifact of that geometry -- it survives a genuine,
 non-separable 2D transverse recording problem.
 
+We also extend this study with the saturation-only surrogate (SAT,
+Section~\ref{sec:baseline-completeness}), asking in 2D the same question
+posed of it in 1D: is the cheap closed-form pointwise model enough on
+its own? SAT's calibration is reused directly from the 1D fit rather
+than re-derived (a property of the medium's dose-sensitivity curve, not
+of whether the calibrating exposures were arranged in 1D or 2D).
+Paired gain over media-blind SGD ranges from \TwoDSATMinGain\ to
+\TwoDSATMaxGain~dB, mean \TwoDSATMeanGain~dB -- recovering
+\TwoDSATFracOfMIL\% of media-in-the-loop's own mean gain on this study,
+squarely inside the \SATFracOfMILTwoX--\SATFracOfMILEightX\% range the
+1D headline grid reports across its three budgets. The cheap surrogate's
+partial-but-incomplete competitiveness is therefore not a 1D artifact
+either.
+
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.85\linewidth]{../code/figures/paper/R2_2d_reconstructions.pdf}
