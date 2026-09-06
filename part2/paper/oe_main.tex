@@ -1247,6 +1247,23 @@ measure $\mathcal{D}$ for the media modelled here; a practitioner can
 close it with a single transmission measurement at the recording
 wavelength.
 
+We also test it directly rather than leave it purely parametric.
+Extending the NPDD recorder to attenuate the recording exposure with
+depth (Beer--Lambert, independently re-recording at each of 16 depth
+slices rather than assuming one profile extruded through the slab) and
+propagating the resulting genuinely depth-resolved index profile through
+the BPM, the same design/evaluate exposures used in
+Section~\ref{sec:mismatch} give a paired gain of \SSevenGainODZero~dB at
+$\mathcal{D}=0$ (reproducing the uniform-depth assumption's own result
+exactly, by construction), falling to \SSevenGainODOneTenth~dB at
+$\mathcal{D}=0.1$ and \SSevenGainODThreeTenths~dB at $\mathcal{D}=0.3$.
+The advantage narrows -- by roughly 13\% from $\mathcal{D}=0$ to
+$\mathcal{D}=0.3$ -- but does not close: even at the strongly-dyed end of
+the range this section's own analytical bound flags as a real
+perturbation, media-in-the-loop still wins. The uniform-depth assumption
+therefore costs accuracy in the reported effect size at high optical
+density, not correctness of the paper's qualitative claim.
+
 The physics
 ablation (Section~\ref{sec:s1-ablation}) is one-at-a-time and does not
 capture interactions between NPDD mechanisms; the

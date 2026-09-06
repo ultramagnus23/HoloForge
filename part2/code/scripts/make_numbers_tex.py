@@ -639,6 +639,33 @@ def build_wp5_macros() -> str:
     return "".join(lines)
 
 
+def build_wp6_macros() -> str:
+    """WP6 (Applied Optics revision, depth-resolved absorption) macros:
+    S7's paired gain at each tested optical density. Macro names use
+    spelled-out ODZero/ODOneTenth/ODThreeTenths (NOT literal decimal
+    points or the digits from "0.1"/"0.3") -- LaTeX control words are
+    letters-only, the same constraint that broke the S4/S5/S6 macro
+    names earlier this revision before they were caught and fixed."""
+    lines = ["\n% --- WP6 (depth-resolved absorption, Sec. 5.x) macros ---\n"]
+    od_labels = [(0.0, "ODZero"), (0.1, "ODOneTenth"), (0.3, "ODThreeTenths")]
+    try:
+        from analysis.aggregate import load_all_results, group_by_config, s7_depth_absorption_summary
+        grouped = group_by_config(load_all_results())
+        s7 = s7_depth_absorption_summary(grouped)
+        if s7["status"] == "ok":
+            for od, label in od_labels:
+                stat = s7["by_od"].get(od, {})
+                lines.append(macro(f"SSevenGain{label}", fmt(stat.get("mean"), ".2f")))
+        else:
+            for _, label in od_labels:
+                lines.append(macro(f"SSevenGain{label}", None))
+    except Exception as e:
+        print(f"[make_numbers_tex] WARNING: WP6 macros failed ({e}); emitting PENDING.")
+        for _, label in od_labels:
+            lines.append(macro(f"SSevenGain{label}", None))
+    return "".join(lines)
+
+
 def main():
     paper_numbers = {}
     if os.path.exists(PAPER_NUMBERS_PATH):
@@ -652,7 +679,7 @@ def main():
           + build_validation_macros() + build_baseline_completeness_macros()
           + build_shrinkage_bound_macros() + build_cost_benefit_macros()
           + build_r1_macros() + build_wp3_baseline_macros() + build_wp4_macros()
-          + build_wp5_macros())
+          + build_wp5_macros() + build_wp6_macros())
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     with open(OUT_PATH, "w") as f:
         f.write(tex)

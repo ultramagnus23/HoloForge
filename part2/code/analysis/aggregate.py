@@ -815,6 +815,42 @@ def s6_joint_mismatch_summary(grouped: dict) -> dict:
                best_draw_gain=max(gains) if gains else None)
 
 
+def s7_depth_absorption_summary(grouped: dict) -> dict:
+    """S7 (WP6): paired gain (MIL-BSGD) at each tested optical density
+    (Beer-Lambert depth attenuation of the recording exposure -- see
+    holomedia.npdd.depth_resolved_dn), K-averaged then seed-averaged the
+    same way s3_mismatch_summary does. optical_density=0.0 reproduces
+    every existing uniform-depth result exactly (verified directly in
+    holomedia's own numerics, not just here), so this reports whether --
+    and by how much -- the gain the rest of the paper reports survives
+    a REAL depth-resolved recording process instead of the uniform-
+    through-depth assumption every other tier uses."""
+    rows = [(exp_id, ch) for exp_id, ch in grouped if exp_id == "S7"]
+    if not rows:
+        return dict(status="no_data")
+
+    per_seed_by_od: dict = {}
+    for exp_id, ch in rows:
+        by_method = grouped[(exp_id, ch)]
+        any_rows = next(iter(by_method.values()), None)
+        if not any_rows:
+            continue
+        cfg = any_rows[0]["config"]
+        od = cfg.get("optical_density")
+        for seed, g in paired_gain(by_method.get("MIL", []),
+                                   by_method.get("BSGD", []), key="psnr"):
+            per_seed_by_od.setdefault(od, {}).setdefault(seed, []).append(g)
+
+    if not per_seed_by_od:
+        return dict(status="no_data")
+
+    by_od = {}
+    for od, by_seed in per_seed_by_od.items():
+        seed_means = [sum(v) / len(v) for v in by_seed.values() if v]
+        by_od[od] = mean_std_median_ci95(seed_means)
+    return dict(status="ok", by_od=by_od)
+
+
 def sat_surrogate_summary(grouped: dict, experiment_id: str = "M1",
                           budgets=BUDGETS) -> dict:
     """SAT: how much of MIL's advantage a cheap saturation-only surrogate
@@ -937,6 +973,7 @@ def build_paper_numbers(results_root: str = RESULTS_ROOT) -> dict:
         s4_target_ensemble_summary=s4_target_ensemble_summary(grouped),
         s5_noise_robustness_summary=s5_noise_robustness_summary(grouped),
         s6_joint_mismatch_summary=s6_joint_mismatch_summary(grouped),
+        s7_depth_absorption_summary=s7_depth_absorption_summary(grouped),
         sat_surrogate_summary=sat_surrogate_summary(grouped),
         # M2 carries SAT at the sub-cliff K = 1.31 rad/um, which lies
         # below M1's grid minimum of 1.96 -- i.e. exactly where
