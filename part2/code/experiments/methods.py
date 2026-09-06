@@ -66,10 +66,22 @@ def run_method(method_id: str, target: torch.Tensor, recorder: NPDDRecorder,
               bpm: SlabBPM, seed: int, n_iters: int = 800, lr: float = 5e-2,
               dose_budget: float = 1.0, contrast_cap: float | None = None,
               converge_tol: float | None = None, log_every: int = 50,
-              tv_weight: float = 0.0) -> dict:
+              tv_weight: float = 0.0, noise_std: float = 0.0) -> dict:
     """Run one method, return a dict with everything the Phase-1.2 schema
     needs EXCEPT git hash / device / wall-clock (added by the caller, since
-    those are orchestration concerns, not physics ones)."""
+    those are orchestration concerns, not physics ones).
+
+    noise_std (WP4, S5 noise-robustness tier): optional relative additive
+    Gaussian noise on the RECONSTRUCTED intensity, applied after
+    optimization/evaluation, before PSNR is computed. Modeled as detector
+    read noise (the camera/sensor observing the reconstruction), not as
+    part of the recording physics itself -- deliberately applied
+    identically regardless of which method produced `recon`, so it cannot
+    favor one method's optimization objective over another's. Scaled to
+    the reconstruction's own peak (relative, not absolute), and seeded
+    from `seed` so a given (config, seed) always draws the same noise
+    realization -- reproducible, not a source of unlogged extra variance
+    across reruns of the identical job."""
     if method_id not in METHOD_IDS:
         raise ValueError(f"unknown method_id {method_id!r}, expected one of {METHOD_IDS}")
 
@@ -153,6 +165,16 @@ def run_method(method_id: str, target: torch.Tensor, recorder: NPDDRecorder,
         E, recon = oracle_unconstrained(target, recorder, bpm, n_iters=n_iters,
                                         lr=lr, seed=seed)
         early_stop_reason = "n_iters_exhausted"
+
+    if noise_std > 0:
+        # Fixed generator per (config, seed) via `seed` itself -- offset
+        # from the optimizer's own seed so the noise draw doesn't
+        # correlate with whatever random init the optimizer used, while
+        # staying fully reproducible.
+        gen = torch.Generator(device=recon.device)
+        gen.manual_seed(int(seed) + 90210)
+        recon = recon + noise_std * float(recon.max()) * torch.randn(
+            recon.shape, generator=gen, device=recon.device, dtype=recon.dtype)
 
     return dict(
         method_id=method_id, method_name=METHOD_NAMES[method_id],

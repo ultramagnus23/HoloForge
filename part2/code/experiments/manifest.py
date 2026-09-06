@@ -515,6 +515,82 @@ def s3_result_config(design_config: dict, cond: dict) -> dict:
 
 
 # =====================================================================
+# S4: target-ensemble robustness (WP4, Applied Optics revision item 1).
+# M1's headline grid measures the BSGD-vs-MIL gain on exactly ONE target
+# family (periodic bars) at every K -- seeds vary the OPTIMIZER's random
+# init, not the SCENE. S4 asks the orthogonal question: does the gain
+# hold across genuinely different target content at fixed K/budget, or
+# is it an artifact of bars specifically?
+#
+# Scoped deliberately small (MIL costs ~1300s/job at production settings,
+# measured -- see the WP3 probe data): ONE representative K
+# (S1_K_POINTS's near-cliff point, where the media-blind/media-aware gap
+# is clearest and best-characterized already) x both budget extremes
+# (2x, 8x -- skipping 4x to hold the grid down) x the two NEW target
+# kinds this needs (run_manifest.build_target already implements "bars"
+# and "spots"; "random_binary" is added alongside this builder). "bars"
+# at this exact (K, budget) already exists in M1's committed data and is
+# reused directly by analysis rather than rerun.
+S4_K_POINT = S1_K_POINTS[1]  # near-cliff
+S4_BUDGETS = [2.0, 8.0]
+S4_TARGET_KINDS = ["spots", "random_binary"]  # "bars" reused from M1
+
+
+def build_S4_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
+                  seeds=None, methods=None) -> list[dict]:
+    seeds = seeds if seeds is not None else PAPER_SEEDS
+    methods = methods if methods is not None else ["BSGD", "MIL"]
+    dx = 51.2 / n_x
+    jobs = []
+    for budget in S4_BUDGETS:
+        for target_kind in S4_TARGET_KINDS:
+            target_spec = dict(kind=target_kind, seed=13)
+            config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=n_iters,
+                         converge_tol=converge_tol, contrast_cap=budget,
+                         dose_budget=1.0, medium=DEFAULT_MEDIUM,
+                         target=target_spec, K_nominal=S4_K_POINT,
+                         target_kind=target_kind, arm="target_ensemble")
+            for method_id in methods:
+                for seed in seeds:
+                    jobs.append(_job("S4", method_id, seed, config))
+    return jobs
+
+
+# =====================================================================
+# S5: readout-noise robustness (WP4, Applied Optics revision item 3).
+# Every prior tier evaluates PSNR against a noiseless BPM readout -- a
+# real simplification (a physical sensor is never noiseless). S5 checks
+# whether the headline gain survives a defined, disclosed detector-noise
+# model (methods.run_method's noise_std parameter: relative additive
+# Gaussian noise on the reconstructed intensity, applied identically to
+# every method after evaluation -- see its docstring). Scoped to the
+# same single representative K/budget as S4 (near-cliff, 2x) since this
+# is a robustness CHECK, not a new sweep: the noiseless (noise_std=0)
+# arm at this exact config already exists in M1 and is reused directly.
+S5_K_POINT = S1_K_POINTS[1]  # near-cliff, same point S4 uses
+S5_BUDGET = 2.0
+S5_NOISE_STD = 0.05  # 5% of reconstruction peak -- a real, disclosed round number
+
+
+def build_S5_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
+                  seeds=None, methods=None) -> list[dict]:
+    seeds = seeds if seeds is not None else PAPER_SEEDS
+    methods = methods if methods is not None else ["BSGD", "MIL"]
+    dx = 51.2 / n_x
+    period_px = period_from_K(S5_K_POINT, dx)
+    config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=n_iters,
+                 converge_tol=converge_tol, contrast_cap=S5_BUDGET,
+                 dose_budget=1.0, medium=DEFAULT_MEDIUM,
+                 target=_bars_target_spec(period_px), K_nominal=S5_K_POINT,
+                 noise_std=S5_NOISE_STD, arm="noise_robustness")
+    jobs = []
+    for method_id in methods:
+        for seed in seeds:
+            jobs.append(_job("S5", method_id, seed, config))
+    return jobs
+
+
+# =====================================================================
 # V1: NPDD solver validation vs. published data. JOB CONFIGS ONLY --
 # NOT execution-ready through run_job()/methods.run_method() (no
 # optimizer/method-registry concept applies; this characterizes the
@@ -599,7 +675,11 @@ def build_all_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e
 BUILDERS = {
     "M1": build_M1_jobs, "M2": build_M2_jobs,
     "S1": build_S1_jobs, "S2": build_S2_jobs,
+    "S4": build_S4_jobs, "S5": build_S5_jobs,
 }
+# S3 deliberately excluded, same reason V1-V3 are: it's a design/eval
+# split (build_S3_designs + build_S3_conditions), not a flat per-job
+# list, and runs via its own script (experiments/run_s3_mismatch.py).
 
 # V1/V2/V3 deliberately NOT in BUILDERS: BUILDERS feeds run_manifest.py's
 # --manifest CLI choices and probe(), which both assume the

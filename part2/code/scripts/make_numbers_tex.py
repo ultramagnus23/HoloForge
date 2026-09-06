@@ -559,6 +559,55 @@ def build_wp3_baseline_macros() -> str:
     return "".join(lines)
 
 
+def build_wp4_macros() -> str:
+    """WP4 (Applied Optics revision, statistics redesign) macros: target-
+    ensemble gain per target kind (S4) and noise-robustness gain (S5),
+    both at the fixed near-cliff K/budget point those tiers use. Also
+    emits bootstrap CI bounds alongside the t-distribution ones already
+    used elsewhere, per WP4's item 2."""
+    lines = ["\n% --- WP4 (target ensemble / noise robustness, Sec. 5.x) macros ---\n"]
+    try:
+        from analysis.aggregate import (load_all_results, group_by_config,
+                                        s4_target_ensemble_summary,
+                                        s5_noise_robustness_summary)
+        grouped = group_by_config(load_all_results())
+        s4 = s4_target_ensemble_summary(grouped)
+        if s4["status"] == "ok":
+            for kind, label in (("bars", "Bars"), ("spots", "Spots"),
+                               ("random_binary", "RandomBinary")):
+                for budget, blabel in ((2.0, "TwoX"), (8.0, "EightX")):
+                    stat = s4["by_kind"].get(kind, {}).get(budget, {})
+                    lines.append(macro(f"S4Gain{label}{blabel}",
+                                       fmt(stat.get("mean"), ".2f")))
+                    lines.append(macro(f"S4BootCILo{label}{blabel}",
+                                       fmt(stat.get("boot_ci_lo"), ".2f")))
+                    lines.append(macro(f"S4BootCIHi{label}{blabel}",
+                                       fmt(stat.get("boot_ci_hi"), ".2f")))
+        else:
+            for kind_label in ("Bars", "Spots", "RandomBinary"):
+                for blabel in ("TwoX", "EightX"):
+                    for prefix in ("S4Gain", "S4BootCILo", "S4BootCIHi"):
+                        lines.append(macro(f"{prefix}{kind_label}{blabel}", None))
+
+        s5 = s5_noise_robustness_summary(grouped)
+        if s5["status"] == "ok":
+            lines.append(macro("S5NoiseStdPct", fmt(s5["noise_std"] * 100, ".0f")))
+            lines.append(macro("S5NoiselessGain", fmt(s5["noiseless"].get("mean"), ".2f")))
+            lines.append(macro("S5NoisyGain", fmt(s5["noisy"].get("mean"), ".2f")))
+        else:
+            for name in ("S5NoiseStdPct", "S5NoiselessGain", "S5NoisyGain"):
+                lines.append(macro(name, None))
+    except Exception as e:
+        print(f"[make_numbers_tex] WARNING: WP4 macros failed ({e}); emitting PENDING.")
+        for kind_label in ("Bars", "Spots", "RandomBinary"):
+            for blabel in ("TwoX", "EightX"):
+                for prefix in ("S4Gain", "S4BootCILo", "S4BootCIHi"):
+                    lines.append(macro(f"{prefix}{kind_label}{blabel}", None))
+        for name in ("S5NoiseStdPct", "S5NoiselessGain", "S5NoisyGain"):
+            lines.append(macro(name, None))
+    return "".join(lines)
+
+
 def main():
     paper_numbers = {}
     if os.path.exists(PAPER_NUMBERS_PATH):
@@ -571,7 +620,7 @@ def main():
     tex = (build_macros(paper_numbers) + build_supplement_macros()
           + build_validation_macros() + build_baseline_completeness_macros()
           + build_shrinkage_bound_macros() + build_cost_benefit_macros()
-          + build_r1_macros() + build_wp3_baseline_macros())
+          + build_r1_macros() + build_wp3_baseline_macros() + build_wp4_macros())
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     with open(OUT_PATH, "w") as f:
         f.write(tex)

@@ -148,6 +148,37 @@ def group_by_config(results: list[dict]) -> dict:
 
 
 # --------------------------------------------------------------- stats
+def bootstrap_ci(values: list[float], n_resamples: int = 10000, alpha: float = 0.05,
+                 seed: int = 0) -> dict:
+    """Nonparametric percentile bootstrap CI on the mean (WP4 item 2:
+    Applied Optics revision asked for bootstrap CIs alongside the
+    existing t-distribution ones in mean_std_median_ci95, rather than in
+    place of them -- with n as small as 3 (PAPER_SEEDS), the
+    t-distribution CI already correctly reports very wide intervals, and
+    a percentile bootstrap over only 3 points is itself a very coarse
+    estimate of the sampling distribution; reporting both lets a referee
+    see that the two methods agree in ORDER OF MAGNITUDE despite neither
+    being individually trustworthy at n=3, rather than picking one
+    method and hiding the small-n caveat.
+
+    Deterministic: seeded with a fixed `seed` (default 0) via numpy's
+    legacy RandomState, so re-running this script reproduces the exact
+    same resampled interval bit-for-bit -- required by the same
+    ground rule that bans hand-typed numbers: a number that changes
+    every time you regenerate it is not reproducible even if it comes
+    from a script."""
+    import numpy as np
+    n = len(values)
+    if n == 0:
+        return dict(n=0, mean=None, boot_ci_lo=None, boot_ci_hi=None)
+    arr = np.asarray(values, dtype=float)
+    rng = np.random.RandomState(seed)
+    idx = rng.randint(0, n, size=(n_resamples, n))
+    boot_means = arr[idx].mean(axis=1)
+    lo, hi = np.percentile(boot_means, [100 * alpha / 2, 100 * (1 - alpha / 2)])
+    return dict(n=n, mean=float(arr.mean()), boot_ci_lo=float(lo), boot_ci_hi=float(hi))
+
+
 def mean_std_median_ci95(values: list[float]) -> dict:
     n = len(values)
     if n == 0:
@@ -568,6 +599,87 @@ def s2_sensitivity_summary(grouped: dict) -> dict:
                overall_min=overall_range[0], overall_max=overall_range[1])
 
 
+def s4_target_ensemble_summary(grouped: dict) -> dict:
+    """WP4 item 1: paired gain (MIL-BSGD) per target kind at S4's fixed
+    (K, budget) pair, for each of S4's two new target kinds (spots,
+    random_binary) plus "bars" -- reused from M1's existing data at the
+    IDENTICAL (K, budget), not rerun, since M1 already covers it. Answers
+    whether the headline gain is specific to the periodic-bars target
+    family or holds across genuinely different scene content."""
+    from manifest import S4_K_POINT, S4_BUDGETS
+
+    def _gains_for_kind(target_kind: str, budget: float) -> list[float]:
+        gains = []
+        for (exp_id, ch), by_method in grouped.items():
+            if exp_id not in ("S4", "M1"):
+                continue
+            any_rows = next(iter(by_method.values()), None)
+            if not any_rows:
+                continue
+            cfg = any_rows[0]["config"]
+            if cfg.get("contrast_cap") != budget:
+                continue
+            if abs(cfg.get("K_nominal", -1) - S4_K_POINT) > 1e-6:
+                continue
+            cfg_kind = cfg.get("target_kind", cfg.get("target", {}).get("kind"))
+            if cfg_kind != target_kind:
+                continue
+            pairs = paired_gain(by_method.get("MIL", []), by_method.get("BSGD", []), key="psnr")
+            gains.extend(g for _, g in pairs)
+        return gains
+
+    kinds = ["bars", "spots", "random_binary"]
+    any_data = any(_gains_for_kind(k, b) for k in kinds for b in S4_BUDGETS)
+    if not any_data:
+        return dict(status="no_data")
+    by_kind = {}
+    for kind in kinds:
+        by_budget = {}
+        for budget in S4_BUDGETS:
+            gains = _gains_for_kind(kind, budget)
+            by_budget[budget] = dict(mean_std_median_ci95(gains),
+                                     **bootstrap_ci(gains))
+        by_kind[kind] = by_budget
+    return dict(status="ok", K=S4_K_POINT, by_kind=by_kind)
+
+
+def s5_noise_robustness_summary(grouped: dict) -> dict:
+    """WP4 item 3: paired gain (MIL-BSGD) at S5's fixed (K, budget) with
+    a disclosed readout-noise model (methods.run_method's noise_std),
+    compared against the SAME (K, budget) noiseless in M1's existing
+    data (reused, not rerun). Answers whether media-in-the-loop's
+    advantage survives a nonzero detector-noise floor, not just the
+    idealized noiseless readout every other tier assumes."""
+    from manifest import S5_K_POINT, S5_BUDGET, S5_NOISE_STD
+
+    def _gains_for(exp_id: str, noise_std: float) -> list[float]:
+        gains = []
+        for (e, ch), by_method in grouped.items():
+            if e != exp_id:
+                continue
+            any_rows = next(iter(by_method.values()), None)
+            if not any_rows:
+                continue
+            cfg = any_rows[0]["config"]
+            if cfg.get("contrast_cap") != S5_BUDGET:
+                continue
+            if abs(cfg.get("K_nominal", -1) - S5_K_POINT) > 1e-6:
+                continue
+            if cfg.get("noise_std", 0.0) != noise_std:
+                continue
+            pairs = paired_gain(by_method.get("MIL", []), by_method.get("BSGD", []), key="psnr")
+            gains.extend(g for _, g in pairs)
+        return gains
+
+    noiseless = _gains_for("M1", 0.0)
+    noisy = _gains_for("S5", S5_NOISE_STD)
+    if not noiseless and not noisy:
+        return dict(status="no_data")
+    return dict(status="ok", K=S5_K_POINT, budget=S5_BUDGET, noise_std=S5_NOISE_STD,
+               noiseless=mean_std_median_ci95(noiseless),
+               noisy=mean_std_median_ci95(noisy))
+
+
 def s3_mismatch_summary(grouped: dict) -> dict:
     """S3: paired gain (MIL-BSGD) when the exposure was designed against
     the NOMINAL twin and then recorded on a MISCALIBRATED one.
@@ -774,6 +886,8 @@ def build_paper_numbers(results_root: str = RESULTS_ROOT) -> dict:
         s1_ablation_summary=s1_ablation_summary(grouped),
         s2_sensitivity_summary=s2_sensitivity_summary(grouped),
         s3_mismatch_summary=s3_mismatch_summary(grouped),
+        s4_target_ensemble_summary=s4_target_ensemble_summary(grouped),
+        s5_noise_robustness_summary=s5_noise_robustness_summary(grouped),
         sat_surrogate_summary=sat_surrogate_summary(grouped),
         # M2 carries SAT at the sub-cliff K = 1.31 rad/um, which lies
         # below M1's grid minimum of 1.96 -- i.e. exactly where
