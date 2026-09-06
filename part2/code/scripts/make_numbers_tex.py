@@ -577,33 +577,33 @@ def build_wp4_macros() -> str:
                                ("random_binary", "RandomBinary")):
                 for budget, blabel in ((2.0, "TwoX"), (8.0, "EightX")):
                     stat = s4["by_kind"].get(kind, {}).get(budget, {})
-                    lines.append(macro(f"S4Gain{label}{blabel}",
+                    lines.append(macro(f"SFourGain{label}{blabel}",
                                        fmt(stat.get("mean"), ".2f")))
-                    lines.append(macro(f"S4BootCILo{label}{blabel}",
+                    lines.append(macro(f"SFourBootCILo{label}{blabel}",
                                        fmt(stat.get("boot_ci_lo"), ".2f")))
-                    lines.append(macro(f"S4BootCIHi{label}{blabel}",
+                    lines.append(macro(f"SFourBootCIHi{label}{blabel}",
                                        fmt(stat.get("boot_ci_hi"), ".2f")))
         else:
             for kind_label in ("Bars", "Spots", "RandomBinary"):
                 for blabel in ("TwoX", "EightX"):
-                    for prefix in ("S4Gain", "S4BootCILo", "S4BootCIHi"):
+                    for prefix in ("SFourGain", "SFourBootCILo", "SFourBootCIHi"):
                         lines.append(macro(f"{prefix}{kind_label}{blabel}", None))
 
         s5 = s5_noise_robustness_summary(grouped)
         if s5["status"] == "ok":
-            lines.append(macro("S5NoiseStdPct", fmt(s5["noise_std"] * 100, ".0f")))
-            lines.append(macro("S5NoiselessGain", fmt(s5["noiseless"].get("mean"), ".2f")))
-            lines.append(macro("S5NoisyGain", fmt(s5["noisy"].get("mean"), ".2f")))
+            lines.append(macro("SFiveNoiseStdPct", fmt(s5["noise_std"] * 100, ".0f")))
+            lines.append(macro("SFiveNoiselessGain", fmt(s5["noiseless"].get("mean"), ".2f")))
+            lines.append(macro("SFiveNoisyGain", fmt(s5["noisy"].get("mean"), ".2f")))
         else:
-            for name in ("S5NoiseStdPct", "S5NoiselessGain", "S5NoisyGain"):
+            for name in ("SFiveNoiseStdPct", "SFiveNoiselessGain", "SFiveNoisyGain"):
                 lines.append(macro(name, None))
     except Exception as e:
         print(f"[make_numbers_tex] WARNING: WP4 macros failed ({e}); emitting PENDING.")
         for kind_label in ("Bars", "Spots", "RandomBinary"):
             for blabel in ("TwoX", "EightX"):
-                for prefix in ("S4Gain", "S4BootCILo", "S4BootCIHi"):
+                for prefix in ("SFourGain", "SFourBootCILo", "SFourBootCIHi"):
                     lines.append(macro(f"{prefix}{kind_label}{blabel}", None))
-        for name in ("S5NoiseStdPct", "S5NoiselessGain", "S5NoisyGain"):
+        for name in ("SFiveNoiseStdPct", "SFiveNoiselessGain", "SFiveNoisyGain"):
             lines.append(macro(name, None))
     return "".join(lines)
 
@@ -618,23 +618,23 @@ def build_wp5_macros() -> str:
         grouped = group_by_config(load_all_results())
         s6 = s6_joint_mismatch_summary(grouped)
         if s6["status"] == "ok":
-            lines.append(macro("S6NDraws", str(s6["n_draws"])))
-            lines.append(macro("S6MeanGain", fmt(s6["stats"]["mean"], ".2f")))
-            lines.append(macro("S6BootCILo", fmt(s6["stats"]["boot_ci_lo"], ".2f")))
-            lines.append(macro("S6BootCIHi", fmt(s6["stats"]["boot_ci_hi"], ".2f")))
-            lines.append(macro("S6NNegative", str(s6["n_negative"])))
-            lines.append(macro("S6WorstDrawGain", fmt(s6["worst_draw_gain"], ".2f")))
-            lines.append(macro("S6BestDrawGain", fmt(s6["best_draw_gain"], ".2f")))
+            lines.append(macro("SSixNDraws", str(s6["n_draws"])))
+            lines.append(macro("SSixMeanGain", fmt(s6["stats"]["mean"], ".2f")))
+            lines.append(macro("SSixBootCILo", fmt(s6["stats"]["boot_ci_lo"], ".2f")))
+            lines.append(macro("SSixBootCIHi", fmt(s6["stats"]["boot_ci_hi"], ".2f")))
+            lines.append(macro("SSixNNegative", str(s6["n_negative"])))
+            lines.append(macro("SSixWorstDrawGain", fmt(s6["worst_draw_gain"], ".2f")))
+            lines.append(macro("SSixBestDrawGain", fmt(s6["best_draw_gain"], ".2f")))
             from manifest import S6_PCT_RANGE
-            lines.append(macro("S6PctRange", fmt(S6_PCT_RANGE, ".0f")))
+            lines.append(macro("SSixPctRange", fmt(S6_PCT_RANGE, ".0f")))
         else:
-            for name in ("S6NDraws", "S6MeanGain", "S6BootCILo", "S6BootCIHi",
-                        "S6NNegative", "S6WorstDrawGain", "S6BestDrawGain", "S6PctRange"):
+            for name in ("SSixNDraws", "SSixMeanGain", "SSixBootCILo", "SSixBootCIHi",
+                        "SSixNNegative", "SSixWorstDrawGain", "SSixBestDrawGain", "SSixPctRange"):
                 lines.append(macro(name, None))
     except Exception as e:
         print(f"[make_numbers_tex] WARNING: WP5 macros failed ({e}); emitting PENDING.")
-        for name in ("S6NDraws", "S6MeanGain", "S6BootCILo", "S6BootCIHi",
-                    "S6NNegative", "S6WorstDrawGain", "S6BestDrawGain", "S6PctRange"):
+        for name in ("SSixNDraws", "SSixMeanGain", "SSixBootCILo", "SSixBootCIHi",
+                    "SSixNNegative", "SSixWorstDrawGain", "SSixBestDrawGain", "SSixPctRange"):
             lines.append(macro(name, None))
     return "".join(lines)
 

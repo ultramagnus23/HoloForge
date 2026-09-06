@@ -1056,6 +1056,55 @@ zero, and only well outside $\pm50\%$.}
 \label{fig:F10}
 \end{figure}
 
+\subsection{Joint miscalibration}
+\label{sec:joint-mismatch}
+Section~\ref{sec:mismatch} perturbs one NPDD parameter at a time, but a
+real calibration error is never that clean -- every parameter is
+uncertain simultaneously. We repeat the same design/evaluate split with
+all four parameters ($D_0$, $\sigma$, $\kappa$, $\Delta n_{\max}$) drawn
+independently per trial, Uniform($-$\SSixPctRange\%, $+$\SSixPctRange\%)
+each, over \SSixNDraws\ independent Monte Carlo draws, reusing the exact
+exposures Section~\ref{sec:mismatch} already optimized rather than
+re-optimizing per draw. Paired gain stays positive on every single draw
+(\SSixNNegative\ of \SSixNDraws\ draws negative), ranging from
+\SSixWorstDrawGain\ to \SSixBestDrawGain~dB (mean \SSixMeanGain~dB, bootstrap
+95\% CI [\SSixBootCILo, \SSixBootCIHi]~dB over draws). The one-parameter-at-a-
+time robustness of Section~\ref{sec:mismatch} is not an artifact of
+testing parameters in isolation: the advantage survives all four being
+wrong together, at the same magnitude of error.
+
+\subsection{Target-content and readout-noise robustness}
+\label{sec:target-noise}
+Every result up to this point measures the same periodic-bars target at
+every $K$ -- seeds vary the optimizer's random initialization, not the
+scene, so a skeptical reading is that the headline gain could be an
+artifact specific to that one target family. We test this directly at a
+single representative near-cliff $K$ point across three genuinely
+different target kinds: the periodic bars used throughout, a sparse
+random-spots target, and an uncorrelated random binary pattern (the
+target family with the most high-frequency content per pixel). The gain
+holds, and is not merely non-negative but varies substantially in
+\emph{magnitude} by target content: \SFourGainBarsTwoX--\SFourGainBarsEightX~dB
+for bars, \SFourGainSpotsTwoX--\SFourGainSpotsEightX~dB for spots (the
+largest gain of the three, bootstrap CI within
+[\SFourBootCILoSpotsTwoX, \SFourBootCIHiSpotsEightX]~dB), and
+\SFourGainRandomBinaryTwoX--\SFourGainRandomBinaryEightX~dB for random
+binary (the smallest, though still clearly positive). Media-in-the-loop's
+advantage is real across target content, not a bars-specific artifact,
+but its size is scene-dependent -- a caveat any deployment should carry
+rather than quoting the bars number as universal.
+
+Separately, every prior result evaluates PSNR against a noiseless BPM
+readout, an idealization no real sensor achieves. We add a disclosed
+detector-noise model (Gaussian, \SFiveNoiseStdPct\% of the reconstructed
+peak, applied identically to every method's output before scoring, so it
+cannot favor one method's objective over another's) at the same
+representative $K$/budget point. Paired gain is
+\SFiveNoiselessGain~dB noiseless and \SFiveNoisyGain~dB at
+\SFiveNoiseStdPct\% readout noise -- indistinguishable at this noise
+level, indicating the advantage is not a fragile artifact of an
+idealized noiseless readout.
+
 \section{Twin Validation}
 \label{sec:twin-validation-ref}
 We fit the twin against \NLiteratureSources{} digitized curves from two
