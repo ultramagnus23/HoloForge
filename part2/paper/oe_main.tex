@@ -1211,13 +1211,42 @@ NRMSE \NRMSEBestInRegime--\NRMSEWorstInRegime), after a citation-scoping
 error in the medium's saturation ceiling was found and corrected --
 reported as a mechanism-level validation, not quantitative agreement
 across media, with the paired-comparison argument for why the gain
-claims do not depend on the twin's absolute fidelity regardless. Scalar diffraction bounds validity to moderate
-numerical apertures; the RCWA validity-envelope grid
-(\url{experiments/rcwa_crosscheck.py}) bounds this quantitatively for the $K$/$\Delta n$/polarization/slant
-range tested -- readout-side error moves absolute PSNRs more than paired
-gains, since the recording-side phenomena Section~\ref{sec:no-cliff}
-examines (and finds no sharp cliff in, only a smooth ceiling collapse)
-are, by construction of the paired comparison, upstream of readout.
+claims do not depend on the twin's absolute fidelity regardless. Scalar
+diffraction bounds validity to moderate numerical apertures; we quantify
+this against rigorous coupled-wave analysis (RCWA) directly rather than
+asserting a validity range, over a \RCWAVGridNCases-case grid spanning
+$K$, $\Delta n$, polarization and slant (Figure~\ref{fig:F3a}). Agreement
+is close for unslanted gratings at both Bragg and normal incidence
+(deviation $\leq$ \RCWAUnslantedMaxDev\ across both geometries, median
+\RCWANormalMedianDev\ for the normal-incidence case) but degrades sharply
+for the slanted $20^\circ$
+geometry this paper's default medium uses, reaching a maximum deviation
+of \RCWAVGridMaxDev\ (essentially total disagreement: at
+$K=12$\,rad/\textmu m, Kogelnik predicts near-unity first-order
+efficiency while RCWA places almost all power in a different diffraction
+order). This is not a criticism of the twin -- Kogelnik coupled-wave
+theory is used only as closed-form validation context, never inside an
+optimization loop or a reported reconstruction (Section~\ref{sec:model-readout}).
+It is the reason BPM, not Kogelnik, is that model: BPM's full split-step
+treatment has no single assumed diffraction order to lose track of, so
+this divergence is evidence for the modeling choice actually made,
+not a caveat on it. Readout-side error of this kind moves absolute
+PSNRs more than paired gains, since the recording-side phenomena
+Section~\ref{sec:no-cliff} examines (and finds no sharp cliff in, only a
+smooth ceiling collapse) are, by construction of the paired comparison,
+upstream of readout.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\linewidth]{../code/figures/paper/F3a_rcwa_validity_envelope.pdf}
+\caption{Absolute deviation between Kogelnik coupled-wave theory and
+RCWA first-order transmission efficiency, across the \RCWAVGridNCases-case
+$K$/$\Delta n$/polarization grid, one series per geometry. Unslanted
+geometries (Bragg and normal incidence) stay close; the slanted
+$20^\circ$ geometry -- this paper's default -- diverges sharply at
+higher $K$, up to \RCWAVGridMaxDev\ absolute deviation.}
+\label{fig:F3a}
+\end{figure}
 The headline results (Sections~\ref{sec:no-cliff}--\ref{sec:baseline-completeness})
 use 1D transverse recording kinetics: the target varies in one spatial
 dimension $x$, isolating the recording-chemistry compensation problem from

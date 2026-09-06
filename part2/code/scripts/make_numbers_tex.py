@@ -341,6 +341,24 @@ def build_supplement_macros() -> str:
     lines.append(macro("RCWAVGridMaxDev",
                        fmt(rcwa_e7.get("max_abs_deviation"), ".3f") if rcwa_e7 else None))
     lines.append(macro("RCWAVGridNCases", str(rcwa_e7["n_cases"]) if rcwa_e7 else None))
+    # WP9 (RCWA promotion): per-geometry breakdown, backing the Discussion's
+    # "unslanted stays close, slanted degrades sharply" claim with real
+    # numbers instead of leaving only the single worst-case deviation
+    # (RCWAVGridMaxDev) to carry the whole comparison.
+    if rcwa_e7:
+        from collections import defaultdict
+        import statistics as _stats
+        by_geom = defaultdict(list)
+        for c in rcwa_e7["cases"]:
+            by_geom[c["geometry"]].append(c["abs_deviation"])
+        unslanted_max = max((max(v) for k, v in by_geom.items() if "unslanted" in k), default=None)
+        normal_devs = by_geom.get("unslanted_normal", [])
+        normal_median = _stats.median(normal_devs) if normal_devs else None
+        lines.append(macro("RCWAUnslantedMaxDev", fmt(unslanted_max, ".2f")))
+        lines.append(macro("RCWANormalMedianDev", fmt(normal_median, ".3f")))
+    else:
+        lines.append(macro("RCWAUnslantedMaxDev", None))
+        lines.append(macro("RCWANormalMedianDev", None))
 
     mesh = _load("results", "gpu_reruns", "npdd_mesh_sweep", "results.json")
     if mesh:
