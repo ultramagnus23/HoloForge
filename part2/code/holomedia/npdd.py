@@ -70,6 +70,45 @@ class MediumParams:
                 for k, v in self.__dict__.items()}
 
 
+def depth_resolved_dn(recorder: "NPDDRecorder", exposure: torch.Tensor,
+                      optical_density: float, n_z: int) -> torch.Tensor:
+    """WP6 (Applied Optics revision, depth-resolved absorption): the
+    uniform-through-depth recording assumption oe_main.tex's Discussion
+    section already bounds analytically (Section on depth-resolved
+    absorption) as "good only for OD <~ 0.1 over the recorded
+    thickness" -- this makes that bound an EMPIRICAL one instead, by
+    actually attenuating the recording exposure with depth (Beer-Lambert:
+    delivered dose falls by 10^{-OD * z/thickness} at depth z) and
+    running the SAME NPDD recording physics independently at each of
+    n_z depth slices, then letting each slice's own (now dimmer, at
+    greater depth) exposure saturate the local dn on its own.
+
+    Returns dn of shape (n_z, n_x): one full 1D recorded index profile
+    per depth slice, NOT a single profile extruded uniformly through
+    depth the way every other tier in this codebase assumes. Feeds
+    directly into holomedia.diffraction.SlabBPM.forward_depth_resolved.
+
+    Implementation note: NPDDRecorder.forward already supports a leading
+    batch dimension (its diffusion step means D_eff over dim=-1 only,
+    keepdim=True -- see NPDDRecorder._diffuse's docstring), so all n_z
+    depth slices are recorded in ONE batched forward call, not a Python
+    loop over z -- this is real physics, not free, but it is one GPU
+    call rather than n_z sequential ones.
+
+    optical_density=0 must reproduce the existing uniform-depth
+    assumption EXACTLY (every slice sees identical, unattenuated
+    exposure) -- this is the empirical check that this function is a
+    strict generalization of the existing model, not a different one.
+    """
+    if optical_density < 0:
+        raise ValueError(f"optical_density must be >= 0, got {optical_density}")
+    z_frac = (torch.arange(n_z, device=exposure.device, dtype=recorder.dtype) + 0.5) / n_z
+    atten = 10.0 ** (-optical_density * z_frac)  # (n_z,), 1.0 at z_frac=0 by construction
+    I_stack = exposure.unsqueeze(0) * atten.unsqueeze(1)  # (n_z, n_x)
+    dn_stack = recorder(I_stack)  # batched forward, (n_z, n_x)
+    return dn_stack
+
+
 class NPDDRecorder(torch.nn.Module):
     """Differentiable simulator: exposure pattern -> recorded index profile.
 

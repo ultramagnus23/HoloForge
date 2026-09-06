@@ -118,3 +118,39 @@ class SlabBPM(torch.nn.Module):
             E = torch.fft.ifft(torch.fft.fft(E) * self.H_slab)
         E = torch.fft.ifft(torch.fft.fft(E) * self.H_free)
         return (E.real ** 2 + E.imag ** 2)
+
+    def forward_depth_resolved(self, dn_stack: torch.Tensor, shrinkage: float = 0.0,
+                               slant_deg: float = 20.0,
+                               incident: torch.Tensor | None = None) -> torch.Tensor:
+        """WP6 counterpart to forward() for a GENUINELY per-depth dn:
+        dn_stack has shape (n_z, n_x) -- one real recorded profile per
+        depth slice (holomedia.npdd.depth_resolved_dn), not a single
+        profile extruded uniformly through depth. Each slice iz uses
+        dn_stack[iz] directly as its own phase kick, with the SAME
+        shrinkage lateral-shift treatment forward() applies (shrinkage is
+        a readout-geometry effect, orthogonal to the recording-depth
+        question this method adds), rather than the single shared
+        dn_hat every slice pulls from in forward().
+
+        dn_stack.shape[0] MUST equal self.n_z (one slice per BPM step);
+        this is checked explicitly rather than silently truncating or
+        padding a mismatched stack, since a silent mismatch here would
+        misattribute physical depth to the wrong z."""
+        if dn_stack.shape[0] != self.n_z:
+            raise ValueError(f"dn_stack has {dn_stack.shape[0]} depth slices, "
+                             f"expected n_z={self.n_z}")
+        E = (torch.ones(dn_stack.shape[1:], dtype=self.cdtype, device=dn_stack.device)
+             if incident is None else incident.to(self.cdtype))
+        dz_eff = self.dz * (1.0 - shrinkage)
+        tan_phi = math.tan(math.radians(slant_deg))
+        fx = torch.fft.fftfreq(self.n_x, d=self.dx).to(dn_stack.device)
+        for iz in range(self.n_z):
+            z = (iz + 0.5) * self.dz
+            shift = shrinkage * tan_phi * z
+            dn_hat_z = torch.fft.fft(dn_stack[iz].to(self.cdtype))
+            dn_z = torch.fft.ifft(
+                dn_hat_z * torch.exp(-2j * math.pi * fx * shift)).real
+            E = E * torch.exp(1j * self.k0 * dn_z.to(E.real.dtype) * dz_eff)
+            E = torch.fft.ifft(torch.fft.fft(E) * self.H_slab)
+        E = torch.fft.ifft(torch.fft.fft(E) * self.H_free)
+        return (E.real ** 2 + E.imag ** 2)
