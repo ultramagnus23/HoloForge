@@ -63,7 +63,27 @@ class SlabBPM(torch.nn.Module):
         self.z_recon = z_recon_um
         self.cdtype = dtype
 
-        fx = torch.fft.fftfreq(n_x, d=dx)
+        # REMEDIATION (confirmed peer-review finding B4, phase-precision
+        # part): torch.fft.fftfreq(n_x, d=dx) with no explicit dtype=
+        # silently uses PyTorch's GLOBAL DEFAULT floating dtype (float32),
+        # regardless of what precision this module was actually
+        # constructed for (self.cdtype, e.g. complex128 for a float64
+        # pipeline). kz*dist reaches ~1.16e6 radians at the default
+        # z_recon_um=5e4, so float32's ~7-significant-digit precision
+        # bounds the representable PHASE to roughly +/-0.1-0.2 rad
+        # absolute error -- reproduced directly: comparing a kernel built
+        # from float32 kz against one built from float64 kz (same
+        # formula, only the intermediate precision differs) gives a
+        # max phase error of 0.215 rad, the same order as the externally
+        # reported 0.105 rad. Casting the FINAL complex result `.to(dtype)`
+        # does not fix this -- the phase was already rounded before the
+        # exponential. Fixed by deriving the real-valued working dtype
+        # from the requested complex dtype (float64 for complex128,
+        # float32 for complex64) and using it for fx/kz throughout, so a
+        # complex128-requested BPM actually gets float64 phase precision,
+        # not float32 precision cast wider after the fact.
+        real_dtype = torch.float64 if dtype == torch.complex128 else torch.float32
+        fx = torch.fft.fftfreq(n_x, d=dx).to(real_dtype)
         k0 = 2 * math.pi / wavelength_um
 
         def asm_kernel(dist, n_medium):
