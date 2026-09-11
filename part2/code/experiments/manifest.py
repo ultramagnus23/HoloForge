@@ -304,12 +304,22 @@ S1_CONDITIONS = {
     "no_nonlocality": dict(sigma=0.0),  # Ghat(K) = exp(-0.5 K^2 sigma^2) -> 1: no blur
     "no_diffusion": dict(D0=0.0),  # D_eff = D0 exp(-alpha_D N) -> 0: no transport
     "no_dye_depletion": dict(k_bleach=0.0),  # d(t) stays 1: no sensitivity falloff
-    # dn_max -> 100x default: tanh(1.5 N) stays in its linear regime for
-    # realistic N, approximating an unsaturating (linear) index response.
-    # This is an APPROXIMATION of removing saturation (tanh is still
-    # technically present), not an exact ablation -- documented as such,
-    # not silently treated as exact.
-    "no_saturation_approx": dict(dn_max=DEFAULT_MEDIUM["dn_max"] * 100),
+    # REMEDIATION (confirmed peer-review finding, B1): scaling dn_max does
+    # NOT approximate removing saturation. dn_max never enters the u/N/d
+    # PDEs -- only the final dn=dn_max*tanh(1.5N) conversion -- so N (and
+    # tanh(1.5N)'s own saturation, since realistic N already sits near 1)
+    # is BIT-FOR-BIT IDENTICAL regardless of dn_max: verified directly,
+    # max|N(dn_max) - N(100*dn_max)| = 0.0 on a realistic exposure. The
+    # old "no_saturation_approx" condition below (kept as a comment, not
+    # deleted, so the mistake stays visible) therefore tested a 100x
+    # LARGER but EQUALLY saturated recording, not an unsaturating one.
+    #   "no_saturation_approx": dict(dn_max=DEFAULT_MEDIUM["dn_max"] * 100),
+    # The real ablation instead replaces the INDEX MAP with its exact
+    # small-signal linear limit (tanh(x) ~= x, so dn = dn_max*1.5*N
+    # instead of dn_max*tanh(1.5*N)), holding every PDE dynamic (u, N, d,
+    # and every medium parameter including dn_max itself) identical --
+    # holomedia.npdd.NPDDRecorder's new linearize_index_map flag.
+    "no_saturation": dict(linearize_index_map=True),
 }
 
 

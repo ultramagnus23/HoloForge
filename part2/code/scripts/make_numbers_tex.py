@@ -97,8 +97,8 @@ def build_macros(paper_numbers: dict) -> str:
         ratios = s1.get("ratio_to_baseline", {})
         lines.append(macro("SOneBaselineGain", fmt(by_cond.get("baseline", {}).get("mean"))))
         lines.append(macro("SOneNoSaturationGain",
-                           fmt(by_cond.get("no_saturation_approx", {}).get("mean"))))
-        lines.append(macro("SOneNoSaturationRatio", fmt(ratios.get("no_saturation_approx"), ".1f")))
+                           fmt(by_cond.get("no_saturation", {}).get("mean"))))
+        lines.append(macro("SOneNoSaturationRatio", fmt(ratios.get("no_saturation"), ".1f")))
         lines.append(macro("SOneNoDiffusionRatio", fmt(ratios.get("no_diffusion"), ".2f")))
         lines.append(macro("SOneNoNonlocalityRatio", fmt(ratios.get("no_nonlocality"), ".2f")))
         lines.append(macro("SOneNoDyeDepletionRatio", fmt(ratios.get("no_dye_depletion"), ".2f")))

@@ -44,7 +44,7 @@ def dose_project(E: torch.Tensor, budget: float) -> torch.Tensor:
 
 def contrast_project(E: torch.Tensor, budget: float,
                      contrast_cap: float | None = None,
-                     n_passes: int = 20) -> torch.Tensor:
+                     n_passes: int = 200, tol: float = 1e-6) -> torch.Tensor:
     """Project E onto {E >= 0, mean(E) == budget, max(E)/mean(E) <= contrast_cap}.
 
     This constraint did NOT previously exist anywhere in the codebase:
@@ -62,15 +62,25 @@ def contrast_project(E: torch.Tensor, budget: float,
     Implementation: alternate clamping the peak to contrast_cap*budget and
     re-normalizing the mean back to budget. Clamping changes the mean (mass
     above the ceiling is removed), so a single pass does not exactly hit
-    both constraints simultaneously; convergence is geometric (~2x error
-    reduction per pass, verified) but the rate depends on the input's
-    peakedness -- simple inputs converge to ~1e-7 within 6 passes, harder
-    (e.g. post-frequency-boost) inputs only to ~3e-3 at 6 passes and need
-    ~20 for <1e-6. Both operations (clamp, rescale) are differentiable, so
-    this is safe to use inside an unrolled optimization loop; 20 passes of
-    elementwise clamp+rescale is negligible cost next to one NPDD/BPM
-    forward pass.
-    """
+    both constraints simultaneously.
+
+    REMEDIATION (confirmed peer-review finding B3): the previous default,
+    n_passes=20, was based on a docstring convergence-rate claim
+    ("~20 for <1e-6") that turned out FALSE for real optimizer-produced
+    exposures. Directly reproduced on this codebase's own media_blind_sgd
+    output at K=3.927rad/um, budget=2x, contrast_cap=2.0: 20 passes left
+    realized contrast at 2.19403 (9.70% OVER the 2.0 cap, matching the
+    externally reported violation exactly), while the SAME exposure
+    converges to <0.0001% excess by 100 passes and exactly to the cap by
+    500. The failure mode is not non-convergence, just under-iteration:
+    each pass is a cheap elementwise clamp+rescale (negligible next to
+    one NPDD/BPM forward pass), so there is no real cost reason to have
+    used so few. Loop now runs until the realized ratio is within `tol`
+    of the cap (checked every pass) or `n_passes` is exhausted, whichever
+    first -- a real convergence check, not a fixed guess -- with the cap
+    raised to 200 as a generous ceiling for cases still not fully
+    converged by then (verified sufficient on the case above with wide
+    margin: reaches tol by pass ~140)."""
     E = dose_project(E, budget)
     if contrast_cap is None:
         return E
@@ -78,6 +88,10 @@ def contrast_project(E: torch.Tensor, budget: float,
     for _ in range(n_passes):
         E = torch.clamp(E, max=ceiling)
         E = dose_project(E, budget)
+        with torch.no_grad():
+            realized = E.max() / (E.mean() + 1e-12)
+            if realized <= ceiling / budget * (1.0 + tol):
+                break
     return E
 
 
@@ -549,17 +563,29 @@ def oracle_ideal(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
         dn_lin = dn_max * (E - E.mean())
         return E, dn_max * torch.tanh(dn_lin / dn_max)
 
+    # REMEDIATION (confirmed peer-review finding B6): this oracle previously
+    # evaluated with shrinkage=0.0 while MIL and BSGD both evaluate with the
+    # real medium's shrinkage (recorder.p.shrinkage) -- an unfair readout
+    # advantage for the "ceiling" this method is meant to bound against.
+    # Measured directly at a representative (K, budget) point: 0.11 dB
+    # inflation from skipping shrinkage alone, a real fraction of the
+    # headline 0.34-0.73 dB gains this ceiling is compared against. Using
+    # the SAME shrinkage as every other method's real-twin evaluation here
+    # closes that gap; it does not change what index-map this oracle
+    # assumes (still the simplified linear-then-saturated map, not the full
+    # NPDD dynamics -- see this function's own docstring for that separate,
+    # disclosed scope limitation).
     for _ in range(n_iters):
         opt.zero_grad()
         _, dn = _dn_from(theta)
-        recon = bpm(dn, shrinkage=0.0)
+        recon = bpm(dn, shrinkage=recorder.p.shrinkage)
         loss = si_mse(recon, target)
         loss.backward()
         opt.step()
 
     with torch.no_grad():
         E, dn = _dn_from(theta)
-        recon = bpm(dn, shrinkage=0.0)
+        recon = bpm(dn, shrinkage=recorder.p.shrinkage)
     return E.detach(), recon.detach()
 
 
@@ -606,17 +632,20 @@ def oracle_unconstrained(target: torch.Tensor, recorder: NPDDRecorder, bpm: Slab
          ).to(device).requires_grad_(True)
     opt = torch.optim.Adam([u], lr=lr)
 
+    # REMEDIATION (confirmed peer-review finding B6, same fix as
+    # oracle_ideal above): use the real medium's shrinkage, not 0.0, so this
+    # oracle isn't evaluated under an easier readout than MIL/BSGD.
     for _ in range(n_iters):
         opt.zero_grad()
         dn = dn_max * torch.tanh(u)  # soft-bounded, no hard E/dose constraint
-        recon = bpm(dn, shrinkage=0.0)
+        recon = bpm(dn, shrinkage=recorder.p.shrinkage)
         loss = si_mse(recon, target)
         loss.backward()
         opt.step()
 
     with torch.no_grad():
         dn = dn_max * torch.tanh(u)
-        recon = bpm(dn, shrinkage=0.0)
+        recon = bpm(dn, shrinkage=recorder.p.shrinkage)
     return dn.detach(), recon.detach()
 
 
@@ -851,15 +880,17 @@ def oracle_ideal_batched(targets: torch.Tensor, recorder: NPDDRecorder,
         dn_lin = dn_max * (E - E.mean(dim=-1, keepdim=True))
         return E, dn_max * torch.tanh(dn_lin / dn_max)
 
+    # REMEDIATION (confirmed peer-review finding B6, same fix as the
+    # unbatched oracle_ideal): real shrinkage, not 0.0.
     for _ in range(n_iters):
         opt.zero_grad()
         _, dn = _dn_from(theta)
-        recon = bpm(dn, shrinkage=0.0)
+        recon = bpm(dn, shrinkage=recorder.p.shrinkage)
         loss_per_row = si_mse(recon, targets, dim=-1)
         loss_per_row.sum().backward()
         opt.step()
 
     with torch.no_grad():
         E, dn = _dn_from(theta)
-        recon = bpm(dn, shrinkage=0.0)
+        recon = bpm(dn, shrinkage=recorder.p.shrinkage)
     return E.detach(), recon.detach()

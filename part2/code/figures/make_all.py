@@ -458,7 +458,7 @@ def make_F7_physics_ablation():
         no_data_placeholder(
             os.path.join(OUT_DIR, "F7_physics_ablation.pdf"),
             "F7 (S1): physics-component ablation (no_nonlocality/"
-            "no_diffusion/no_dye_depletion/no_saturation_approx vs. baseline)",
+            "no_diffusion/no_dye_depletion/no_saturation vs. baseline)",
             "needs S1 manifest results.")
         return False
     _render_F7(results)
