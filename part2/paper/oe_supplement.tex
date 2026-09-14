@@ -206,10 +206,23 @@ zero, and only well outside $\pm50\%$.}
 Paired gain is \SThreeNominalGain~dB at nominal and stays between
 \SThreeWorstWithinFifty\ and \SThreeBestWithinFifty~dB across every
 tested perturbation of $D_0$, $\sigma$, $\kappa$. $\Delta n_{\max}$ is
-the one parameter where the advantage eventually breaks: gain is still
-\SThreeDnMaxAtMinusSixtyThree~dB under-estimating the saturation ceiling
-by $-63\%$, but falls to \SThreeDnMaxAtHundred~dB at $+100\%$ and goes
-negative, \SThreeDnMaxWorstGain~dB, at $+\SThreeDnMaxFlipPct\%$.
+the one parameter where the advantage is not simply safe in one
+direction: the exposure is designed at the nominal $\Delta n_{\max}$ and
+recorded on a medium whose true ceiling is perturbed relative to that
+design, so a $\SThreeDnMaxMostNegativePct\%$ perturbation (true medium
+holds \emph{less} capacity than the design assumed -- the design
+over-estimates the true ceiling) leaves gain at
+\SThreeDnMaxAtMostNegative~dB, essentially at the boundary of zero. A
+$+\SThreeDnMaxFlipPct\%$ perturbation (true medium holds \emph{more}
+than assumed -- the design under-estimates the true ceiling) is where
+gain is worst, \SThreeDnMaxWorstGain~dB, having already gone negative
+from \SThreeDnMaxAtHundred~dB at $+100\%$; this does not worsen
+monotonically, though, since at the most extreme perturbation tested,
+$+\SThreeDnMaxMostPositivePct\%$, gain partially recovers to
+\SThreeDnMaxAtMostPositive~dB (still slightly negative). At the
+magnitude of disagreement actually observed across independent
+literature fits, $\Delta n_{\max}$ miscalibration is a real risk in both
+directions.
 
 \section*{S5: RCWA validity envelope}
 \label{sec:supp-s5}

@@ -161,8 +161,39 @@ def build_macros(paper_numbers: dict) -> str:
         lines.append(macro("SThreeDnMaxWorstGain", fmt(dn.get("worst_mean_gain"))))
         by_pct = dn.get("by_pct", {})
         lines.append(macro("SThreeDnMaxAtHundred", fmt(by_pct.get("100", {}).get("mean"))))
-        lines.append(macro("SThreeDnMaxAtMinusSixtyThree",
-                           fmt(by_pct.get("-63", {}).get("mean"))))
+        # REMEDIATION (B2 cascading effect): this used to hard-code the
+        # lookup key "-63" (and a matching "SixtyThree" macro name) to the
+        # dn_max literature-disagreement grid's most-negative tested
+        # percentage. That grid is now derived dynamically from the real
+        # fit (experiments/manifest.py's _dn_max_disagreement_factor), so a
+        # hardcoded "-63" lookup would silently go PENDING the moment the
+        # fit -- and therefore the grid's actual endpoints -- changed, which
+        # is exactly what happened once the B2 conservation/accuracy fixes
+        # changed the fitted dn_max values. Finds the most-negative tested
+        # percentage directly from the real data instead, and reports its
+        # own value in the macro name via a fixed, letters-only name
+        # (SThreeDnMaxAtMostNegative) plus a companion macro carrying the
+        # actual percentage, so the prose can state which percentage this is
+        # without hand-typing it.
+        most_negative_pct = min((int(p) for p in by_pct if int(p) < 0), default=None)
+        lines.append(macro("SThreeDnMaxMostNegativePct",
+                           str(most_negative_pct) if most_negative_pct is not None else None))
+        lines.append(macro("SThreeDnMaxAtMostNegative",
+                           fmt(by_pct.get(str(most_negative_pct), {}).get("mean"))
+                           if most_negative_pct is not None else None))
+        # Companion pair for the most-POSITIVE tested percentage (same
+        # dynamic-grid reasoning as most_negative_pct above): the wider,
+        # corrected grid now extends well past the old sign-flip point
+        # (170%), and gain there is NOT monotonically worsening -- it
+        # partially recovers at the most extreme positive perturbation
+        # tested, a real finding worth reporting rather than only
+        # reporting the single worst point.
+        most_positive_pct = max((int(p) for p in by_pct if int(p) > 0), default=None)
+        lines.append(macro("SThreeDnMaxMostPositivePct",
+                           str(most_positive_pct) if most_positive_pct is not None else None))
+        lines.append(macro("SThreeDnMaxAtMostPositive",
+                           fmt(by_pct.get(str(most_positive_pct), {}).get("mean"))
+                           if most_positive_pct is not None else None))
         # Whether ANY parameter flips sign inside the +/-50% claim range.
         flips_within = [v.get("sign_flip_pct") for v in by_param.values()
                         if v.get("sign_flip_pct") is not None
@@ -173,8 +204,9 @@ def build_macros(paper_numbers: dict) -> str:
         for name in ("SThreeNominalGain", "SThreeWorstWithinFifty",
                      "SThreeWorstWithinFiftyParam", "SThreeBestWithinFifty",
                      "SThreeDnMaxFlipPct", "SThreeDnMaxWorstGain",
-                     "SThreeDnMaxAtHundred", "SThreeDnMaxAtMinusSixtyThree",
-                     "SThreeAnyFlipWithinFifty"):
+                     "SThreeDnMaxAtHundred", "SThreeDnMaxMostNegativePct",
+                     "SThreeDnMaxAtMostNegative", "SThreeDnMaxMostPositivePct",
+                     "SThreeDnMaxAtMostPositive", "SThreeAnyFlipWithinFifty"):
             lines.append(macro(name, None))
 
     # SAT: how much of media-in-the-loop's advantage the cheap

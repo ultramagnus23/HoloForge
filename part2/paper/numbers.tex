@@ -22,8 +22,8 @@
 \newcommand{\MinGainEightX}{0.18}
 \newcommand{\MinGainAllBudgets}{0.00}
 \newcommand{\SOneBaselineGain}{1.80}
-\newcommand{\SOneNoSaturationGain}{13.58}
-\newcommand{\SOneNoSaturationRatio}{7.5}
+\newcommand{\SOneNoSaturationGain}{\textcolor{red}{[PENDING]}}
+\newcommand{\SOneNoSaturationRatio}{\textcolor{red}{[PENDING]}}
 \newcommand{\SOneNoDiffusionRatio}{0.72}
 \newcommand{\SOneNoNonlocalityRatio}{0.95}
 \newcommand{\SOneNoDyeDepletionRatio}{0.96}
@@ -37,7 +37,10 @@
 \newcommand{\SThreeDnMaxFlipPct}{170}
 \newcommand{\SThreeDnMaxWorstGain}{-0.63}
 \newcommand{\SThreeDnMaxAtHundred}{1.03}
-\newcommand{\SThreeDnMaxAtMinusSixtyThree}{0.86}
+\newcommand{\SThreeDnMaxMostNegativePct}{-83}
+\newcommand{\SThreeDnMaxAtMostNegative}{0.00}
+\newcommand{\SThreeDnMaxMostPositivePct}{473}
+\newcommand{\SThreeDnMaxAtMostPositive}{-0.07}
 \newcommand{\SThreeAnyFlipWithinFifty}{no}
 \newcommand{\SATMeanGainTwoX}{0.09}
 \newcommand{\SATFracOfMILTwoX}{28}
@@ -64,11 +67,11 @@
 \newcommand{\SeedCountModal}{3}
 \newcommand{\SeedCountNExtraConfigs}{0}
 \newcommand{\SeedCount}{3}
-\newcommand{\NResultFiles}{1752}
+\newcommand{\NResultFiles}{2592}
 
 % --- supplement macros (already-real data, not Phase-3-gated) ---
-\newcommand{\AblationCheckpointCosSim}{0.977}
-\newcommand{\AblationSurrogateCosSim}{0.841}
+\newcommand{\AblationCheckpointCosSim}{1.000}
+\newcommand{\AblationSurrogateCosSim}{0.844}
 \newcommand{\RCWAMaxDevThreeCase}{0.038}
 \newcommand{\RCWAVGridMaxDev}{0.980}
 \newcommand{\RCWAVGridNCases}{90}
@@ -79,16 +82,16 @@
 
 % --- validation (Phase 6 / Section 6) macros ---
 \newcommand{\NLiteratureSources}{3}
-\newcommand{\NRMSEBruderGrowthDnKExp}{0.29}
+\newcommand{\NRMSEBruderGrowthDnKExp}{0.28}
 \newcommand{\NRMSEBruderGrowthDnKSim}{0.17}
 \newcommand{\NRMSEHsiehGrowthDnK}{0.10}
-\newcommand{\NRMSEWorstFit}{0.29}
+\newcommand{\NRMSEWorstFit}{0.28}
 \newcommand{\NRMSEBestFit}{0.10}
 \newcommand{\NGoodFits}{3}
-\newcommand{\NRMSEWorstInRegime}{0.29}
+\newcommand{\NRMSEWorstInRegime}{0.28}
 \newcommand{\NRMSEBestInRegime}{0.17}
 \newcommand{\NInRegimeSources}{2}
-\newcommand{\BayfolDnMaxRatio}{2.7}
+\newcommand{\BayfolDnMaxRatio}{5.7}
 
 % --- baseline completeness (Sec. 5.2 / F4b) macros ---
 \newcommand{\GSGainMin}{-0.96}

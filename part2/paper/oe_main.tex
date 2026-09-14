@@ -50,8 +50,8 @@ volume photopolymer media: the reconstruction error becomes measurable
 only once it is permanent. We replace it with a differentiable digital
 twin of the NPDD recording chemistry inside the hologram-design loop.
 Against a media-blind optimizer this cuts the fraction of exposures
-falling more than \WastedMediaThreshDB\,dB short of the achievability
-ceiling from \WastedMediaBSGDFrac\% to \WastedMediaMILFrac\% -- the
+falling more than \WastedMediaThreshDB\,dB short of a strong reference
+optimizer's score from \WastedMediaBSGDFrac\% to \WastedMediaMILFrac\% -- the
 quantity write-once recording is billed in. The advantage holds on
 non-separable 2D targets (mean \TwoDMeanGain~dB) and survives a 50\%
 error in any single recording parameter. We find no sharp compensation
@@ -89,15 +89,22 @@ the level of mechanism rather than absolute optical response
 (Section~\ref{sec:twin-validation-ref}). That is a weaker guarantee than
 it may appear to need, because of what the claims are: every headline
 result is a \emph{paired} comparison in which both arms are designed
-and scored against the same twin, so a systematic offset or ceiling
-error in the twin cancels in the difference, by construction. What the
-paired design does depend on is the twin's \emph{qualitative} response
-being right -- the saturating, rise-then-decline index response --
-which is what Section~\ref{sec:twin-validation-ref} verifies against
-published data. Independently, Section~\ref{sec:mismatch} shows the
-result survives a 50\% error in any single recording parameter between
-design time and recording time, which is a stronger and one-sided test:
-there the error does not cancel.
+and scored against the literal same twin instance, so an
+\emph{exposure-independent} systematic offset or ceiling error in the
+twin's calibration cancels in the difference. This is an assumption
+about the twin-vs-reality gap, not a guarantee the paired design proves
+on its own: if the gap between this twin and a real medium instead
+varies with the specific exposure shape being recorded -- plausible for
+any unmodeled higher-order effect -- it would not cancel, since
+media-in-the-loop's and media-blind SGD's exposures are different
+shapes. What the paired design does depend on is the twin's
+\emph{qualitative} response being right -- the saturating,
+rise-then-decline index response -- which is what
+Section~\ref{sec:twin-validation-ref} verifies against published data.
+Independently, Section~\ref{sec:mismatch} shows the result survives a
+50\% error in any single recording parameter between design time and
+recording time, which is a stronger and one-sided test: there the error
+does not cancel by any assumption, exposure-dependent or not.
 
 This work is the second in a two-part study; Part 1 characterized phase-only
 CGH degradation under idealized-modulator assumptions using purely
@@ -479,8 +486,10 @@ Figure~\ref{fig:F4} shows this is not what happens. Mean paired gain is
 $2\times/4\times/8\times$, and stays at or above zero at every one of the
 15 tested $K$ -- the minimum observed value across all budgets is
 \MinGainAllBudgets{}~dB (at $K=7.85$\,rad/\textmu m, $2\times$ budget,
-where the 95\% CI does include zero; every other point is positive
-outside its CI). The same point holds directly under the K* estimators
+where the 95\% CI does include zero, as it also does at a small number
+of other high-$K$, high-budget points where both methods approach the
+medium's ceiling and the paired difference is correspondingly small;
+every reported mean stays non-negative regardless). The same point holds directly under the K* estimators
 (Supplement S1): because gain never crosses zero, neither returns a
 crossing at any budget -- there is no observed $K^*$ to compare
 against the predicted $K_c$
@@ -575,28 +584,32 @@ A mean PSNR gain is the wrong unit for this setting. What a write-once
 medium charges for is not average quality but ruined material: an
 exposure either yields a usable hologram or consumes a piece of film
 that cannot be reused. So we measure the failure rate directly, and
-measure ``wasted'' rather than asserting it. An exposure fails if its
-PSNR falls more than \WastedMediaThreshDB\,dB below the constrained
-oracle's ceiling at the same $K$ and budget -- a round number tied to the
-oracle framework Section~\ref{sec:baselines} already defines for
-isolating what is achievable from what a given method reaches, chosen
-before looking at the result, not fit to it. Across the \WastedMediaNConfigs\
-$(K,\text{budget})$ configurations in the headline sweep,
-\WastedMediaBSGDFrac\% of
-media-blind SGD exposures fail this bar, against \WastedMediaMILFrac\%
-of media-in-the-loop exposures. The direction of the effect is stable across
-thresholds, though its size is not, and the spread is worth stating
-rather than summarizing: at \WastedMediaThreshDB\,dB the rates are
-\WastedMediaBSGDFrac\% vs.\ \WastedMediaMILFrac\%, at 3\,dB
-\WastedMediaBSGDFracThreeDB\% vs.\ \WastedMediaMILFracThreeDB\%, and
-at 1\,dB \WastedMediaBSGDFracOneDB\% vs.\
-\WastedMediaMILFracOneDB\%. Media-in-the-loop is better at every
+measure ``wasted'' rather than asserting it, against a strong reference
+rather than a proven bound: the constrained oracle (Section~\ref{sec:baselines})
+is a gradient-optimized upper reference under a simplified
+exposure-to-index map, not a formally established ceiling on the true
+recording problem -- we verified its assumed index amplitude does not
+fall below the real recorder's on a range of representative exposures,
+but a finite-run numerical optimizer is never a proven global optimum.
+An exposure fails if its PSNR falls more than \WastedMediaThreshDB\,dB
+below this reference at the same $K$ and budget -- a round number tied
+to the oracle framework Section~\ref{sec:baselines} already defines,
+chosen before looking at the result, not fit to it. Across the
+\WastedMediaNConfigs\ $(K,\text{budget})$ configurations in the headline
+sweep, \WastedMediaBSGDFrac\% of media-blind SGD exposures fail this
+bar, against \WastedMediaMILFrac\% of media-in-the-loop exposures. The
+direction of the effect is stable across thresholds, though its size is
+not, and the spread is worth stating rather than summarizing: at
+\WastedMediaThreshDB\,dB the rates are \WastedMediaBSGDFrac\% vs.\
+\WastedMediaMILFrac\%, at 3\,dB \WastedMediaBSGDFracThreeDB\% vs.\
+\WastedMediaMILFracThreeDB\%, and at 1\,dB \WastedMediaBSGDFracOneDB\%
+vs.\ \WastedMediaMILFracOneDB\%. Media-in-the-loop is better at every
 threshold, but the gap narrows sharply at 1\,dB: a 1\,dB shortfall from
-the ceiling is common for both methods, and it is the larger, more
-consequential shortfalls that media-in-the-loop essentially
-eliminates. Under this criterion media-in-the-loop does not merely score
-a higher mean PSNR -- it essentially eliminates the exposures that would
-have had to be thrown away.
+the reference is common for both methods, and it is the larger, more
+consequential shortfalls that media-in-the-loop essentially removes.
+Under this criterion media-in-the-loop does not merely score a higher
+mean PSNR -- it lands close to this reference far more consistently
+than media-blind SGD does, at every threshold tested.
 
 Table~\ref{tab:failure-rate} extends the same measurement to every
 non-oracle baseline defined in Section~\ref{sec:baselines}, including
@@ -620,8 +633,8 @@ threshold.
 \centering
 \caption{Failure rate (\% of the \WastedMediaNConfigs\ $(K,\text{budget})$
 configurations in the headline M1 grid whose PSNR falls more than the
-column threshold below the constrained oracle's ceiling at the same
-$(K,\text{budget})$), for every non-oracle method. GS, LPC and GPC are
+column threshold below the constrained oracle's reference score at the
+same $(K,\text{budget})$), for every non-oracle method. GS, LPC and GPC are
 single deterministic runs per configuration (closed-form, no optimizer
 seed -- Section~\ref{sec:baselines}); BSGD, SAT, RSGD and MIL are
 averaged over the same three seeds Section~\ref{sec:failure-rate} uses
@@ -646,13 +659,21 @@ MIL (ours) & \WastedMediaMILFracOneDB\% & \WastedMediaMILFrac\% & \WastedMediaMI
 \label{sec:compute-matched}
 A compute-matched arm repeats the comparison at three representative $K$
 (sub-/near-/post-cliff) with media-blind SGD given
-\texttt{compute\_match\_ratio}$\times$ more optimizer iterations, so its
-wall-clock/FLOP cost matches media-in-the-loop's full-NPDD-forward-pass
-cost per iteration rather than its iteration count (full comparison
-figure in Supplement S6). Gain remains positive in both arms at all
-three $K$ and all three budgets; giving media-blind SGD proportionally
-more compute does not close the gap. Media-in-the-loop's advantage is
-not an iteration-budget artifact.
+\texttt{compute\_match\_ratio}$\times$ more optimizer iterations,
+\texttt{compute\_match\_ratio} set from one representative per-iteration
+wall-clock measurement (a design-time target, not a per-job invariant
+this arm re-verifies -- archived wall-clock ratios between the two
+methods' actual jobs vary far more than this single ratio, since
+wall-clock is a noisy proxy sensitive to scheduling and hardware state)
+so its iteration allowance is intended to approximate media-in-the-loop's
+full-NPDD-forward-pass cost per iteration rather than matching its
+iteration count outright (full comparison figure in Supplement S6).
+Gain remains positive in both arms at all three $K$ and all three
+budgets; giving media-blind SGD a substantially larger iteration
+allowance, on this basis, does not close the gap. Media-in-the-loop's
+advantage is not an iteration-budget artifact, though this arm
+establishes robustness to a much larger baseline allowance rather than
+a verified equal-wall-clock comparison.
 
 \subsection{Baseline completeness}
 \label{sec:baseline-completeness}
@@ -875,15 +896,32 @@ parameter, never approaching zero.
 $\Delta n_{\max}$ is swept wider than the other three, because our own
 fits disagree about Bayfol's $\Delta n_{\max}$ by a factor of
 \BayfolDnMaxRatio{}$\times$ (Section~\ref{sec:twin-validation-ref}), and
-it is the one parameter where the advantage eventually breaks, one-sided:
-gain is still \SThreeDnMaxAtMinusSixtyThree~dB under-estimating the
-saturation ceiling by $-63\%$, but falls to \SThreeDnMaxAtHundred~dB at
-$+100\%$ and goes negative, \SThreeDnMaxWorstGain~dB, at
-$+\SThreeDnMaxFlipPct\%$. A twin that believes the medium can hold more
-index modulation than it can will spend contrast budget driving an index
-swing the real medium simply clips (the same saturation mechanism
-Section~\ref{sec:s1-ablation} identifies as dominant): $\Delta n_{\max}$
-must not be over-estimated by more than about a factor of two.
+it is the one parameter where the advantage is not simply safe in one
+direction: the exposure is always designed at the nominal
+$\Delta n_{\max}$ and recorded on a medium whose \emph{true} ceiling is
+perturbed relative to that design. A perturbation of
+$\SThreeDnMaxMostNegativePct\%$ (bracketing the measured literature
+disagreement in the direction where the true medium holds \emph{less}
+index modulation than the design assumed -- the design over-estimates
+the true ceiling) leaves gain at \SThreeDnMaxAtMostNegative~dB:
+essentially at the boundary of zero, not comfortably positive. In the
+opposite direction, a $+\SThreeDnMaxFlipPct\%$ perturbation (the true
+medium holding \emph{more} than the design assumed -- the design
+under-estimates the true ceiling) is where gain is worst,
+\SThreeDnMaxWorstGain~dB, having already gone negative from
+\SThreeDnMaxAtHundred~dB at $+100\%$; gain is plausibly explained here by
+an under-estimating design driving the exposure harder than necessary to
+compensate for an assumed shortfall that was never real, then recording
+that over-driven exposure on the \emph{actually} higher-capacity medium
+at an amplitude beyond what was intended -- the same clipping-adjacent
+saturation mechanism Section~\ref{sec:s1-ablation} identifies as
+dominant. This does not worsen monotonically, though: at the most
+extreme perturbation tested, $+\SThreeDnMaxMostPositivePct\%$, gain is
+back to \SThreeDnMaxAtMostPositive~dB -- still slightly negative, but a
+partial recovery from the $+\SThreeDnMaxFlipPct\%$ minimum, not a
+continuing collapse. Taken together, $\Delta n_{\max}$ miscalibration at
+the magnitude actually observed across independent literature fits is a
+real risk in both directions, not a one-sided caveat.
 
 \subsection{Joint miscalibration}
 \label{sec:joint-mismatch}
@@ -985,10 +1023,13 @@ Bayfol HX figure), $D_0$ and $\sigma$ were not independently re-audited to
 their exact source condition the way $\Delta n_{\max}$ was, and this
 paper's own headline claims are paired comparisons (media-in-the-loop minus
 media-blind SGD, same twin for both arms), so they do not require the
-twin's absolute response to match real photopolymers -- a systematic
-offset or ceiling error cancels in the difference as long as it is common
-to both arms, which it is by construction. What this validation
-establishes is that the corrected twin reproduces the saturating,
+twin's absolute response to match real photopolymers -- an
+exposure-independent systematic offset or ceiling error would cancel in
+the difference, common to both arms by construction, though this does
+not cover an exposure-dependent gap between the twin and a real medium
+(Section~\ref{sec:mismatch} tests robustness to a different, one-sided
+kind of error that does not cancel by any assumption). What this
+validation establishes is that the corrected twin reproduces the saturating,
 rise-then-decline index response identified in Section~\ref{sec:s1-ablation}
 as the dominant
 mechanism behind the paired-gain result, at parameter values consistent

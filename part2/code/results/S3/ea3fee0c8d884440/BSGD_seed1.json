@@ -1,0 +1,52 @@
+{
+ "git_commit": "9e87cd36c2700d4e6a4abd18df0cb8d4933b9fb5",
+ "experiment_id": "S3",
+ "method_id": "BSGD",
+ "seed": 1,
+ "config": {
+  "n_x": 1024,
+  "dx": 0.05,
+  "lam_um": 0.405,
+  "n_iters": 800,
+  "converge_tol": 0.0001,
+  "contrast_cap": 2.0,
+  "dose_budget": 1.0,
+  "medium": {
+   "D0": 0.1,
+   "sigma": 0.08,
+   "kappa": 2.0,
+   "gamma": 1.0,
+   "dn_max": 0.0005950000000000002,
+   "k_bleach": 0.2,
+   "alpha_D": 1.0,
+   "shrinkage": 0.005,
+   "thickness": 30.0,
+   "n0": 1.5
+  },
+  "target": {
+   "kind": "bars",
+   "period_px": 32
+  },
+  "K_nominal": 3.9269908169872414,
+  "design_medium": "nominal",
+  "arm": "mismatch_eval",
+  "mismatch_param": "dn_max",
+  "mismatch_pct": -83
+ },
+ "config_hash": "ea3fee0c8d884440",
+ "device": "cpu",
+ "device_name": "cpu:AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+ "dtype": "torch.float32",
+ "loss_curve": [],
+ "iterations_run": 800,
+ "early_stop_reason": "evaluation_only",
+ "wall_s": 0.09995150566101074,
+ "peak_mem_mb": null,
+ "psnr": 6.019369125366211,
+ "psnr_maxnorm_legacy": 3.102358341217041,
+ "diffraction_efficiency": 0.49993456871259717,
+ "contrast": {
+  "max_over_mean": 2.1923391819000244,
+  "p95_over_mean": 2.1923391819000244
+ }
+}

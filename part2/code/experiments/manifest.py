@@ -372,8 +372,30 @@ S2_BUDGET = 2.0
 # Trimmed to the innermost 4 (dropping the two outermost on each side) as
 # part of the same compute-budget cut -- full 8-point grid kept below for
 # explicit opt-in.
-S2_K_POINTS_FULL = [3.5, 4.25, 4.6, 5.0, 5.24, 5.6, 6.0, 6.5]
-S2_K_POINTS = [4.6, 5.0, 5.24, 5.6]
+#
+# REMEDIATION (confirmed peer-review finding I5): the previous nominal
+# values [3.5, 4.25, 4.6, 5.0, 5.24, 5.6, 6.0, 6.5] do NOT all round to
+# distinct even pixel periods at this grid's dx=51.2/1024 (period_from_K
+# rounds to the nearest EVEN period, same convention M1's own K grid
+# uses -- see period_from_K's docstring for why "nearest even" matters).
+# Verified directly against the real committed S2 result files:
+# K_nominal=5.0 and K_nominal=5.24 both realize period_px=24, and their
+# saved BSGD_seed0.json results are bit-for-bit identical (same target,
+# same psnr to the last decimal) -- two of S2_K_POINTS's four "distinct"
+# points were the same target. The FULL 8-point grid has the same
+# problem twice over (5.0/5.24 -> period 24; 6.0/6.5 -> period 20), so
+# only 6 of 8 were ever distinct.
+#
+# Fixed by specifying this grid directly in exactly-representable EVEN
+# periods (matching M1's own _CLIFF_PERIODS_PX convention) instead of
+# nominal K values that get silently rounded and collapsed. The 8 periods
+# below are a contiguous slice of M1's own _CLIFF_PERIODS_PX list, so
+# every S2_K_POINTS_FULL value is also a real, already-tested M1 grid
+# point -- directly comparable, not merely close to one.
+S2_PERIODS_FULL_PX = [36, 32, 30, 28, 26, 24, 22, 20]
+S2_PERIODS_PX = [28, 26, 24, 22]  # innermost 4, same compute-budget cut as before
+S2_K_POINTS_FULL = [round(K_from_period_exact(p, 51.2 / 1024), 6) for p in S2_PERIODS_FULL_PX]
+S2_K_POINTS = [round(K_from_period_exact(p, 51.2 / 1024), 6) for p in S2_PERIODS_PX]
 
 
 def build_S2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
@@ -451,13 +473,40 @@ S3_PERTURBATIONS_PCT = [-50, -25, -10, 0, 10, 25, 50]
 # dn_max gets a wider grid than the other three, for an empirical reason
 # specific to this parameter: our own literature fit (Sec. 6,
 # results_literature_fit.json) found two Bayfol dn_max values that
-# disagree by 2.7x -- i.e. about +170% / -63% -- which is far outside the
-# +/-50% band. Testing dn_max only to +/-50% would be testing a range we
-# already know from our own data is too narrow, so the grid is extended
-# to bracket that measured disagreement exactly: 2.7x = +170%, 1/2.7 =
-# -63%.
-DN_MAX_LITERATURE_DISAGREEMENT_FACTOR = 2.7
-S3_PERTURBATIONS_PCT_DN_MAX = [-63, -50, -25, -10, 0, 10, 25, 50, 100, 170]
+# disagree by a real, measured factor -- far outside the +/-50% band.
+# Testing dn_max only to +/-50% would be testing a range we already know
+# from our own data is too narrow, so the grid is extended to bracket
+# that measured disagreement exactly.
+#
+# REMEDIATION (B2 cascading effect): this factor was previously
+# HARD-CODED at 2.7 (the ratio from an earlier, non-conservative
+# literature fit -- see holomedia/npdd.py's forward()/_step() conservation
+# fix and experiments/fit_literature_curves.py's step-count fix, both
+# confirmed peer-review findings). The corrected fit finds the two
+# series disagree by a real, substantially LARGER factor. Loaded
+# dynamically from the actual fit output below instead of hand-typed
+# again, so a future refit cannot silently leave this stale a second
+# time -- falls back to the old 2.7 only if the fit file does not exist
+# yet (e.g. a fresh checkout before Section 6's fit has been run once).
+def _dn_max_disagreement_factor(default: float = 2.7) -> float:
+    path = os.path.join(os.path.dirname(__file__), "..", "results_literature_fit.json")
+    if not os.path.exists(path):
+        return default
+    with open(path) as f:
+        fits = json.load(f).get("fits", [])
+    bayfol = [fit for fit in fits if "bruder2017" in fit.get("file", "")
+             and fit.get("second_param") == "dn_max"]
+    if len(bayfol) != 2:
+        return default
+    vals = sorted(fit["second_param_fit"] for fit in bayfol)
+    return vals[1] / vals[0] if vals[0] > 0 else default
+
+
+DN_MAX_LITERATURE_DISAGREEMENT_FACTOR = _dn_max_disagreement_factor()
+_dn_max_hi_pct = round((DN_MAX_LITERATURE_DISAGREEMENT_FACTOR - 1.0) * 100)
+_dn_max_lo_pct = round((1.0 / DN_MAX_LITERATURE_DISAGREEMENT_FACTOR - 1.0) * 100)
+S3_PERTURBATIONS_PCT_DN_MAX = sorted(set(
+    [_dn_max_lo_pct, -50, -25, -10, 0, 10, 25, 50, 100, _dn_max_hi_pct]))
 
 S3_BUDGET = 2.0
 # Same three sub/near/post-cliff K's as S1/M2, for direct comparability.
