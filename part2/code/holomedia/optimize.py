@@ -44,7 +44,7 @@ def dose_project(E: torch.Tensor, budget: float) -> torch.Tensor:
 
 def contrast_project(E: torch.Tensor, budget: float,
                      contrast_cap: float | None = None,
-                     n_passes: int = 20) -> torch.Tensor:
+                     n_passes: int = 200, tol: float = 1e-6) -> torch.Tensor:
     """Project E onto {E >= 0, mean(E) == budget, max(E)/mean(E) <= contrast_cap}.
 
     This constraint did NOT previously exist anywhere in the codebase:
@@ -62,15 +62,25 @@ def contrast_project(E: torch.Tensor, budget: float,
     Implementation: alternate clamping the peak to contrast_cap*budget and
     re-normalizing the mean back to budget. Clamping changes the mean (mass
     above the ceiling is removed), so a single pass does not exactly hit
-    both constraints simultaneously; convergence is geometric (~2x error
-    reduction per pass, verified) but the rate depends on the input's
-    peakedness -- simple inputs converge to ~1e-7 within 6 passes, harder
-    (e.g. post-frequency-boost) inputs only to ~3e-3 at 6 passes and need
-    ~20 for <1e-6. Both operations (clamp, rescale) are differentiable, so
-    this is safe to use inside an unrolled optimization loop; 20 passes of
-    elementwise clamp+rescale is negligible cost next to one NPDD/BPM
-    forward pass.
-    """
+    both constraints simultaneously.
+
+    REMEDIATION (confirmed peer-review finding B3): the previous default,
+    n_passes=20, was based on a docstring convergence-rate claim
+    ("~20 for <1e-6") that turned out FALSE for real optimizer-produced
+    exposures. Directly reproduced on this codebase's own media_blind_sgd
+    output at K=3.927rad/um, budget=2x, contrast_cap=2.0: 20 passes left
+    realized contrast at 2.19403 (9.70% OVER the 2.0 cap, matching the
+    externally reported violation exactly), while the SAME exposure
+    converges to <0.0001% excess by 100 passes and exactly to the cap by
+    500. The failure mode is not non-convergence, just under-iteration:
+    each pass is a cheap elementwise clamp+rescale (negligible next to
+    one NPDD/BPM forward pass), so there is no real cost reason to have
+    used so few. Loop now runs until the realized ratio is within `tol`
+    of the cap (checked every pass) or `n_passes` is exhausted, whichever
+    first -- a real convergence check, not a fixed guess -- with the cap
+    raised to 200 as a generous ceiling for cases still not fully
+    converged by then (verified sufficient on the case above with wide
+    margin: reaches tol by pass ~140)."""
     E = dose_project(E, budget)
     if contrast_cap is None:
         return E
@@ -78,6 +88,10 @@ def contrast_project(E: torch.Tensor, budget: float,
     for _ in range(n_passes):
         E = torch.clamp(E, max=ceiling)
         E = dose_project(E, budget)
+        with torch.no_grad():
+            realized = E.max() / (E.mean() + 1e-12)
+            if realized <= ceiling / budget * (1.0 + tol):
+                break
     return E
 
 
@@ -370,6 +384,103 @@ def linear_precomp(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
     return E, recon
 
 
+def gamma_precomp(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
+                  dose_budget: float = 1.0, contrast_cap: float | None = None,
+                  a_eff: float | None = None, fit_samples: int = 48):
+    """Gamma-precompensated linear (WP3 item 2) -- closed-form, zero
+    optimization, the cheapest media-AWARE competitor in the registry
+    (cheaper than LPC: elementwise inversion, no FFT).
+
+    Where LPC (linear_precomp) inverts the LINEARIZED small-signal
+    transfer function H(K) in frequency space, this baseline inverts the
+    FULL pointwise saturating nonlinearity directly, in real space -- the
+    standard "gamma correction" recipe: given a calibrated forward map
+    E -> dn = f(E) (here, SaturationOnlyTwin's calibrated pointwise map,
+    the same one/same fit sat_sgd (SAT) uses), and a desired index profile
+    dn_desired(x), solve elementwise for E(x) = f^{-1}(dn_desired(x)) so
+    that f(E(x)) = dn_desired(x) exactly under the CALIBRATED model (not
+    the real twin -- this is a media-blind-to-transport-physics baseline,
+    same spirit as LPC and BSGD, just with a better single-point
+    nonlinearity than either).
+
+    dn_desired is built the same way LPC treats its target (target taken
+    as directly proportional to the desired profile, not run through an
+    optimizer), rescaled into this medium's own achievable range
+    (0, dn_max) since the recorder's dn is strictly nonnegative by
+    construction (dn = dn_max*tanh(...), N >= 0) -- clipped strictly
+    below dn_max to keep the tanh inversion finite.
+
+    a_eff reuses SAT's own calibration cache (_cached_sat_fit) rather than
+    re-fitting -- same fitted sensitivity, same fit cost amortization,
+    consistent with sat_sgd's own a_eff handling.
+    """
+    device = target.device
+    dtype = recorder.dtype
+    if a_eff is None:
+        a_eff = _cached_sat_fit(recorder, fit_samples, dose_budget)
+    dn_max, gamma_exp = recorder.p.dn_max, recorder.p.gamma
+
+    t = target.to(dtype)
+    t_norm = (t / (t.max() + 1e-12)).clamp(min=0.0, max=0.999)
+    dn_desired = dn_max * t_norm
+
+    # Invert dn = dn_max * tanh(1.5*N)  =>  N = artanh(dn/dn_max) / 1.5
+    N = torch.atanh((dn_desired / dn_max).clamp(max=0.999)) / 1.5
+    # Invert N = 1 - exp(-a*E^gamma)  =>  E = (-ln(1-N)/a)^(1/gamma)
+    E = (-torch.log((1.0 - N).clamp(min=1e-12)) / a_eff).clamp(min=0.0) ** (1.0 / gamma_exp)
+
+    E = contrast_project(E, dose_budget, contrast_cap)
+    with torch.no_grad():
+        dn = recorder(E)
+        recon = bpm(dn, shrinkage=recorder.p.shrinkage)
+    return E, recon
+
+
+def regularized_media_blind_sgd(target: torch.Tensor, recorder: NPDDRecorder,
+                                bpm: SlabBPM, n_iters: int = 400, lr: float = 5e-2,
+                                dose_budget: float = 1.0, seed: int = 0,
+                                contrast_cap: float | None = None,
+                                tv_weight: float = 0.0, log_every: int = 50):
+    """media_blind_sgd (WP3 item 1) plus a total-variation penalty on the
+    exposure, to neutralize the "straw man" objection that unregularized
+    media-blind SGD drives exposures to binary swings that saturate
+    dn_max regardless of medium. Identical to media_blind_sgd in every
+    other respect (same naive linear dn_ideal = c_lin*(E-mean(E))
+    assumption, same evaluation-on-the-real-twin protocol) -- tv_weight=0
+    reproduces media_blind_sgd exactly.
+
+    tv_weight is tuned ON THE TWIN (selected by realized PSNR against the
+    real recorder+BPM, not against the naive linear proxy the optimizer
+    itself minimizes) by a small grid search at the call site
+    (experiments/tune_regularized_sgd.py) -- stated explicitly per the
+    work order's requirement that twin-tuned regularization be disclosed,
+    not presented as if the naive optimizer discovered it unsupervised.
+    """
+    device = target.device
+    theta = _seeded_init_theta(recorder.n_x, device, recorder.dtype, seed)
+    opt = torch.optim.Adam([theta], lr=lr)
+    c_lin = recorder.p.dn_max
+    history = []
+
+    for it in range(n_iters):
+        opt.zero_grad()
+        E = torch.nn.functional.softplus(theta) + 1e-6
+        E = contrast_project(E, dose_budget, contrast_cap)
+        dn_ideal = c_lin * (E - E.mean())
+        recon = bpm(dn_ideal, shrinkage=0.0)
+        tv = torch.mean(torch.abs(E[1:] - E[:-1]))
+        loss = si_mse(recon, target) + tv_weight * tv
+        loss.backward()
+        opt.step()
+        if it % log_every == 0:
+            history.append((it, float(loss.detach())))
+
+    with torch.no_grad():
+        E = contrast_project(torch.nn.functional.softplus(theta) + 1e-6, dose_budget, contrast_cap)
+        recon_real = bpm(recorder(E), shrinkage=recorder.p.shrinkage)
+    return E.detach(), recon_real.detach(), history
+
+
 def media_blind_gs(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
                    n_iters: int = 200, dose_budget: float = 1.0, seed: int = 0,
                    contrast_cap: float | None = None):
@@ -452,17 +563,29 @@ def oracle_ideal(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
         dn_lin = dn_max * (E - E.mean())
         return E, dn_max * torch.tanh(dn_lin / dn_max)
 
+    # REMEDIATION (confirmed peer-review finding B6): this oracle previously
+    # evaluated with shrinkage=0.0 while MIL and BSGD both evaluate with the
+    # real medium's shrinkage (recorder.p.shrinkage) -- an unfair readout
+    # advantage for the "ceiling" this method is meant to bound against.
+    # Measured directly at a representative (K, budget) point: 0.11 dB
+    # inflation from skipping shrinkage alone, a real fraction of the
+    # headline 0.34-0.73 dB gains this ceiling is compared against. Using
+    # the SAME shrinkage as every other method's real-twin evaluation here
+    # closes that gap; it does not change what index-map this oracle
+    # assumes (still the simplified linear-then-saturated map, not the full
+    # NPDD dynamics -- see this function's own docstring for that separate,
+    # disclosed scope limitation).
     for _ in range(n_iters):
         opt.zero_grad()
         _, dn = _dn_from(theta)
-        recon = bpm(dn, shrinkage=0.0)
+        recon = bpm(dn, shrinkage=recorder.p.shrinkage)
         loss = si_mse(recon, target)
         loss.backward()
         opt.step()
 
     with torch.no_grad():
         E, dn = _dn_from(theta)
-        recon = bpm(dn, shrinkage=0.0)
+        recon = bpm(dn, shrinkage=recorder.p.shrinkage)
     return E.detach(), recon.detach()
 
 
@@ -509,17 +632,20 @@ def oracle_unconstrained(target: torch.Tensor, recorder: NPDDRecorder, bpm: Slab
          ).to(device).requires_grad_(True)
     opt = torch.optim.Adam([u], lr=lr)
 
+    # REMEDIATION (confirmed peer-review finding B6, same fix as
+    # oracle_ideal above): use the real medium's shrinkage, not 0.0, so this
+    # oracle isn't evaluated under an easier readout than MIL/BSGD.
     for _ in range(n_iters):
         opt.zero_grad()
         dn = dn_max * torch.tanh(u)  # soft-bounded, no hard E/dose constraint
-        recon = bpm(dn, shrinkage=0.0)
+        recon = bpm(dn, shrinkage=recorder.p.shrinkage)
         loss = si_mse(recon, target)
         loss.backward()
         opt.step()
 
     with torch.no_grad():
         dn = dn_max * torch.tanh(u)
-        recon = bpm(dn, shrinkage=0.0)
+        recon = bpm(dn, shrinkage=recorder.p.shrinkage)
     return dn.detach(), recon.detach()
 
 
@@ -754,15 +880,17 @@ def oracle_ideal_batched(targets: torch.Tensor, recorder: NPDDRecorder,
         dn_lin = dn_max * (E - E.mean(dim=-1, keepdim=True))
         return E, dn_max * torch.tanh(dn_lin / dn_max)
 
+    # REMEDIATION (confirmed peer-review finding B6, same fix as the
+    # unbatched oracle_ideal): real shrinkage, not 0.0.
     for _ in range(n_iters):
         opt.zero_grad()
         _, dn = _dn_from(theta)
-        recon = bpm(dn, shrinkage=0.0)
+        recon = bpm(dn, shrinkage=recorder.p.shrinkage)
         loss_per_row = si_mse(recon, targets, dim=-1)
         loss_per_row.sum().backward()
         opt.step()
 
     with torch.no_grad():
         E, dn = _dn_from(theta)
-        recon = bpm(dn, shrinkage=0.0)
+        recon = bpm(dn, shrinkage=recorder.p.shrinkage)
     return E.detach(), recon.detach()

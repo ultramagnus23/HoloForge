@@ -24,11 +24,13 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import torch
 
-from holomedia import MediumParams, contrast_project, dose_project, si_mse, psnr_si, diffraction_efficiency
+from holomedia import (MediumParams, NPDDRecorder, contrast_project, dose_project,
+                       si_mse, psnr_si, diffraction_efficiency)
+from holomedia.npdd import fit_saturation_only
 from holomedia.npdd3d import NPDDRecorder3D
 from holomedia.diffraction3d import SlabBPM3D
 
-from manifest_2d import build_2d_jobs, TARGET_FNS
+from manifest_2d import build_2d_jobs, TARGET_FNS, DEFAULT_MEDIUM
 
 HERE = os.path.dirname(__file__)
 RESULTS_ROOT = os.path.join(HERE, "..", "results", "M1_2D")
@@ -107,7 +109,67 @@ def run_bsgd(target, rec, bpm, config, seed):
     return E.detach(), recon.detach(), loss_hist
 
 
-RUNNERS = {"MIL": run_mil, "BSGD": run_bsgd}
+_SAT_AEFF_CACHE: dict = {}
+
+
+def _sat_a_eff_2d(medium_dict: dict) -> float:
+    """WP7 (Applied Optics revision, 2D expansion): SAT's one-parameter
+    calibration (holomedia.npdd.fit_saturation_only) is a property of the
+    MEDIUM's dose-sensitivity curve (kappa, gamma, dn_max, k_bleach,
+    sigma) -- it does not depend on whether the exposures it was fit
+    against were arranged as a 1D or 2D grid, since the pointwise map
+    itself (dn = dn_max*tanh(1.5*(1-exp(-a*E**gamma)))) has no spatial
+    derivatives. Rather than write a parallel 2D-specific fitting
+    routine (which would re-derive the identical number at real cost),
+    this reuses the EXACT SAME calibration the 1D M1/SAT pipeline
+    already computed and cached, via a throwaway 1D NPDDRecorder built
+    from the identical MediumParams manifest_2d.DEFAULT_MEDIUM already
+    matches (see that file's own docstring: "same medium defaults ...
+    unmodified"). Cached in-process keyed by the medium dict so repeated
+    2D SAT jobs across targets/budgets/seeds pay this once, exactly like
+    the 1D pipeline's own _cached_sat_fit."""
+    key = json.dumps(medium_dict, sort_keys=True)
+    if key not in _SAT_AEFF_CACHE:
+        medium = MediumParams(**medium_dict)
+        rec_1d = NPDDRecorder(256, 0.05, t_total=10.0, n_steps=300,
+                              params=medium, dtype=torch.float64).to(DEVICE)
+        a_eff, nrmse = fit_saturation_only(rec_1d, n_samples=48)
+        print(f"  [2D SAT calibration] a_eff={a_eff:.4f} nrmse={nrmse:.4f} "
+             f"(reused from a 1D fit against the identical medium)", flush=True)
+        _SAT_AEFF_CACHE[key] = a_eff
+    return _SAT_AEFF_CACHE[key]
+
+
+def run_sat(target, rec, bpm, config, seed):
+    """2D analogue of holomedia.optimize.sat_sgd: optimize against the
+    closed-form saturating pointwise map (no NPDD PDE unroll, no
+    non-local/diffusion terms), evaluate on the real 2D twin. Cheap
+    relative to MIL for the same reason the 1D SAT arm is."""
+    a_eff = _sat_a_eff_2d(config["medium"])
+    dn_max, gamma = rec.p.dn_max, rec.p.gamma
+    theta = _seeded_init_theta_2d(config["n"], DEVICE, DTYPE, seed)
+    opt = torch.optim.Adam([theta], lr=config["lr"])
+    loss_hist = []
+    for it in range(config["n_iters"]):
+        opt.zero_grad()
+        E = torch.nn.functional.softplus(theta) + 1e-6
+        E = contrast_project(E, config["dose_budget"], contrast_cap=config["contrast_cap"])
+        dn_sat = dn_max * torch.tanh(1.5 * (1.0 - torch.exp(-a_eff * E ** gamma)))
+        recon = bpm(dn_sat)
+        loss = si_mse(recon, target)
+        loss.backward()
+        opt.step()
+        if it % 100 == 0 or it == config["n_iters"] - 1:
+            loss_hist.append((it, float(loss.detach())))
+    with torch.no_grad():
+        E = contrast_project(torch.nn.functional.softplus(theta) + 1e-6,
+                            config["dose_budget"], contrast_cap=config["contrast_cap"])
+        # Evaluated on the REAL twin, matching 1D sat_sgd's arm design.
+        recon = bpm(rec(E))
+    return E.detach(), recon.detach(), loss_hist
+
+
+RUNNERS = {"MIL": run_mil, "BSGD": run_bsgd, "SAT": run_sat}
 
 
 def run_job(job: dict) -> dict:

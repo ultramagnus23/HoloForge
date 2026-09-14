@@ -94,11 +94,26 @@ def run_one_K(K: float, rec, bpm, device) -> dict:
     print(f"K={K:.3f}  BSGD PSNR={psnr_bsgd:.2f}dB ({t_bsgd:.0f}s)  "
           f"MIL PSNR={psnr_mil:.2f}dB ({t_mil:.0f}s)  gain={psnr_mil-psnr_bsgd:.2f}dB", flush=True)
 
+    # REMEDIATION (confirmed peer-review finding I4, second part): the
+    # error panel this feeds (figures/make_all.py's make_R1_reconstructions)
+    # previously plotted the RAW residual (recon - target), but the psnr
+    # labels next to it are psnr_si -- computed from the OPTIMALLY-SCALED
+    # residual (alpha*recon - target, alpha = <recon,target>/<recon,recon>),
+    # not the raw one. Saving the alpha-scaled reconstructions here (instead
+    # of changing the plotting code) means every consumer of this JSON --
+    # both the profile overlay and the error panel -- shows what psnr_si
+    # actually scored, with no separate scaling logic to keep in sync.
+    def _si_scaled(recon):
+        alpha = (recon * target).sum() / ((recon * recon).sum() + 1e-12)
+        return alpha * recon
+    recon_bsgd_scaled = _si_scaled(recon_bsgd)
+    recon_mil_scaled = _si_scaled(recon_mil)
+
     return dict(
         K=K, period_px=period_px, budget=BUDGET, seed=SEED,
         target=target.detach().cpu().tolist(),
-        recon_bsgd=recon_bsgd.detach().cpu().tolist(),
-        recon_mil=recon_mil.detach().cpu().tolist(),
+        recon_bsgd=recon_bsgd_scaled.detach().cpu().tolist(),
+        recon_mil=recon_mil_scaled.detach().cpu().tolist(),
         psnr_bsgd=psnr_bsgd, psnr_mil=psnr_mil,
         wall_s_bsgd=t_bsgd, wall_s_mil=t_mil,
     )

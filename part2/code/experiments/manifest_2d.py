@@ -5,10 +5,14 @@ Scope decision (see paper's Phase 2 decision memo): NOT a full 2D
 generalization of the M1 15-K x 3-budget x 3-seed x 4-method grid (costed
 at thousands of GPU-hours at real image resolution -- infeasible on this
 hardware by the submission deadline). Instead: 3 real 2D image targets x 3
-contrast budgets x N seeds x 2 methods (MIL, BSGD -- the paper's core
-paired comparison), at a fixed resolution. K is not swept because K is not
-well-defined for a broadband 2D image; the 3 targets vary in spatial-
-frequency content instead, playing the analogous role.
+contrast budgets x N seeds x 3 methods (MIL, BSGD -- the paper's core
+paired comparison -- plus SAT, the cheap saturation-only surrogate added
+for WP7/the Applied Optics revision, mirroring the 1D baseline-
+completeness question in 2D: does the cheap surrogate remain a real
+competitor once the target is genuinely 2D?), at a fixed resolution. K is
+not swept because K is not well-defined for a broadband 2D image; the 3
+targets vary in spatial-frequency content instead, playing the analogous
+role.
 
 Reuses holomedia.npdd3d.NPDDRecorder3D / holomedia.diffraction3d.SlabBPM3D
 unmodified -- same governing NPDD equations as the 1D pipeline, generalized
@@ -105,7 +109,7 @@ def _job(method_id: str, seed: int, config: dict) -> dict:
 
 
 def build_2d_jobs(target_kinds=None, budgets=None, seeds=None,
-                  methods=("BSGD", "MIL")) -> list[dict]:
+                  methods=("BSGD", "MIL", "SAT")) -> list[dict]:
     target_kinds = target_kinds if target_kinds is not None else TARGET_KINDS
     budgets = budgets if budgets is not None else BUDGETS
     seeds = seeds if seeds is not None else SEEDS

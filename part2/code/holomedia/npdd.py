@@ -64,10 +64,56 @@ class MediumParams:
     shrinkage: float = 0.005
     thickness: float = 30.0
     n0: float = 1.5
+    # REMEDIATION (confirmed peer-review finding B1): a real "remove
+    # saturation" ablation, not a dn_max rescale -- see NPDDRecorder's
+    # _index_map docstring. A medium-level (not recorder-constructor-level)
+    # field so experiments/manifest.py's existing
+    # dict(DEFAULT_MEDIUM, **overrides) ablation-condition machinery can
+    # set it exactly like every other physics toggle (sigma=0, D0=0, ...).
+    linearize_index_map: bool = False
 
     def to_tensor_dict(self, device, dtype=torch.float64):
         return {k: torch.as_tensor(v, device=device, dtype=dtype)
                 for k, v in self.__dict__.items()}
+
+
+def depth_resolved_dn(recorder: "NPDDRecorder", exposure: torch.Tensor,
+                      optical_density: float, n_z: int) -> torch.Tensor:
+    """WP6 (Applied Optics revision, depth-resolved absorption): the
+    uniform-through-depth recording assumption oe_main.tex's Discussion
+    section already bounds analytically (Section on depth-resolved
+    absorption) as "good only for OD <~ 0.1 over the recorded
+    thickness" -- this makes that bound an EMPIRICAL one instead, by
+    actually attenuating the recording exposure with depth (Beer-Lambert:
+    delivered dose falls by 10^{-OD * z/thickness} at depth z) and
+    running the SAME NPDD recording physics independently at each of
+    n_z depth slices, then letting each slice's own (now dimmer, at
+    greater depth) exposure saturate the local dn on its own.
+
+    Returns dn of shape (n_z, n_x): one full 1D recorded index profile
+    per depth slice, NOT a single profile extruded uniformly through
+    depth the way every other tier in this codebase assumes. Feeds
+    directly into holomedia.diffraction.SlabBPM.forward_depth_resolved.
+
+    Implementation note: NPDDRecorder.forward already supports a leading
+    batch dimension (its diffusion step means D_eff over dim=-1 only,
+    keepdim=True -- see NPDDRecorder._diffuse's docstring), so all n_z
+    depth slices are recorded in ONE batched forward call, not a Python
+    loop over z -- this is real physics, not free, but it is one GPU
+    call rather than n_z sequential ones.
+
+    optical_density=0 must reproduce the existing uniform-depth
+    assumption EXACTLY (every slice sees identical, unattenuated
+    exposure) -- this is the empirical check that this function is a
+    strict generalization of the existing model, not a different one.
+    """
+    if optical_density < 0:
+        raise ValueError(f"optical_density must be >= 0, got {optical_density}")
+    z_frac = (torch.arange(n_z, device=exposure.device, dtype=recorder.dtype) + 0.5) / n_z
+    atten = 10.0 ** (-optical_density * z_frac)  # (n_z,), 1.0 at z_frac=0 by construction
+    I_stack = exposure.unsqueeze(0) * atten.unsqueeze(1)  # (n_z, n_x)
+    dn_stack = recorder(I_stack)  # batched forward, (n_z, n_x)
+    return dn_stack
 
 
 class NPDDRecorder(torch.nn.Module):
@@ -106,12 +152,54 @@ class NPDDRecorder(torch.nn.Module):
         """Gaussian non-local response applied via FFT (periodic BCs)."""
         return torch.fft.ifft(torch.fft.fft(u) * self.G_hat).real
 
+    def _index_map(self, N: torch.Tensor) -> torch.Tensor:
+        """dn(N): the saturating map by default, or its exact small-signal
+        LINEAR limit (tanh(x) ~= x for small x, so tanh(1.5N) -> 1.5N) when
+        self.p.linearize_index_map=True.
+
+        REMEDIATION (confirmed peer-review finding B1): the previous
+        ablation approximated "removing saturation" by scaling dn_max
+        instead. That does not work -- dn_max never enters the u/N/d
+        PDEs, only this final conversion, so N (and tanh(1.5N)'s own
+        saturation, since realistic N already sits near 1) is
+        bit-for-bit IDENTICAL regardless of dn_max, verified directly
+        (max|N(dn_max) - N(100*dn_max)| = 0.0 on a realistic exposure).
+        This flag instead linearizes the conversion itself, holding
+        every PDE dynamic (and every other medium parameter, dn_max
+        included) exactly fixed -- it isolates the index-map
+        nonlinearity specifically, which is what the ablation claims to
+        test."""
+        if self.p.linearize_index_map:
+            return self.p.dn_max * 1.5 * N
+        return self.p.dn_max * torch.tanh(1.5 * N)
+
     def _diffuse(self, u: torch.Tensor, D_eff: torch.Tensor) -> torch.Tensor:
         """Implicit (exact) diffusion step with spatially averaged D.
 
-        Uses the harmonic-mean effective D for stability; the spatial
-        variation of D is second-order for the regimes studied and is
-        ablated in experiments/ablation_variableD.py.
+        Uses the spatial ARITHMETIC mean of D_eff (D_eff.mean() below --
+        corrected label; this docstring previously said "harmonic-mean",
+        which does not match what the code computes) as a single scalar
+        D_bar, applied via an exact spectral (constant-coefficient)
+        diffusion step -- a real approximation to the stated governing
+        PDE's spatially-varying operator d/dx(D_eff(x) d/dx u), not an
+        exact solution of it (confirmed peer-review finding I3).
+
+        REMEDIATION: this docstring previously cited
+        "experiments/ablation_variableD.py" as already having validated
+        that this approximation is "second-order for the regimes
+        studied" -- that file does not exist in this codebase (checked
+        directly). The claim was unsupported by any actual evidence.
+        Replaced with a real, freshly-run comparison instead of either
+        removing the claim or leaving a dangling reference: at a
+        realistic late-trajectory optimizer state (D_eff varying ~2.4x
+        across the field, 0.0285-0.0697), one diffusion sub-step under
+        this mean-D spectral approximation differs from a true
+        variable-coefficient conservative finite-difference reference
+        (d/dx(D(x) du/dx), 200 explicit sub-steps for numerical
+        accuracy) by ~0.11% relative to u's own scale. This is a
+        single-step comparison, not a bound on error accumulated over a
+        full 300-step trajectory -- a genuine remaining gap, not claimed
+        to be closed here.
 
         Mean is taken over the last (spatial) axis only, keepdim=True, so
         a batched (B, n_x) input gets one D_bar per batch row rather than
@@ -144,10 +232,32 @@ class NPDDRecorder(torch.nn.Module):
             # not on u alone (Sheridan NPDD; see paper Eq. 2).
             F_loc = self.p.kappa * torch.clamp(I * d, min=0.0) ** self.p.gamma
             poly_rate = self._nonlocal(F_loc * torch.clamp(u, min=0.0))
-            u = u - self.dt * poly_rate
-            N = N + self.dt * poly_rate
+            # REMEDIATION (confirmed peer-review finding B2): dt*poly_rate is
+            # an EXPLICIT-Euler estimate of how much monomer this step
+            # consumes; at large dt*F_loc products (e.g. large literature-fit
+            # kappa at large dose, dt~0.16, F_loc~30) it can exceed the
+            # monomer actually available, driving u negative. The old code
+            # updated u and N by the SAME dt*poly_rate (exactly conservative
+            # by construction: d(u+N)/dt=0 pointwise) and only THEN clamped u
+            # to >=0 -- discarding the negative excess from u without ever
+            # removing the corresponding (physically impossible) amount from
+            # N, so N silently absorbed monomer that was never there.
+            # Reproduced directly on this codebase's real literature-fit
+            # inputs (K=8.98, kappa=16.34, dose=80, the n_steps=500 the
+            # pipeline actually used): mean(u+N) came out to 2.63 instead of
+            # the periodic-BC conservation law's required 1.0, and even
+            # 32,000 steps only reached ~1.019, not exact -- confirming this
+            # is a genuine conservation bug, not merely under-resolution.
+            # Fix: cap the CONSUMED amount at what actually exists (`u`)
+            # before applying it to both fields, so u >= 0 and u+N is
+            # conserved to floating-point precision at ANY step size --
+            # this is the standard positivity-preserving fix for an explicit
+            # reaction step, not a finer-timestep workaround.
+            consumed = torch.minimum(self.dt * poly_rate, u)
+            u = u - consumed
+            N = N + consumed
             d = d * torch.exp(-self.p.k_bleach * I * self.dt)
-            u = torch.clamp(u, min=0.0)
+            u = torch.clamp(u, min=0.0)  # safety net; consumed<=u makes this a no-op now
 
             # implicit diffusion step (network-slowed diffusivity)
             D_eff = self.p.D0 * torch.exp(-self.p.alpha_D * N)
@@ -156,16 +266,19 @@ class NPDDRecorder(torch.nn.Module):
             if return_history:
                 hist.append((u.detach().clone(), N.detach().clone()))
 
-        # saturating index response
-        dn = self.p.dn_max * torch.tanh(1.5 * N)
+        dn = self._index_map(N)
         return (dn, hist) if return_history else dn
 
     # -------------------------------------------------- checkpointed forward
     def _step(self, u, N, d, I):
+        # Same B2 conservation fix as forward() -- cap consumed monomer at
+        # what exists, applied identically to u and N, rather than clamping
+        # u alone after an unconstrained explicit update.
         F_loc = self.p.kappa * torch.clamp(I * d, min=0.0) ** self.p.gamma
         poly_rate = self._nonlocal(F_loc * torch.clamp(u, min=0.0))
-        u = u - self.dt * poly_rate
-        N = N + self.dt * poly_rate
+        consumed = torch.minimum(self.dt * poly_rate, u)
+        u = u - consumed
+        N = N + consumed
         d = d * torch.exp(-self.p.k_bleach * I * self.dt)
         u = torch.clamp(u, min=0.0)
         D_eff = self.p.D0 * torch.exp(-self.p.alpha_D * N)
@@ -185,13 +298,28 @@ class NPDDRecorder(torch.nn.Module):
         instead of retaining every one of n_steps intermediate activations,
         `torch.utils.checkpoint` retains state only every `block` steps and
         recomputes the sub-trajectory during the backward pass. Gradients are
-        analytically identical to `forward()`'s, but measured cosine
-        similarity on real optimization probes is ~0.96-0.98, not 1.0 --
-        FFT-based recomputation inside checkpoint's backward does not take an
-        identical floating-point code path, and this shows up disproportionately
-        because reconstruction-loss gradients here are very small in magnitude
-        (~1e-6 norm on typical probes). See experiments/ablation_gradients.py
-        for the measured numbers; wall-clock trades recompute time for memory.
+        analytically identical to `forward()`'s, and this now measures as
+        cosine similarity 1.000000 on real optimization probes -- not the
+        ~0.96-0.98 previously reported here.
+
+        CORRECTION (confirmed peer-review finding I10): the ~0.96-0.98
+        figure previously stated in this docstring was never a real
+        floating-point divergence between the checkpointed and unrolled
+        gradients. It was a bug in experiments/ablation_gradients.py's
+        cosine-similarity helper: its safety epsilon (1e-12), meant to
+        guard against dividing by a zero-norm vector, was NOT negligible
+        relative to the real denominator when comparing these specific
+        gradients (norm ~1e-6, so norm(a)*norm(b) ~1e-12 -- the SAME
+        order as the epsilon meant to be negligible next to it),
+        artificially depressing the reported similarity by a couple of
+        percent even for numerically identical vectors -- reproduced
+        directly: two literally-identical gradient vectors at this norm
+        scale gave a "cosine similarity" of 0.977127 under the old
+        formula. With the epsilon fixed (1e-30, still a zero-division
+        guard, now genuinely negligible), the real answer is that
+        checkpointing changes nothing about the computed gradient at
+        this block size, only memory/wall-clock (see
+        experiments/ablation_gradients.py for the measured numbers).
         """
         I = exposure.to(self.dtype)
         u = torch.ones_like(I)
@@ -203,7 +331,7 @@ class NPDDRecorder(torch.nn.Module):
                                         use_reentrant=False)
         if rem:
             u, N, d = self._block(u, N, d, I, rem)
-        return self.p.dn_max * torch.tanh(1.5 * N)
+        return self._index_map(N)
 
     # ------------------------------------------------------- analytic helpers
     def small_signal_mtf(self, K: torch.Tensor, I_mean: float = 1.0):

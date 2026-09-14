@@ -22,8 +22,8 @@
 \newcommand{\MinGainEightX}{0.18}
 \newcommand{\MinGainAllBudgets}{0.00}
 \newcommand{\SOneBaselineGain}{1.80}
-\newcommand{\SOneNoSaturationGain}{13.58}
-\newcommand{\SOneNoSaturationRatio}{7.5}
+\newcommand{\SOneNoSaturationGain}{\textcolor{red}{[PENDING]}}
+\newcommand{\SOneNoSaturationRatio}{\textcolor{red}{[PENDING]}}
 \newcommand{\SOneNoDiffusionRatio}{0.72}
 \newcommand{\SOneNoNonlocalityRatio}{0.95}
 \newcommand{\SOneNoDyeDepletionRatio}{0.96}
@@ -37,7 +37,10 @@
 \newcommand{\SThreeDnMaxFlipPct}{170}
 \newcommand{\SThreeDnMaxWorstGain}{-0.63}
 \newcommand{\SThreeDnMaxAtHundred}{1.03}
-\newcommand{\SThreeDnMaxAtMinusSixtyThree}{0.86}
+\newcommand{\SThreeDnMaxMostNegativePct}{-83}
+\newcommand{\SThreeDnMaxAtMostNegative}{0.00}
+\newcommand{\SThreeDnMaxMostPositivePct}{473}
+\newcommand{\SThreeDnMaxAtMostPositive}{-0.07}
 \newcommand{\SThreeAnyFlipWithinFifty}{no}
 \newcommand{\SATMeanGainTwoX}{0.09}
 \newcommand{\SATFracOfMILTwoX}{28}
@@ -64,29 +67,31 @@
 \newcommand{\SeedCountModal}{3}
 \newcommand{\SeedCountNExtraConfigs}{0}
 \newcommand{\SeedCount}{3}
-\newcommand{\NResultFiles}{1752}
+\newcommand{\NResultFiles}{2592}
 
 % --- supplement macros (already-real data, not Phase-3-gated) ---
-\newcommand{\AblationCheckpointCosSim}{0.977}
-\newcommand{\AblationSurrogateCosSim}{0.841}
+\newcommand{\AblationCheckpointCosSim}{1.000}
+\newcommand{\AblationSurrogateCosSim}{0.844}
 \newcommand{\RCWAMaxDevThreeCase}{0.038}
 \newcommand{\RCWAVGridMaxDev}{0.980}
 \newcommand{\RCWAVGridNCases}{90}
+\newcommand{\RCWAUnslantedMaxDev}{0.29}
+\newcommand{\RCWANormalMedianDev}{0.001}
 \newcommand{\MeshPSNRSpread}{0.036}
 \newcommand{\WavelengthDesignPSNR}{6.63}
 
 % --- validation (Phase 6 / Section 6) macros ---
 \newcommand{\NLiteratureSources}{3}
-\newcommand{\NRMSEBruderGrowthDnKExp}{0.29}
+\newcommand{\NRMSEBruderGrowthDnKExp}{0.28}
 \newcommand{\NRMSEBruderGrowthDnKSim}{0.17}
 \newcommand{\NRMSEHsiehGrowthDnK}{0.10}
-\newcommand{\NRMSEWorstFit}{0.29}
+\newcommand{\NRMSEWorstFit}{0.28}
 \newcommand{\NRMSEBestFit}{0.10}
 \newcommand{\NGoodFits}{3}
-\newcommand{\NRMSEWorstInRegime}{0.29}
+\newcommand{\NRMSEWorstInRegime}{0.28}
 \newcommand{\NRMSEBestInRegime}{0.17}
 \newcommand{\NInRegimeSources}{2}
-\newcommand{\BayfolDnMaxRatio}{2.7}
+\newcommand{\BayfolDnMaxRatio}{5.7}
 
 % --- baseline completeness (Sec. 5.2 / F4b) macros ---
 \newcommand{\GSGainMin}{-0.96}
@@ -109,6 +114,51 @@
 % --- R1 reconstruction figure macros ---
 \newcommand{\ROneSeedValue}{0}
 
+% --- WP3 baseline (RSGD/GPC, Sec. 5.2) macros ---
+\newcommand{\RSGDGainMin}{0.00}
+\newcommand{\RSGDGainMax}{0.00}
+\newcommand{\GPCGainMin}{-2.13}
+\newcommand{\GPCGainMax}{0.20}
+\newcommand{\GPCLPCMaxAbsDiffTwoX}{0.15}
+
+% --- WP4 (target ensemble / noise robustness, Sec. 5.x) macros ---
+\newcommand{\SFourGainBarsTwoX}{0.77}
+\newcommand{\SFourBootCILoBarsTwoX}{0.76}
+\newcommand{\SFourBootCIHiBarsTwoX}{0.79}
+\newcommand{\SFourGainBarsEightX}{1.17}
+\newcommand{\SFourBootCILoBarsEightX}{1.10}
+\newcommand{\SFourBootCIHiBarsEightX}{1.24}
+\newcommand{\SFourGainSpotsTwoX}{3.18}
+\newcommand{\SFourBootCILoSpotsTwoX}{3.15}
+\newcommand{\SFourBootCIHiSpotsTwoX}{3.24}
+\newcommand{\SFourGainSpotsEightX}{4.14}
+\newcommand{\SFourBootCILoSpotsEightX}{4.11}
+\newcommand{\SFourBootCIHiSpotsEightX}{4.16}
+\newcommand{\SFourGainRandomBinaryTwoX}{0.19}
+\newcommand{\SFourBootCILoRandomBinaryTwoX}{0.19}
+\newcommand{\SFourBootCIHiRandomBinaryTwoX}{0.20}
+\newcommand{\SFourGainRandomBinaryEightX}{0.39}
+\newcommand{\SFourBootCILoRandomBinaryEightX}{0.34}
+\newcommand{\SFourBootCIHiRandomBinaryEightX}{0.41}
+\newcommand{\SFiveNoiseStdPct}{5}
+\newcommand{\SFiveNoiselessGain}{0.77}
+\newcommand{\SFiveNoisyGain}{0.76}
+
+% --- WP5 (joint miscalibration Monte Carlo, Sec. 5.x) macros ---
+\newcommand{\SSixNDraws}{30}
+\newcommand{\SSixMeanGain}{1.77}
+\newcommand{\SSixBootCILo}{1.73}
+\newcommand{\SSixBootCIHi}{1.80}
+\newcommand{\SSixNNegative}{0}
+\newcommand{\SSixWorstDrawGain}{1.60}
+\newcommand{\SSixBestDrawGain}{1.95}
+\newcommand{\SSixPctRange}{25}
+
+% --- WP6 (depth-resolved absorption, Sec. 5.x) macros ---
+\newcommand{\SSevenGainODZero}{1.81}
+\newcommand{\SSevenGainODOneTenth}{1.62}
+\newcommand{\SSevenGainODThreeTenths}{1.57}
+
 % --- diffraction-efficiency confirmation (Sec. 5.1) macros ---
 \newcommand{\DEMeanGainTwoX}{1.45}
 \newcommand{\DEMeanGainFourX}{2.75}
@@ -126,6 +176,21 @@
 \newcommand{\WastedMediaBSGDFracThreeDB}{13}
 \newcommand{\WastedMediaMILFracThreeDB}{0}
 \newcommand{\WastedMediaNConfigs}{45}
+\newcommand{\WastedMediaGSFrac}{36}
+\newcommand{\WastedMediaGSFracOneDB}{40}
+\newcommand{\WastedMediaGSFracThreeDB}{20}
+\newcommand{\WastedMediaLPCFrac}{31}
+\newcommand{\WastedMediaLPCFracOneDB}{49}
+\newcommand{\WastedMediaLPCFracThreeDB}{20}
+\newcommand{\WastedMediaSATFrac}{22}
+\newcommand{\WastedMediaSATFracOneDB}{40}
+\newcommand{\WastedMediaSATFracThreeDB}{0}
+\newcommand{\WastedMediaRSGDFrac}{24}
+\newcommand{\WastedMediaRSGDFracOneDB}{42}
+\newcommand{\WastedMediaRSGDFracThreeDB}{16}
+\newcommand{\WastedMediaGPCFrac}{31}
+\newcommand{\WastedMediaGPCFracOneDB}{49}
+\newcommand{\WastedMediaGPCFracThreeDB}{18}
 
 % --- bounded 2D study (experiments/run_2d.py) macros ---
 \newcommand{\TwoDNTargets}{3}
@@ -137,3 +202,7 @@
 \newcommand{\TwoDMeanGain}{1.37}
 \newcommand{\TwoDMaxGain}{2.07}
 \newcommand{\TwoDReconSeed}{0}
+\newcommand{\TwoDSATMeanGain}{0.59}
+\newcommand{\TwoDSATMinGain}{0.07}
+\newcommand{\TwoDSATMaxGain}{0.99}
+\newcommand{\TwoDSATFracOfMIL}{43}

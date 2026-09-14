@@ -138,6 +138,17 @@ def build_target(spec: dict, n_x: int, device, dtype: torch.dtype = DTYPE) -> to
             amp = float(torch.rand(1, generator=gen)) + 0.3
             g[max(0, c - w):min(n_x, c + w)] = amp
         return g
+    elif kind == "random_binary":
+        # WP4 (target-ensemble robustness, S4): an uncorrelated random
+        # binary pattern, unlike "bars" (periodic, single spatial
+        # frequency) and "spots" (sparse, localized) -- deliberately the
+        # target family with the MOST high-frequency content per pixel,
+        # to stress-test whether the headline gain is an artifact of the
+        # periodic-bars target specifically.
+        gen = torch.Generator(device="cpu")
+        gen.manual_seed(spec.get("seed", 13))
+        p = spec.get("p_on", 0.5)
+        return (torch.rand(n_x, generator=gen) < p).to(device=device, dtype=dtype)
     elif kind == "image_slice":
         raise NotImplementedError(
             "image_slice targets require an actual image asset -- see "
@@ -243,7 +254,9 @@ def run_job(job: dict, device, commit: str, dtype: torch.dtype = DTYPE) -> dict:
     result = run_method(job["method_id"], target, rec, bpm, seed=job["seed"],
                         n_iters=cfg["n_iters"], dose_budget=cfg["dose_budget"],
                         contrast_cap=cfg.get("contrast_cap"),
-                        converge_tol=cfg.get("converge_tol"))
+                        converge_tol=cfg.get("converge_tol"),
+                        tv_weight=cfg.get("tv_weight", 0.0),
+                        noise_std=cfg.get("noise_std", 0.0))
     if device.type == "cuda":
         torch.cuda.synchronize(device)
     wall_s = time.time() - t0

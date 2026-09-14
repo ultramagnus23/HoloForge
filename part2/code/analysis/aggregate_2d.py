@@ -61,6 +61,29 @@ def main():
         "TwoDReconSeed": "0",
     }
 
+    # WP7 (Applied Optics revision): SAT's paired gain over BSGD and its
+    # fraction of MIL's own gain, same "fraction_of_mil" framing
+    # analysis/aggregate.py's sat_surrogate_summary already uses for the
+    # 1D study -- "is the cheap surrogate enough" asked in 2D.
+    sat_gains, mil_gains_matched = [], []
+    for (t, b), methods in by_key.items():
+        if "SAT" not in methods:
+            continue
+        bsgd, mil, sat = methods["BSGD"], methods["MIL"], methods["SAT"]
+        for seed in sat:
+            if seed in bsgd:
+                sat_gains.append(sat[seed] - bsgd[seed])
+            if seed in bsgd and seed in mil:
+                mil_gains_matched.append(mil[seed] - bsgd[seed])
+    if sat_gains:
+        mean_sat_gain = st.mean(sat_gains)
+        mean_mil_gain_matched = st.mean(mil_gains_matched) if mil_gains_matched else None
+        macros["TwoDSATMeanGain"] = f"{mean_sat_gain:.2f}"
+        macros["TwoDSATMinGain"] = f"{min(sat_gains):.2f}"
+        macros["TwoDSATMaxGain"] = f"{max(sat_gains):.2f}"
+        if mean_mil_gain_matched:
+            macros["TwoDSATFracOfMIL"] = f"{100 * mean_sat_gain / mean_mil_gain_matched:.0f}"
+
     lines = [MARKER_START]
     for name, value in macros.items():
         lines.append(f"\\newcommand{{\\{name}}}{{{value}}}")

@@ -63,7 +63,27 @@ class SlabBPM(torch.nn.Module):
         self.z_recon = z_recon_um
         self.cdtype = dtype
 
-        fx = torch.fft.fftfreq(n_x, d=dx)
+        # REMEDIATION (confirmed peer-review finding B4, phase-precision
+        # part): torch.fft.fftfreq(n_x, d=dx) with no explicit dtype=
+        # silently uses PyTorch's GLOBAL DEFAULT floating dtype (float32),
+        # regardless of what precision this module was actually
+        # constructed for (self.cdtype, e.g. complex128 for a float64
+        # pipeline). kz*dist reaches ~1.16e6 radians at the default
+        # z_recon_um=5e4, so float32's ~7-significant-digit precision
+        # bounds the representable PHASE to roughly +/-0.1-0.2 rad
+        # absolute error -- reproduced directly: comparing a kernel built
+        # from float32 kz against one built from float64 kz (same
+        # formula, only the intermediate precision differs) gives a
+        # max phase error of 0.215 rad, the same order as the externally
+        # reported 0.105 rad. Casting the FINAL complex result `.to(dtype)`
+        # does not fix this -- the phase was already rounded before the
+        # exponential. Fixed by deriving the real-valued working dtype
+        # from the requested complex dtype (float64 for complex128,
+        # float32 for complex64) and using it for fx/kz throughout, so a
+        # complex128-requested BPM actually gets float64 phase precision,
+        # not float32 precision cast wider after the fact.
+        real_dtype = torch.float64 if dtype == torch.complex128 else torch.float32
+        fx = torch.fft.fftfreq(n_x, d=dx).to(real_dtype)
         k0 = 2 * math.pi / wavelength_um
 
         def asm_kernel(dist, n_medium):
@@ -83,14 +103,35 @@ class SlabBPM(torch.nn.Module):
         """Propagate a (plane-wave by default) readout beam; return far-field
         intensity at the reconstruction plane.
 
-        Shrinkage model (v2): for fringes slanted at `slant_deg` to the surface
-        normal, longitudinal shrinkage s rotates/compresses the grating vector,
-        which at readout appears as a depth-dependent LATERAL shift of the
-        recorded pattern: dx(z) = s * tan(slant) * z. Implemented as an exact
-        per-slice FFT shift (differentiable). For unslanted transmission
-        fringes (slant=0) shrinkage correctly has almost no effect -- the
-        detuning is a slanted/reflection-geometry phenomenon (Kogelnik;
-        photopolymer shrinkage literature).
+        Slant/shrinkage model (v3 -- REMEDIATION, confirmed peer-review
+        finding I2): a grating vector tilted at `slant_deg` from the depth
+        axis has iso-phase (fringe) planes satisfying, in the standard
+        small-angle/paraxial shear approximation, x - z*tan(slant) = const
+        -- i.e. the SAME transverse profile `dn_profile` recorded at the
+        surface, sheared laterally by tan(slant)*z at each depth z. This
+        baseline shear is a real geometric property of a slanted grating
+        and is present regardless of shrinkage; post-exposure shrinkage s
+        then adds a further, INCREMENTAL detuning (previously the only
+        slant-related effect this function modeled): dx_shrinkage(z) =
+        s*tan(slant)*z. Both terms are implemented as one combined
+        per-slice FFT shift (differentiable).
+
+        CORRECTION: v2 of this model applied ONLY the shrinkage-scaled
+        term (shift = s*tan(slant)*z), so at s=0 the slant angle had NO
+        effect on propagation whatsoever -- verified directly: v2 gave
+        bit-for-bit identical output for slant_deg=20 and slant_deg=0 at
+        shrinkage=0, which is not a slanted-grating readout by any
+        definition. v3 restores the geometrically-required baseline shear
+        so a nonzero slant_deg has a real effect even at zero shrinkage,
+        while keeping the same shrinkage-detuning term v2 already
+        documented. The EXACT shrinkage-slant coupling coefficient (here,
+        additive: total shift = tan(slant)*z*(1+s)) is the standard
+        first-order treatment but has not been independently re-derived
+        against the photopolymer-shrinkage literature in this pass --
+        flagged as the remaining open item for a domain-expert check
+        before this specific coupling formula is relied on quantitatively;
+        the baseline (s=0) shear term is the geometrically unambiguous
+        part and is what was actually missing.
 
         dn_profile may carry leading batch dimensions (..., n_x); a plane
         wave is then initialized per batch row via dn_profile.shape rather
@@ -111,9 +152,47 @@ class SlabBPM(torch.nn.Module):
         dn_hat = torch.fft.fft(dn_profile.to(self.cdtype))
         for iz in range(self.n_z):
             z = (iz + 0.5) * self.dz
-            shift = shrinkage * tan_phi * z
+            shift = tan_phi * z * (1.0 + shrinkage)
             dn_z = torch.fft.ifft(
                 dn_hat * torch.exp(-2j * math.pi * fx * shift)).real
+            E = E * torch.exp(1j * self.k0 * dn_z.to(E.real.dtype) * dz_eff)
+            E = torch.fft.ifft(torch.fft.fft(E) * self.H_slab)
+        E = torch.fft.ifft(torch.fft.fft(E) * self.H_free)
+        return (E.real ** 2 + E.imag ** 2)
+
+    def forward_depth_resolved(self, dn_stack: torch.Tensor, shrinkage: float = 0.0,
+                               slant_deg: float = 20.0,
+                               incident: torch.Tensor | None = None) -> torch.Tensor:
+        """WP6 counterpart to forward() for a GENUINELY per-depth dn:
+        dn_stack has shape (n_z, n_x) -- one real recorded profile per
+        depth slice (holomedia.npdd.depth_resolved_dn), not a single
+        profile extruded uniformly through depth. Each slice iz uses
+        dn_stack[iz] directly as its own phase kick, with the SAME
+        slant/shrinkage lateral-shift treatment forward() applies (see
+        forward()'s docstring for the v3 correction, confirmed
+        peer-review finding I2: baseline slant shear is now applied
+        unconditionally, not only when shrinkage is nonzero) -- shrinkage
+        and slant are readout-geometry effects, orthogonal to the
+        recording-depth question this method adds.
+
+        dn_stack.shape[0] MUST equal self.n_z (one slice per BPM step);
+        this is checked explicitly rather than silently truncating or
+        padding a mismatched stack, since a silent mismatch here would
+        misattribute physical depth to the wrong z."""
+        if dn_stack.shape[0] != self.n_z:
+            raise ValueError(f"dn_stack has {dn_stack.shape[0]} depth slices, "
+                             f"expected n_z={self.n_z}")
+        E = (torch.ones(dn_stack.shape[1:], dtype=self.cdtype, device=dn_stack.device)
+             if incident is None else incident.to(self.cdtype))
+        dz_eff = self.dz * (1.0 - shrinkage)
+        tan_phi = math.tan(math.radians(slant_deg))
+        fx = torch.fft.fftfreq(self.n_x, d=self.dx).to(dn_stack.device)
+        for iz in range(self.n_z):
+            z = (iz + 0.5) * self.dz
+            shift = tan_phi * z * (1.0 + shrinkage)
+            dn_hat_z = torch.fft.fft(dn_stack[iz].to(self.cdtype))
+            dn_z = torch.fft.ifft(
+                dn_hat_z * torch.exp(-2j * math.pi * fx * shift)).real
             E = E * torch.exp(1j * self.k0 * dn_z.to(E.real.dtype) * dz_eff)
             E = torch.fft.ifft(torch.fft.fft(E) * self.H_slab)
         E = torch.fft.ifft(torch.fft.fft(E) * self.H_free)

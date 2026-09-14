@@ -67,7 +67,22 @@ def grad_surrogate(surrogate, E, bpm, target, shrinkage):
 
 
 def cos_sim(a, b):
-    return float(torch.dot(a, b) / (a.norm() * b.norm() + 1e-12))
+    """REMEDIATION (confirmed peer-review finding I10): the old fixed
+    epsilon (1e-12) was NOT negligible relative to the real denominator
+    here -- this module's own docstring already notes gradient norms
+    ~1e-6, so norm(a)*norm(b) ~ 1e-12, the SAME order as the epsilon
+    meant to be a negligible zero-division guard. Reproduced directly:
+    on two IDENTICAL gradients (true cosine = 1.0 by construction), the
+    old formula reported 0.9771 -- confirmed to match the externally
+    reported number exactly, and explained precisely (solving
+    N^2/(N^2+1e-12)=0.9771 for N gives ~6.5e-6, matching this module's
+    own stated gradient-norm scale). Fixed by using an epsilon far below
+    any gradient norm this codebase produces (1e-30, near float64's
+    smallest positive normal ~2.2e-308 but generously larger to avoid
+    underflow in the squared/product terms) -- it still guards against
+    exact division by zero for a genuinely zero vector without biasing
+    real, nonzero-but-small gradients."""
+    return float(torch.dot(a, b) / (a.norm() * b.norm() + 1e-30))
 
 
 def optimize_with_grad_fn(recorder, bpm, target, grad_fn, n_iters=150, lr=5e-2,

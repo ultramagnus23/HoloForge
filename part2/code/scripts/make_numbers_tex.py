@@ -97,8 +97,8 @@ def build_macros(paper_numbers: dict) -> str:
         ratios = s1.get("ratio_to_baseline", {})
         lines.append(macro("SOneBaselineGain", fmt(by_cond.get("baseline", {}).get("mean"))))
         lines.append(macro("SOneNoSaturationGain",
-                           fmt(by_cond.get("no_saturation_approx", {}).get("mean"))))
-        lines.append(macro("SOneNoSaturationRatio", fmt(ratios.get("no_saturation_approx"), ".1f")))
+                           fmt(by_cond.get("no_saturation", {}).get("mean"))))
+        lines.append(macro("SOneNoSaturationRatio", fmt(ratios.get("no_saturation"), ".1f")))
         lines.append(macro("SOneNoDiffusionRatio", fmt(ratios.get("no_diffusion"), ".2f")))
         lines.append(macro("SOneNoNonlocalityRatio", fmt(ratios.get("no_nonlocality"), ".2f")))
         lines.append(macro("SOneNoDyeDepletionRatio", fmt(ratios.get("no_dye_depletion"), ".2f")))
@@ -161,8 +161,39 @@ def build_macros(paper_numbers: dict) -> str:
         lines.append(macro("SThreeDnMaxWorstGain", fmt(dn.get("worst_mean_gain"))))
         by_pct = dn.get("by_pct", {})
         lines.append(macro("SThreeDnMaxAtHundred", fmt(by_pct.get("100", {}).get("mean"))))
-        lines.append(macro("SThreeDnMaxAtMinusSixtyThree",
-                           fmt(by_pct.get("-63", {}).get("mean"))))
+        # REMEDIATION (B2 cascading effect): this used to hard-code the
+        # lookup key "-63" (and a matching "SixtyThree" macro name) to the
+        # dn_max literature-disagreement grid's most-negative tested
+        # percentage. That grid is now derived dynamically from the real
+        # fit (experiments/manifest.py's _dn_max_disagreement_factor), so a
+        # hardcoded "-63" lookup would silently go PENDING the moment the
+        # fit -- and therefore the grid's actual endpoints -- changed, which
+        # is exactly what happened once the B2 conservation/accuracy fixes
+        # changed the fitted dn_max values. Finds the most-negative tested
+        # percentage directly from the real data instead, and reports its
+        # own value in the macro name via a fixed, letters-only name
+        # (SThreeDnMaxAtMostNegative) plus a companion macro carrying the
+        # actual percentage, so the prose can state which percentage this is
+        # without hand-typing it.
+        most_negative_pct = min((int(p) for p in by_pct if int(p) < 0), default=None)
+        lines.append(macro("SThreeDnMaxMostNegativePct",
+                           str(most_negative_pct) if most_negative_pct is not None else None))
+        lines.append(macro("SThreeDnMaxAtMostNegative",
+                           fmt(by_pct.get(str(most_negative_pct), {}).get("mean"))
+                           if most_negative_pct is not None else None))
+        # Companion pair for the most-POSITIVE tested percentage (same
+        # dynamic-grid reasoning as most_negative_pct above): the wider,
+        # corrected grid now extends well past the old sign-flip point
+        # (170%), and gain there is NOT monotonically worsening -- it
+        # partially recovers at the most extreme positive perturbation
+        # tested, a real finding worth reporting rather than only
+        # reporting the single worst point.
+        most_positive_pct = max((int(p) for p in by_pct if int(p) > 0), default=None)
+        lines.append(macro("SThreeDnMaxMostPositivePct",
+                           str(most_positive_pct) if most_positive_pct is not None else None))
+        lines.append(macro("SThreeDnMaxAtMostPositive",
+                           fmt(by_pct.get(str(most_positive_pct), {}).get("mean"))
+                           if most_positive_pct is not None else None))
         # Whether ANY parameter flips sign inside the +/-50% claim range.
         flips_within = [v.get("sign_flip_pct") for v in by_param.values()
                         if v.get("sign_flip_pct") is not None
@@ -173,8 +204,9 @@ def build_macros(paper_numbers: dict) -> str:
         for name in ("SThreeNominalGain", "SThreeWorstWithinFifty",
                      "SThreeWorstWithinFiftyParam", "SThreeBestWithinFifty",
                      "SThreeDnMaxFlipPct", "SThreeDnMaxWorstGain",
-                     "SThreeDnMaxAtHundred", "SThreeDnMaxAtMinusSixtyThree",
-                     "SThreeAnyFlipWithinFifty"):
+                     "SThreeDnMaxAtHundred", "SThreeDnMaxMostNegativePct",
+                     "SThreeDnMaxAtMostNegative", "SThreeDnMaxMostPositivePct",
+                     "SThreeDnMaxAtMostPositive", "SThreeAnyFlipWithinFifty"):
             lines.append(macro(name, None))
 
     # SAT: how much of media-in-the-loop's advantage the cheap
@@ -341,6 +373,24 @@ def build_supplement_macros() -> str:
     lines.append(macro("RCWAVGridMaxDev",
                        fmt(rcwa_e7.get("max_abs_deviation"), ".3f") if rcwa_e7 else None))
     lines.append(macro("RCWAVGridNCases", str(rcwa_e7["n_cases"]) if rcwa_e7 else None))
+    # WP9 (RCWA promotion): per-geometry breakdown, backing the Discussion's
+    # "unslanted stays close, slanted degrades sharply" claim with real
+    # numbers instead of leaving only the single worst-case deviation
+    # (RCWAVGridMaxDev) to carry the whole comparison.
+    if rcwa_e7:
+        from collections import defaultdict
+        import statistics as _stats
+        by_geom = defaultdict(list)
+        for c in rcwa_e7["cases"]:
+            by_geom[c["geometry"]].append(c["abs_deviation"])
+        unslanted_max = max((max(v) for k, v in by_geom.items() if "unslanted" in k), default=None)
+        normal_devs = by_geom.get("unslanted_normal", [])
+        normal_median = _stats.median(normal_devs) if normal_devs else None
+        lines.append(macro("RCWAUnslantedMaxDev", fmt(unslanted_max, ".2f")))
+        lines.append(macro("RCWANormalMedianDev", fmt(normal_median, ".3f")))
+    else:
+        lines.append(macro("RCWAUnslantedMaxDev", None))
+        lines.append(macro("RCWANormalMedianDev", None))
 
     mesh = _load("results", "gpu_reruns", "npdd_mesh_sweep", "results.json")
     if mesh:
@@ -520,6 +570,152 @@ def build_baseline_completeness_macros() -> str:
     return "".join(lines)
 
 
+def build_wp3_baseline_macros() -> str:
+    """WP3 (Applied Optics revision) macros: paired-gain range for the two
+    new baselines (RSGD, GPC) over BSGD at budget=2x, alongside SAT's, so
+    the revised Sec. 5.2 text can state where the cheap surrogate and the
+    two new baselines land without hand-typing. RSGD is a seeded optimizer
+    (gain_curve); GPC is closed-form/seed=0-only like GS/LPC
+    (gain_vs_bsgd_seed_mean) -- same split make_F4b_baseline_comparison
+    uses, for the same reason (see figures/make_all.py)."""
+    lines = ["\n% --- WP3 baseline (RSGD/GPC, Sec. 5.2) macros ---\n"]
+    try:
+        from analysis.aggregate import (load_all_results, group_by_config,
+                                        gain_curve, gain_vs_bsgd_seed_mean)
+        grouped = group_by_config(load_all_results())
+        rsgd_curve = gain_curve(grouped, "M1", 2.0, method="RSGD")
+        rsgd_vals = [v[1] for v in rsgd_curve]
+        lines.append(macro("RSGDGainMin", fmt(min(rsgd_vals), ".2f") if rsgd_vals else None))
+        lines.append(macro("RSGDGainMax", fmt(max(rsgd_vals), ".2f") if rsgd_vals else None))
+        gpc_curve = gain_vs_bsgd_seed_mean(grouped, "M1", 2.0, method="GPC")
+        gpc_vals = [v[1] for v in gpc_curve]
+        lines.append(macro("GPCGainMin", fmt(min(gpc_vals), ".2f") if gpc_vals else None))
+        lines.append(macro("GPCGainMax", fmt(max(gpc_vals), ".2f") if gpc_vals else None))
+        # Degeneracy check: max abs(GPC-LPC) paired gain at this budget,
+        # to back the "frequently near-identical to LPC" claim with a
+        # real computed number rather than the smoke-test anecdote.
+        lpc_curve = gain_vs_bsgd_seed_mean(grouped, "M1", 2.0, method="LPC")
+        lpc_by_K = {k: v for k, v, *_ in lpc_curve}
+        gpc_by_K = {k: v for k, v, *_ in gpc_curve}
+        common_Ks = sorted(set(lpc_by_K) & set(gpc_by_K))
+        diffs = [abs(gpc_by_K[k] - lpc_by_K[k]) for k in common_Ks]
+        lines.append(macro("GPCLPCMaxAbsDiffTwoX", fmt(max(diffs), ".2f") if diffs else None))
+    except Exception as e:
+        print(f"[make_numbers_tex] WARNING: WP3 baseline macros failed ({e}); "
+              f"emitting PENDING for all of them.")
+        for name in ("RSGDGainMin", "RSGDGainMax", "GPCGainMin", "GPCGainMax",
+                     "GPCLPCMaxAbsDiffTwoX"):
+            lines.append(macro(name, None))
+    return "".join(lines)
+
+
+def build_wp4_macros() -> str:
+    """WP4 (Applied Optics revision, statistics redesign) macros: target-
+    ensemble gain per target kind (S4) and noise-robustness gain (S5),
+    both at the fixed near-cliff K/budget point those tiers use. Also
+    emits bootstrap CI bounds alongside the t-distribution ones already
+    used elsewhere, per WP4's item 2."""
+    lines = ["\n% --- WP4 (target ensemble / noise robustness, Sec. 5.x) macros ---\n"]
+    try:
+        from analysis.aggregate import (load_all_results, group_by_config,
+                                        s4_target_ensemble_summary,
+                                        s5_noise_robustness_summary)
+        grouped = group_by_config(load_all_results())
+        s4 = s4_target_ensemble_summary(grouped)
+        if s4["status"] == "ok":
+            for kind, label in (("bars", "Bars"), ("spots", "Spots"),
+                               ("random_binary", "RandomBinary")):
+                for budget, blabel in ((2.0, "TwoX"), (8.0, "EightX")):
+                    stat = s4["by_kind"].get(kind, {}).get(budget, {})
+                    lines.append(macro(f"SFourGain{label}{blabel}",
+                                       fmt(stat.get("mean"), ".2f")))
+                    lines.append(macro(f"SFourBootCILo{label}{blabel}",
+                                       fmt(stat.get("boot_ci_lo"), ".2f")))
+                    lines.append(macro(f"SFourBootCIHi{label}{blabel}",
+                                       fmt(stat.get("boot_ci_hi"), ".2f")))
+        else:
+            for kind_label in ("Bars", "Spots", "RandomBinary"):
+                for blabel in ("TwoX", "EightX"):
+                    for prefix in ("SFourGain", "SFourBootCILo", "SFourBootCIHi"):
+                        lines.append(macro(f"{prefix}{kind_label}{blabel}", None))
+
+        s5 = s5_noise_robustness_summary(grouped)
+        if s5["status"] == "ok":
+            lines.append(macro("SFiveNoiseStdPct", fmt(s5["noise_std"] * 100, ".0f")))
+            lines.append(macro("SFiveNoiselessGain", fmt(s5["noiseless"].get("mean"), ".2f")))
+            lines.append(macro("SFiveNoisyGain", fmt(s5["noisy"].get("mean"), ".2f")))
+        else:
+            for name in ("SFiveNoiseStdPct", "SFiveNoiselessGain", "SFiveNoisyGain"):
+                lines.append(macro(name, None))
+    except Exception as e:
+        print(f"[make_numbers_tex] WARNING: WP4 macros failed ({e}); emitting PENDING.")
+        for kind_label in ("Bars", "Spots", "RandomBinary"):
+            for blabel in ("TwoX", "EightX"):
+                for prefix in ("SFourGain", "SFourBootCILo", "SFourBootCIHi"):
+                    lines.append(macro(f"{prefix}{kind_label}{blabel}", None))
+        for name in ("SFiveNoiseStdPct", "SFiveNoiselessGain", "SFiveNoisyGain"):
+            lines.append(macro(name, None))
+    return "".join(lines)
+
+
+def build_wp5_macros() -> str:
+    """WP5 (Applied Optics revision, joint miscalibration Monte Carlo)
+    macros: S6's paired-gain distribution across joint (all-four-
+    parameter) perturbation draws."""
+    lines = ["\n% --- WP5 (joint miscalibration Monte Carlo, Sec. 5.x) macros ---\n"]
+    try:
+        from analysis.aggregate import load_all_results, group_by_config, s6_joint_mismatch_summary
+        grouped = group_by_config(load_all_results())
+        s6 = s6_joint_mismatch_summary(grouped)
+        if s6["status"] == "ok":
+            lines.append(macro("SSixNDraws", str(s6["n_draws"])))
+            lines.append(macro("SSixMeanGain", fmt(s6["stats"]["mean"], ".2f")))
+            lines.append(macro("SSixBootCILo", fmt(s6["stats"]["boot_ci_lo"], ".2f")))
+            lines.append(macro("SSixBootCIHi", fmt(s6["stats"]["boot_ci_hi"], ".2f")))
+            lines.append(macro("SSixNNegative", str(s6["n_negative"])))
+            lines.append(macro("SSixWorstDrawGain", fmt(s6["worst_draw_gain"], ".2f")))
+            lines.append(macro("SSixBestDrawGain", fmt(s6["best_draw_gain"], ".2f")))
+            from manifest import S6_PCT_RANGE
+            lines.append(macro("SSixPctRange", fmt(S6_PCT_RANGE, ".0f")))
+        else:
+            for name in ("SSixNDraws", "SSixMeanGain", "SSixBootCILo", "SSixBootCIHi",
+                        "SSixNNegative", "SSixWorstDrawGain", "SSixBestDrawGain", "SSixPctRange"):
+                lines.append(macro(name, None))
+    except Exception as e:
+        print(f"[make_numbers_tex] WARNING: WP5 macros failed ({e}); emitting PENDING.")
+        for name in ("SSixNDraws", "SSixMeanGain", "SSixBootCILo", "SSixBootCIHi",
+                    "SSixNNegative", "SSixWorstDrawGain", "SSixBestDrawGain", "SSixPctRange"):
+            lines.append(macro(name, None))
+    return "".join(lines)
+
+
+def build_wp6_macros() -> str:
+    """WP6 (Applied Optics revision, depth-resolved absorption) macros:
+    S7's paired gain at each tested optical density. Macro names use
+    spelled-out ODZero/ODOneTenth/ODThreeTenths (NOT literal decimal
+    points or the digits from "0.1"/"0.3") -- LaTeX control words are
+    letters-only, the same constraint that broke the S4/S5/S6 macro
+    names earlier this revision before they were caught and fixed."""
+    lines = ["\n% --- WP6 (depth-resolved absorption, Sec. 5.x) macros ---\n"]
+    od_labels = [(0.0, "ODZero"), (0.1, "ODOneTenth"), (0.3, "ODThreeTenths")]
+    try:
+        from analysis.aggregate import load_all_results, group_by_config, s7_depth_absorption_summary
+        grouped = group_by_config(load_all_results())
+        s7 = s7_depth_absorption_summary(grouped)
+        if s7["status"] == "ok":
+            for od, label in od_labels:
+                stat = s7["by_od"].get(od, {})
+                lines.append(macro(f"SSevenGain{label}", fmt(stat.get("mean"), ".2f")))
+        else:
+            for _, label in od_labels:
+                lines.append(macro(f"SSevenGain{label}", None))
+    except Exception as e:
+        print(f"[make_numbers_tex] WARNING: WP6 macros failed ({e}); emitting PENDING.")
+        for _, label in od_labels:
+            lines.append(macro(f"SSevenGain{label}", None))
+    return "".join(lines)
+
+
 def main():
     paper_numbers = {}
     if os.path.exists(PAPER_NUMBERS_PATH):
@@ -532,7 +728,8 @@ def main():
     tex = (build_macros(paper_numbers) + build_supplement_macros()
           + build_validation_macros() + build_baseline_completeness_macros()
           + build_shrinkage_bound_macros() + build_cost_benefit_macros()
-          + build_r1_macros())
+          + build_r1_macros() + build_wp3_baseline_macros() + build_wp4_macros()
+          + build_wp5_macros() + build_wp6_macros())
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     with open(OUT_PATH, "w") as f:
         f.write(tex)

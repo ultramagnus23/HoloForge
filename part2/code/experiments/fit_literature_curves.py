@@ -179,15 +179,26 @@ def simulate_growth_dn(dose_values, K, kappa, D0, base_params: MediumParams):
     x = torch.arange(N_X) * DX
     dns = []
     for dose in dose_values:
-        # Capped at 500 (NPDDRecorder's own docstring: "200-500 adequate
-        # for the parameter ranges above", IMEX scheme -- stability isn't
-        # tied to raw t_total). The uncapped `20*dose` heuristic this was
-        # copied from was written when dose/t_total values were always
-        # small abstract units (1-18, see f1_validate_twin.py); it breaks
-        # for curves reporting real physical exposure time in seconds
-        # (checked: hsieh2022's t axis runs to 2000s, which would ask for
-        # 40,000 steps uncapped).
-        n_steps = min(max(20, int(20 * max(dose, 1e-3))), 500)
+        # REMEDIATION (confirmed peer-review finding B2): the old flat cap
+        # of 500 steps was not a stability requirement (NPDDRecorder's own
+        # conservation bug -- separately fixed in holomedia/npdd.py's
+        # reaction step -- made it LOOK stable by silently discarding mass
+        # rather than erroring), it was just under-resolved for large
+        # kappa*dose products. Reproduced directly on this pipeline's own
+        # fitted values (K=8.98, kappa=16.34, dose=80): 500 steps gave
+        # |dn1|=0.000028, while the value actually converges (flat from
+        # 8000 steps on, matching 32000 and 128000 to 6 significant
+        # figures) to |dn1|=0.000072 -- a 61% underestimate at the old
+        # step count, not merely imprecise. Step count now scales with the
+        # reaction rate*duration product (kappa*dose, the quantity that
+        # actually sets how many e-foldings of the fast initial transient
+        # need resolving), floored at the old 500 (fine for gentle low-
+        # kappa*dose cases, unchanged cost there) and capped at 4000 to
+        # bound worst-case per-call cost during the bounded-random-start
+        # search over kappa in/up to 1e3 (measured ~0.8s/call at the cap
+        # on this hardware) -- 4000 steps reproduces the converged value
+        # above to within simulation noise, not just closer than 500.
+        n_steps = int(min(max(500, 5 * kappa * max(dose, 1e-3)), 4000))
         rec = NPDDRecorder(N_X, DX, t_total=float(dose), n_steps=n_steps, params=p)
         exposure = 1.0 + 0.9 * torch.cos(K * x)
         dn = rec(exposure)
