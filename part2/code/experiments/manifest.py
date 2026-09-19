@@ -344,6 +344,83 @@ def build_S1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
 
 
 # =====================================================================
+# NZ: slice-count (n_z) convergence of the headline paired gain.
+# Peer-review item B4 -- CONFIRMED at reduced scale (see commit 68f0afd):
+# every M1/M2/S* result uses SlabBPM's default n_z=32, and paired gain
+# (MIL - BSGD) moved from 0.059 dB at n_z=32 to 0.019 dB at n_z=256 on a
+# CPU-feasible check, i.e. the pipeline default is NOT converged. This
+# manifest is the real GPU version of that check, and it decides whether
+# the paper's central claim (positive paired gain, no cliff) survives at a
+# converged slice count before any full M1/M2 rerun is spent on it.
+#
+# Design choices:
+#   * Only BSGD and MIL: the headline statistic is their paired gain, and
+#     both arms are evaluated on a twin built with the SAME n_z, so a
+#     change in gain is a change in the physics-resolution, not a
+#     design/eval mismatch. (Whether a design optimized at n_z=32 still
+#     scores at n_z=256 is a different question, deliberately not asked.)
+#   * n_x=512 (dx=0.1 um, same fixed 51.2 um window): the check is about
+#     n_z, not mesh density (mesh convergence is a separate supplement
+#     result). NZ_K_POINTS' periods (32/16/12 px) are exactly renderable.
+#     n_z=32 is re-run HERE at n_x=512 as the control, rather than
+#     compared against M1's n_x=1024 numbers.
+#   * Budget 2.0 (= S1_BUDGET, M1's first budget): one budget keeps the
+#     total under ~one overnight session; extend only if the effect at 2x
+#     is not conclusive.
+#   * n_z is added to config only for THIS manifest, so every existing
+#     experiment's config_hash (which omits n_z) is unchanged and no
+#     committed M1/M2/S* result is invalidated or clobbered.
+#   * Job order is seed-major then n_z: after the first seed finishes
+#     every (K, n_z) cell already has one paired point, so an interrupted
+#     run still yields the full n_z trend, just with wider CIs.
+# =====================================================================
+NZ_VALUES = [32, 256, 128, 64]   # control first, then the extreme, then fill-in
+NZ_K_POINTS = [1.963495, 3.926991, 5.235988]
+NZ_BUDGET = 2.0
+
+
+def build_NZ_jobs(n_x: int = 512, n_iters: int = 800, converge_tol: float = 1e-4,
+                  seeds=None, n_z_values=None, K_points=None,
+                  experiment_id: str = "NZ") -> list[dict]:
+    seeds = seeds if seeds is not None else PAPER_SEEDS
+    n_z_values = n_z_values if n_z_values is not None else NZ_VALUES
+    K_points = K_points if K_points is not None else NZ_K_POINTS
+    dx = 51.2 / n_x
+    jobs = []
+    for seed in seeds:
+        for n_z in n_z_values:
+            for K in K_points:
+                period_px = period_from_K(K, dx)
+                config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=n_iters,
+                              converge_tol=converge_tol, contrast_cap=NZ_BUDGET,
+                              dose_budget=1.0, medium=DEFAULT_MEDIUM,
+                              target=_bars_target_spec(period_px), K_nominal=K,
+                              arm="iteration_matched", n_z=n_z)
+                for method_id in ["BSGD", "MIL"]:
+                    jobs.append(_job(experiment_id, method_id, seed, config))
+    return jobs
+
+
+# NZ_1024: follow-up to NZ, run at M1's own resolution. NZ (n_x=512) showed
+# the paired gain is positive at every n_z and converged by n_z~128, but its
+# gains were ~20-40x smaller than M1's at the same K and budget (e.g. K=1.96,
+# 2x: 0.05 dB vs M1's 1.08 dB) -- dx=0.1 um is coarser than the 0.08 um
+# nonlocality length, so n_x=512 is not in M1's regime and its n_z shift
+# cannot be transferred to M1's headline. This reruns the two K points with
+# M1's largest gains at n_x=1024, n_z in {32 (M1's setting), 128 (converged
+# at 512)}. n_z=256 is skipped: 128 vs 256 agreed to ~5% at n_x=512.
+NZ1024_K_POINTS = [1.963495, 3.926991]
+NZ1024_N_Z = [32, 128]
+
+
+def build_NZ1024_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
+                      seeds=None) -> list[dict]:
+    return build_NZ_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol,
+                         seeds=seeds, n_z_values=NZ1024_N_Z,
+                         K_points=NZ1024_K_POINTS, experiment_id="NZ_1024")
+
+
+# =====================================================================
 # S2: parameter sensitivity applied to cliff location specifically.
 # Perturbs each of the 3 key NPDD parameters (D0, sigma, kappa) by
 # +/-10/25/50%, across a K range spanning the collapse region (so K* can
@@ -789,6 +866,7 @@ BUILDERS = {
     "M1": build_M1_jobs, "M2": build_M2_jobs,
     "S1": build_S1_jobs, "S2": build_S2_jobs,
     "S4": build_S4_jobs, "S5": build_S5_jobs,
+    "NZ": build_NZ_jobs, "NZ_1024": build_NZ1024_jobs,
 }
 # S3 deliberately excluded, same reason V1-V3 are: it's a design/eval
 # split (build_S3_designs + build_S3_conditions), not a flat per-job
