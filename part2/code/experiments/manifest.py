@@ -464,7 +464,7 @@ NZ0_N_Z = [32, 128, 256]
 def build_NZ0_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
                    seeds=None) -> list[dict]:
     return build_NZ_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol,
-                         seeds=seeds if seeds is not None else [0, 1],
+                         seeds=seeds if seeds is not None else [0],
                          n_z_values=NZ0_N_Z, K_points=NZ0_K_POINTS,
                          experiment_id="NZ0")
 
