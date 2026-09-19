@@ -38,24 +38,31 @@ aggregation path, (4) one campaign, one aggregation, one rewrite.
 
 ## Compute plan
 
-Hardware: one RTX 3050 laptop GPU, 6 parallel workers (GPU saturates ~98%).
-Sequential cost estimate for the full campaign ~150 GPU-hours; measured
-parallel speed-up ~3x (est) -> ~50 wall-hours. Queue, in priority order, with a
-HARD CUTOFF Tue 2026-09-22 22:00:
+Hardware: one RTX 3050 laptop GPU shared by parallel workers. The GPU
+saturates (~96-98% utilization) at 4-6 workers, so the parallel speed-up is
+~2-3x (est, from BSGD/MIL timings under contention), not linear. Sequential
+cost of the full campaign is ~170 GPU-hours (est) -> ~60-80 wall-hours, which
+does NOT fit comfortably before the cutoff; hence the priority queue and the
+cut rules below. HARD CUTOFF Tue 2026-09-22 22:00.
 
-1. NZ0 (n_z study at frozen geometry) -- decides n_z. ~1.5 h.
-2. RSGD re-tune (its baseline hyper-parameters were tuned under the old physics).
-3. M1 full grid (15 K x 3 budgets x 9 methods) -- main figure. ~51 h seq.
-4. M2 compute-matched arm. ~22 h seq.
-5. S3 designs -> S6, S7 (twin miscalibration, joint, depth absorption).
-6. S4, S5 (target ensemble, readout noise).
-7. S1 (physics ablation).
-8. S8 (slant dependence, 84 jobs).
-9. S2 (parameter sensitivity, reduced grid) -- first to be cut if behind.
-10. 2D check (subset) -- compare current code vs stored 2D at one K.
+Queue order (each worker runs it over its own balanced shard):
 
-Anything unfinished at the cutoff is reported at its reduced scale in the
-supplement with the reduction stated; nothing is kept from the archive.
+1. NZ0 (n_z study at frozen geometry, seed 0 decides) -- confirms n_z = 128.
+2. RSGD re-tune (its regularization strengths were tuned under the old physics).
+3. M1A: main grid, coarse pass (8 K x 3 budgets x 9 methods, 504 jobs).
+4. S8: slant dependence (84 jobs) -- the finding that changed the paper's scope.
+5. M2: compute-matched arm.
+6. S4, S5 (target ensemble, readout noise), S1 (physics ablation).
+7. M1B: main grid fill-in (the other 7 K points, same configs as the full M1).
+8. S2R (one-K parameter sensitivity), then the rest of S2.
+Separate single-process jobs: S3 designs -> S6, S7 (twin miscalibration, joint,
+depth absorption); the 2D study (reduced seeds); R1/R3 figure data.
+
+Cut rules (decided now, so the cutoff is not a judgement call under pressure):
+anything unfinished at the cutoff is reported at its reduced scale with the
+reduction stated in the text (e.g. "8 of 15 K points", "one K point", "n=2
+seeds"); nothing is carried over from the archive; a claim whose supporting
+run did not finish is removed rather than softened.
 
 ## Manuscript plan (runs in parallel with the campaign)
 
@@ -82,10 +89,13 @@ simulation-only paper: the honest ceiling is "submittable and defensible", not
 
 - [x] Attribution of the M1 collapse (I2 slant shear)
 - [x] Geometry frozen in code + config; stale results archived
-- [x] NZ0 launched
+- [x] NZ0 launched (6 workers, 2026-09-19 ~20:25)
+- [x] Code fully frozen: 1D and 3D recorders (B2), contrast projection (B3), slant + n_z in config
+- [x] Geometry / B5 / I6 / B4-scoping manuscript edits applied
+- [x] S8 + NZ0 aggregation, numbers.tex macros and figure F11 wired
 - [ ] NZ0 confirms n_z = 128
-- [ ] RSGD re-tuned
-- [ ] Campaign queue launched (M1 -> M2 -> ...)
+- [ ] RSGD re-tuned (running)
+- [ ] Campaign queue launched (auto-starts when RSGD tuning finishes)
 - [ ] Aggregation + numbers.tex + figures regenerated
 - [ ] Manuscript rewrite, zero [PENDING]
 - [ ] Final build + consistency checks
