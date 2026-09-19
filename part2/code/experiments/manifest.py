@@ -95,9 +95,23 @@ def config_hash(config: dict) -> str:
     return hashlib.sha256(canon.encode()).hexdigest()[:16]
 
 
+# FROZEN GEOMETRY (2026-09-19 revision). Every job records the readout slice
+# count and slant explicitly, so (a) provenance is in the result JSON and (b)
+# config_hash differs from every pre-revision result (whose configs lacked
+# these keys), making it impossible for the resume logic to mistake a stale,
+# pre-fix result for a finished job. n_z=128 per the NZ0 convergence study;
+# slant 0 = unslanted transmission grating, the geometry where the model is
+# validated against RCWA (see the slant-dependence study, S8).
+FROZEN_N_Z = 128
+FROZEN_SLANT_DEG = 0.0
+
+
 def _job(experiment_id, method_id, seed, config):
+    config = dict(config)
+    config.setdefault("n_z", FROZEN_N_Z)
+    config.setdefault("slant_deg", FROZEN_SLANT_DEG)
     return dict(experiment_id=experiment_id, method_id=method_id, seed=seed,
-               config=dict(config), config_hash=config_hash(config))
+               config=config, config_hash=config_hash(config))
 
 
 def _bars_target_spec(period_px: int) -> dict:
@@ -418,6 +432,55 @@ def build_NZ1024_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float =
     return build_NZ_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol,
                          seeds=seeds, n_z_values=NZ1024_N_Z,
                          K_points=NZ1024_K_POINTS, experiment_id="NZ_1024")
+
+
+# NZ0: the n_z convergence study at the FROZEN geometry (slant 0, n_x=1024),
+# the study that justifies FROZEN_N_Z. Replaces the slant-20 NZ/NZ_1024
+# studies, which were run at a geometry the paper no longer reports.
+NZ0_K_POINTS = [1.963495, 3.926991, 5.235988]
+NZ0_N_Z = [32, 128, 256]
+
+
+def build_NZ0_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
+                   seeds=None) -> list[dict]:
+    return build_NZ_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol,
+                         seeds=seeds if seeds is not None else [0, 1],
+                         n_z_values=NZ0_N_Z, K_points=NZ0_K_POINTS,
+                         experiment_id="NZ0")
+
+
+# =====================================================================
+# S8: slant-angle dependence of the paired gain. Added 2026-09-19 after the
+# I2 (real slant shear) fix showed the M1 headline gain is strongly
+# geometry-dependent at fixed K: one-cell probe (K=1.96, 2x budget, seed 0,
+# n_x=1024, n_z=32) gave 1.02 dB at 0 deg, 2.20 at 5, 0.11 at 10, 0.06 at 20
+# -- NON-monotone. The main results are reported at the frozen unslanted
+# geometry (where the model is validated against RCWA); S8 is what makes that
+# scoping honest, by quantifying how much of the gain survives in slanted
+# geometries rather than leaving it as an unmeasured caveat.
+# =====================================================================
+S8_SLANTS_DEG = [0.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0]
+S8_K_POINTS = [1.963495, 3.926991]
+S8_BUDGET = 2.0
+
+
+def build_S8_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
+                  seeds=None) -> list[dict]:
+    seeds = seeds if seeds is not None else PAPER_SEEDS
+    dx = 51.2 / n_x
+    jobs = []
+    for slant in S8_SLANTS_DEG:
+        for K in S8_K_POINTS:
+            period_px = period_from_K(K, dx)
+            config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=n_iters,
+                          converge_tol=converge_tol, contrast_cap=S8_BUDGET,
+                          dose_budget=1.0, medium=DEFAULT_MEDIUM,
+                          target=_bars_target_spec(period_px), K_nominal=K,
+                          arm="iteration_matched", slant_deg=slant)
+            for method_id in ["BSGD", "MIL"]:
+                for seed in seeds:
+                    jobs.append(_job("S8", method_id, seed, config))
+    return jobs
 
 
 # =====================================================================
@@ -866,7 +929,7 @@ BUILDERS = {
     "M1": build_M1_jobs, "M2": build_M2_jobs,
     "S1": build_S1_jobs, "S2": build_S2_jobs,
     "S4": build_S4_jobs, "S5": build_S5_jobs,
-    "NZ": build_NZ_jobs, "NZ_1024": build_NZ1024_jobs,
+    "NZ": build_NZ_jobs, "NZ_1024": build_NZ1024_jobs, "NZ0": build_NZ0_jobs, "S8": build_S8_jobs,
 }
 # S3 deliberately excluded, same reason V1-V3 are: it's a design/eval
 # split (build_S3_designs + build_S3_conditions), not a flat per-job

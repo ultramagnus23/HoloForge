@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import torch
 
 from holomedia import NPDDRecorder, MediumParams, SlabBPM
-from manifest import DEFAULT_MEDIUM, period_from_K
+from manifest import DEFAULT_MEDIUM, period_from_K, FROZEN_N_Z, FROZEN_SLANT_DEG
 from methods import run_method
 
 torch.set_default_dtype(torch.float32)
@@ -41,7 +41,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     medium = MediumParams(**DEFAULT_MEDIUM)
     rec = NPDDRecorder(N_X, DX, t_total=10.0, n_steps=300, params=medium, dtype=torch.float32).to(device)
-    bpm = SlabBPM(N_X, DX, LAM_UM, medium.thickness, n_z=32, n0=medium.n0, dtype=torch.complex64).to(device)
+    bpm = SlabBPM(N_X, DX, LAM_UM, medium.thickness, n_z=FROZEN_N_Z, n0=medium.n0,
+                  dtype=torch.complex64, slant_deg=FROZEN_SLANT_DEG).to(device)
     x = torch.arange(N_X, device=device)
 
     best_per_budget = {}

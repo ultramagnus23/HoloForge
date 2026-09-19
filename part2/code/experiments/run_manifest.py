@@ -238,13 +238,14 @@ def run_job(job: dict, device, commit: str, dtype: torch.dtype = DTYPE) -> dict:
     n_x, dx = cfg["n_x"], cfg["dx"]
     medium = MediumParams(**cfg["medium"])
     n_steps = cfg.get("n_steps", 300)
-    n_z = cfg.get("n_z", 32)
+    n_z = cfg.get("n_z", 128)
+    slant_deg = cfg.get("slant_deg", 0.0)
     cdtype = torch.complex64 if dtype == torch.float32 else torch.complex128
 
     rec = NPDDRecorder(n_x, dx, t_total=10.0, n_steps=n_steps, params=medium,
                        dtype=dtype).to(device)
     bpm = SlabBPM(n_x, dx, cfg["lam_um"], medium.thickness, n_z=n_z, n0=medium.n0,
-                 dtype=cdtype).to(device)
+                 dtype=cdtype, slant_deg=slant_deg).to(device)
     target = build_target(cfg["target"], n_x, device, dtype=dtype)
 
     t0 = time.time()

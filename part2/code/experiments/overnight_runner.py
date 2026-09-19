@@ -39,16 +39,17 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from manifest import BUILDERS
-from run_manifest import result_path, RESULTS_ROOT
+from run_manifest import result_path, RESULTS_ROOT, apply_shard
 
 HERE = os.path.dirname(__file__)
 
 
-def jobs_remaining(manifest_name: str, n_x: int, n_iters: int, converge_tol: float) -> tuple[int, int]:
+def jobs_remaining(manifest_name: str, n_x: int, n_iters: int, converge_tol: float,
+                   shard: tuple[int, int] | None = None) -> tuple[int, int]:
     """(n_done, n_total) via the same filesystem check run_manifest.py's
     resume logic uses -- no CUDA/GPU needed, safe to call from the wrapper
     itself to decide whether to bother launching another chunk."""
-    jobs = BUILDERS[manifest_name](n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
+    jobs = apply_shard(BUILDERS[manifest_name](n_x=n_x, n_iters=n_iters, converge_tol=converge_tol), shard)
     n_done = sum(
         1 for j in jobs
         if os.path.exists(result_path(j["experiment_id"], j["method_id"], j["config_hash"], j["seed"]))
@@ -58,11 +59,11 @@ def jobs_remaining(manifest_name: str, n_x: int, n_iters: int, converge_tol: flo
 
 def run_one_manifest(manifest: str, deadline: float, chunk_minutes: float,
                      max_consecutive_crashes: int, n_x: int, n_iters: int,
-                     converge_tol: float) -> bool:
+                     converge_tol: float, shard: tuple[int, int] | None = None) -> bool:
     """Drive one manifest with crash-tolerant chunked restarts until it's
     complete or the shared deadline is hit. Returns True iff it completed
     (so the caller knows whether to move on to the next manifest or stop)."""
-    n_done, n_total = jobs_remaining(manifest, n_x, n_iters, converge_tol)
+    n_done, n_total = jobs_remaining(manifest, n_x, n_iters, converge_tol, shard)
     print(f"[overnight] manifest={manifest!r}: {n_done}/{n_total} jobs already done",
           flush=True)
     if n_done >= n_total:
@@ -72,7 +73,7 @@ def run_one_manifest(manifest: str, deadline: float, chunk_minutes: float,
     attempt = 0
     consecutive_crashes = 0
     while time.time() < deadline:
-        n_done, n_total = jobs_remaining(manifest, n_x, n_iters, converge_tol)
+        n_done, n_total = jobs_remaining(manifest, n_x, n_iters, converge_tol, shard)
         if n_done >= n_total:
             print(f"[overnight] manifest {manifest!r} complete "
                   f"({n_done}/{n_total}).", flush=True)
@@ -90,6 +91,8 @@ def run_one_manifest(manifest: str, deadline: float, chunk_minutes: float,
                "--manifest", manifest, "--max-minutes", str(chunk),
                "--n-x", str(n_x), "--n-iters", str(n_iters),
                "--converge-tol", str(converge_tol)]
+        if shard is not None:
+            cmd += ["--shard", f"{shard[0]}/{shard[1]}"]
         proc = subprocess.run(cmd, cwd=os.path.join(HERE, ".."))
         if proc.returncode == 0:
             consecutive_crashes = 0
@@ -106,12 +109,24 @@ def run_one_manifest(manifest: str, deadline: float, chunk_minutes: float,
                 sys.exit(1)
             time.sleep(15)  # let the device settle before retrying
 
-    n_done, n_total = jobs_remaining(manifest, n_x, n_iters, converge_tol)
+    n_done, n_total = jobs_remaining(manifest, n_x, n_iters, converge_tol, shard)
     print(f"[overnight] {manifest} at budget cutoff: {n_done}/{n_total} done.", flush=True)
     return n_done >= n_total
 
 
+def _prevent_idle_sleep() -> None:
+    """Windows: ask the OS not to idle-sleep while this (long-lived) process
+    runs. Per-thread execution state -- released automatically when the
+    process exits, and it changes no system power setting. No-op elsewhere.
+    Does NOT stop a closed lid or a manual Sleep."""
+    if sys.platform == "win32":
+        import ctypes
+        ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
+        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+
+
 def main():
+    _prevent_idle_sleep()
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifests", required=True,
                     help="comma-separated manifest names, in priority order "
@@ -127,7 +142,14 @@ def main():
     ap.add_argument("--n-x", type=int, default=1024)
     ap.add_argument("--n-iters", type=int, default=800)
     ap.add_argument("--converge-tol", type=float, default=1e-4)
+    ap.add_argument("--shard", type=str, default=None,
+                    help="'i/N': this worker takes every N-th job, offset i, of each "
+                         "manifest (launch N workers, one per shard, to share the GPU)")
     args = ap.parse_args()
+    shard = None
+    if args.shard is not None:
+        _i, _n = args.shard.split("/")
+        shard = (int(_i), int(_n))
 
     manifests = args.manifests.split(",")
     for m in manifests:
@@ -143,11 +165,11 @@ def main():
             break
         run_one_manifest(manifest, deadline, args.chunk_minutes,
                          args.max_consecutive_crashes, args.n_x,
-                         args.n_iters, args.converge_tol)
+                         args.n_iters, args.converge_tol, shard)
 
     print(f"\n[overnight] session done. Status:", flush=True)
     for m in manifests:
-        n_done, n_total = jobs_remaining(m, args.n_x, args.n_iters, args.converge_tol)
+        n_done, n_total = jobs_remaining(m, args.n_x, args.n_iters, args.converge_tol, shard)
         print(f"  {m}: {n_done}/{n_total}", flush=True)
     print("[overnight] rerun the same command tomorrow night to pick up "
           "where this left off (already-done jobs are skipped).", flush=True)

@@ -53,9 +53,16 @@ class SlabBPM(torch.nn.Module):
     """
 
     def __init__(self, n_x: int, dx: float, wavelength_um: float,
-                 thickness_um: float, n_z: int = 32, n0: float = 1.5,
-                 z_recon_um: float = 5.0e4, dtype=torch.complex128):
+                 thickness_um: float, n_z: int = 128, n0: float = 1.5,
+                 z_recon_um: float = 5.0e4, dtype=torch.complex128,
+                 slant_deg: float = 0.0):
+        # FROZEN GEOMETRY (2026-09-19 revision): n_z=128 (was 32 -- the NZ0
+        # convergence study showed 32 is under-converged) and slant_deg=0
+        # (was an implicit 20 in forward()). slant_deg is now a constructor
+        # property so it is an explicit, recorded experiment parameter; an
+        # explicit slant_deg passed to forward() still overrides it.
         super().__init__()
+        self.slant_deg = slant_deg
         self.n_x, self.dx = n_x, dx
         self.lam, self.n0 = wavelength_um, n0
         self.T, self.n_z = thickness_um, n_z
@@ -98,7 +105,7 @@ class SlabBPM(torch.nn.Module):
         self.k0 = k0
 
     def forward(self, dn_profile: torch.Tensor, shrinkage: float = 0.0,
-                slant_deg: float = 20.0,
+                slant_deg: float | None = None,
                 incident: torch.Tensor | None = None) -> torch.Tensor:
         """Propagate a (plane-wave by default) readout beam; return far-field
         intensity at the reconstruction plane.
@@ -141,7 +148,7 @@ class SlabBPM(torch.nn.Module):
         E = (torch.ones(dn_profile.shape, dtype=self.cdtype, device=dn_profile.device)
              if incident is None else incident.to(self.cdtype))
         dz_eff = self.dz * (1.0 - shrinkage)
-        tan_phi = math.tan(math.radians(slant_deg))
+        tan_phi = math.tan(math.radians(self.slant_deg if slant_deg is None else slant_deg))
         fx = torch.fft.fftfreq(self.n_x, d=self.dx).to(dn_profile.device)
         # self.cdtype, NOT a hardcoded complex128: this line previously
         # upcast to complex128 on every forward regardless of how the BPM
@@ -161,7 +168,7 @@ class SlabBPM(torch.nn.Module):
         return (E.real ** 2 + E.imag ** 2)
 
     def forward_depth_resolved(self, dn_stack: torch.Tensor, shrinkage: float = 0.0,
-                               slant_deg: float = 20.0,
+                               slant_deg: float | None = None,
                                incident: torch.Tensor | None = None) -> torch.Tensor:
         """WP6 counterpart to forward() for a GENUINELY per-depth dn:
         dn_stack has shape (n_z, n_x) -- one real recorded profile per
@@ -185,7 +192,7 @@ class SlabBPM(torch.nn.Module):
         E = (torch.ones(dn_stack.shape[1:], dtype=self.cdtype, device=dn_stack.device)
              if incident is None else incident.to(self.cdtype))
         dz_eff = self.dz * (1.0 - shrinkage)
-        tan_phi = math.tan(math.radians(slant_deg))
+        tan_phi = math.tan(math.radians(self.slant_deg if slant_deg is None else slant_deg))
         fx = torch.fft.fftfreq(self.n_x, d=self.dx).to(dn_stack.device)
         for iz in range(self.n_z):
             z = (iz + 0.5) * self.dz
