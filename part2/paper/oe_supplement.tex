@@ -26,17 +26,27 @@
 \begin{document}
 \maketitle
 
-\section*{S1: Small-signal compensation-cliff derivation, and the mechanism behind R1}
+\section*{S1: A heuristic small-signal transfer function and the compensation-cliff hypothesis, and the mechanism behind R1}
 \label{sec:supp-s1}
 
-\subsection*{Linearizing the recording equations}
-This section derives the linearized recording transfer function $H(K)$
-(the main text's Section 3.3 states $H$ as given; here it is derived),
-defines $K_c(B_c)$ precisely as it is actually computed in the
-pipeline, and verifies that the derivation reproduces the reported
+\subsection*{A heuristic transfer function, and its status}
+This section motivates the heuristic recording transfer function $H(K)$
+used to state the compensation-cliff hypothesis, defines $K_c(B_c)$
+precisely as it is computed in the pipeline, and reports the predicted
 values \KcPredTwoX/\KcPredFourX/\KcPredEightX\,rad/\textmu m at
-$B_c \in \{2,4,8\}$ to three decimal places -- not approximately,
-exactly, once the correct definition of $K_c$ is used.
+$B_c \in \{2,4,8\}$. \textbf{Status of $H(K)$.} The closed form below
+follows from a quasi-steady elimination whose result we checked against the
+simulator itself and found \emph{not} to match it: an independent
+linearization of the same equations, validated directly against the live
+recorder, agrees with the simulator closely, whereas the closed form for
+$H(K)$ does not. We therefore present $H(K)$ as an order-of-magnitude
+heuristic that motivated the hypothesis, not as a validated derivation, and
+no result in the main text depends on it being exact: the paper's central
+finding (no sharp compensation cliff) is an empirical statement about the
+optimizer, and it is a negative result \emph{for} this heuristic.
+That the reported $K_c$ values are reproduced ``exactly'' below means only
+that the pipeline's bookkeeping is internally consistent with the formula it
+implements, not that the formula describes the medium.
 
 Consider a spatially uniform mean exposure $I_{\text{mean}}$ with a small
 sinusoidal perturbation, $I(x) = I_{\text{mean}}\big(1 + m\cos(Kx)\big)$,
@@ -61,8 +71,9 @@ before diffusing away:
 H(K) = \frac{\widehat{G_\sigma}(K)}{1 + D_0 K^2 / F_0}
      = \frac{\exp(-\tfrac{1}{2}K^2\sigma^2)}{1 + D_0 K^2 / F_0},
 \]
-exactly the closed form implemented in
-\texttt{NPDDRecorder.small\_signal\_mtf}. $H(K)$ is the fraction of a
+the closed form implemented in
+\texttt{NPDDRecorder.small\_signal\_mtf} (a heuristic, per the status note
+above). Read as a heuristic, $H(K)$ is the fraction of a
 small-signal exposure modulation at spatial frequency $K$ that survives
 into recorded contrast: the Gaussian numerator is non-local smearing's
 low-pass response, and the $1 + D_0 K^2/F_0$ denominator is diffusion's

@@ -875,13 +875,52 @@ def make_R3_exposure_profiles():
     return True
 
 
+def make_F11_slant_dependence():
+    """S8: paired gain (MIL - BSGD) vs grating slant angle, one curve per K
+    (2x budget, mean +/- 95% t-interval over seeds). This is the figure that
+    makes the unslanted scoping of the headline results honest: at fixed K the
+    gain is strongly and non-monotonically geometry-dependent."""
+    path = os.path.join(OUT_DIR, "F11_slant_dependence.pdf")
+    results = [r for r in load_all_results() if r["experiment_id"] == "S8"]
+    if not results:
+        no_data_placeholder(path, "F11 (S8): paired gain vs slant angle", "needs S8 manifest results.")
+        return False
+    by = {}
+    for r in results:
+        c = r["config"]
+        by.setdefault((round(c["K_nominal"], 4), float(c["slant_deg"])), {}).setdefault(r["method_id"], []).append(r)
+    Ks = sorted({k for k, _ in by})
+    fig, ax = new_fig(width="single")
+    palette = [COLORS["blue"], COLORS["vermillion"], COLORS["bluish_green"]]
+    for i, K in enumerate(Ks):
+        xs, ms, los, his = [], [], [], []
+        for slant in sorted({sl for k, sl in by if k == K}):
+            arms = by[(K, slant)]
+            gains = [g for _, g in paired_gain(arms.get("MIL", []), arms.get("BSGD", []), key="psnr")]
+            if not gains:
+                continue
+            st = mean_std_median_ci95(gains)
+            xs.append(slant); ms.append(st["mean"]); los.append(st["ci95_lo"]); his.append(st["ci95_hi"])
+        if not xs:
+            continue
+        col = palette[i % len(palette)]
+        ax.errorbar(xs, ms, yerr=[[m - l for m, l in zip(ms, los)], [h - m for m, h in zip(ms, his)]],
+                    color=col, marker="os^"[i % 3], ms=4, lw=1.2, capsize=2, label=f"$K={K:.2f}$ rad/µm")
+    ax.axhline(0.0, color="0.5", lw=0.8, ls=":")
+    ax.set_xlabel(r"grating slant $\phi$ (deg)")
+    ax.set_ylabel("paired gain, MIL $-$ BSGD (dB)")
+    ax.legend(frameon=False, fontsize=7)
+    savefig(fig, path)
+    return True
+
+
 ALL_FIGURES = [
     make_F1_pipeline_schematic,
     make_F2_twin_validation,
     make_F3a_rcwa_validity_envelope, make_F3b_regime_map,
     make_F4_headline_gain_vs_K, make_F4b_baseline_comparison, make_F5_Kstar_vs_Kc_scatter,
     make_F6_cliff_shift, make_F7_physics_ablation, make_F8_sensitivity_band,
-    make_F10_twin_mismatch,
+    make_F10_twin_mismatch, make_F11_slant_dependence,
     make_F9a_gradient_ablation, make_F9b_mesh_convergence, make_F9c_wavelength_detuning,
     make_R1_reconstructions, make_R2_2d_reconstructions, make_R3_exposure_profiles,
 ]

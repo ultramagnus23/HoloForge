@@ -39,6 +39,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from manifest import BUILDERS
+import run_manifest as _rm
 from run_manifest import result_path, RESULTS_ROOT, apply_shard
 
 HERE = os.path.dirname(__file__)
@@ -93,6 +94,8 @@ def run_one_manifest(manifest: str, deadline: float, chunk_minutes: float,
                "--converge-tol", str(converge_tol)]
         if shard is not None:
             cmd += ["--shard", f"{shard[0]}/{shard[1]}"]
+            if _rm.SHARD_BALANCED:
+                cmd += ["--balanced-shard"]
         proc = subprocess.run(cmd, cwd=os.path.join(HERE, ".."))
         if proc.returncode == 0:
             consecutive_crashes = 0
@@ -142,10 +145,13 @@ def main():
     ap.add_argument("--n-x", type=int, default=1024)
     ap.add_argument("--n-iters", type=int, default=800)
     ap.add_argument("--converge-tol", type=float, default=1e-4)
+    ap.add_argument("--balanced-shard", action="store_true",
+                    help="balanced (per-method) shard assignment; see run_manifest.apply_shard")
     ap.add_argument("--shard", type=str, default=None,
                     help="'i/N': this worker takes every N-th job, offset i, of each "
                          "manifest (launch N workers, one per shard, to share the GPU)")
     args = ap.parse_args()
+    _rm.SHARD_BALANCED = bool(args.balanced_shard)
     shard = None
     if args.shard is not None:
         _i, _n = args.shard.split("/")

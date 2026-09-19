@@ -182,7 +182,8 @@ def _cliff_K_grid(dx: float) -> list[float]:
 # =====================================================================
 def build_M1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
                   seeds=None, methods=None,
-                  rsgd_tv_weight: dict[float, float] | None = None) -> list[dict]:
+                  rsgd_tv_weight: dict[float, float] | None = None,
+                  periods_px: list[int] | None = None) -> list[dict]:
     """Cliff x budget grid, ITERATION-matched arms: BSGD (media-unaware)
     and MIL (media-aware) both get the same n_iters budget. This is the
     original cliff/budget design (formerly build_E1_jobs), unchanged
@@ -215,6 +216,12 @@ def build_M1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
     methods = methods if methods is not None else ALL_METHODS
     dx = 51.2 / n_x  # fixed physical window, matches gpu_npdd_mesh_convergence_sweep.py convention
     all_K = _cliff_K_grid(dx)
+    if periods_px is not None:
+        # subset of the SAME grid (identical configs => identical hashes to the
+        # full M1), used to run the grid in two priority passes so a hard
+        # compute cutoff still leaves a coarse grid that spans the whole range.
+        keep = {round(K_from_period_exact(p, dx), 6) for p in periods_px}
+        all_K = [K for K in all_K if round(K, 6) in keep]
     budgets = [2.0, 4.0, 8.0]
 
     jobs = []
@@ -239,6 +246,19 @@ def build_M1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
                 for seed in for_seeds:
                     jobs.append(_job("M1", method_id, seed, base_config))
     return jobs
+
+
+# M1 in two priority passes (same configs/hashes as the full M1 above).
+M1A_PERIODS_PX = [64, 36, 30, 26, 22, 18, 14, 8]          # coarse, spans the range
+M1B_PERIODS_PX = [p for p in _CLIFF_PERIODS_PX if p not in M1A_PERIODS_PX]
+
+
+def build_M1A_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4) -> list[dict]:
+    return build_M1_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol, periods_px=M1A_PERIODS_PX)
+
+
+def build_M1B_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4) -> list[dict]:
+    return build_M1_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol, periods_px=M1B_PERIODS_PX)
 
 
 def build_M2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
@@ -563,6 +583,16 @@ def build_S2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
                     for seed in seeds:
                         jobs.append(_job("S2", method_id, seed, config))
     return jobs
+
+
+# S2R: reduced S2 (ONE of S2's K points, the p=24 px period) -- a subset of the
+# full S2 with IDENTICAL configs/hashes, so running full S2 afterwards only adds
+# the remaining K points. Used when the compute budget cannot cover all four.
+S2R_K_POINTS = [round(K_from_period_exact(24, 51.2 / 1024), 6)]
+
+
+def build_S2R_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4) -> list[dict]:
+    return build_S2_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol, K_points=S2R_K_POINTS)
 
 
 # =====================================================================
@@ -926,8 +956,8 @@ def build_all_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e
 
 
 BUILDERS = {
-    "M1": build_M1_jobs, "M2": build_M2_jobs,
-    "S1": build_S1_jobs, "S2": build_S2_jobs,
+    "M1": build_M1_jobs, "M1A": build_M1A_jobs, "M1B": build_M1B_jobs, "M2": build_M2_jobs,
+    "S1": build_S1_jobs, "S2": build_S2_jobs, "S2R": build_S2R_jobs,
     "S4": build_S4_jobs, "S5": build_S5_jobs,
     "NZ": build_NZ_jobs, "NZ_1024": build_NZ1024_jobs, "NZ0": build_NZ0_jobs, "S8": build_S8_jobs,
 }

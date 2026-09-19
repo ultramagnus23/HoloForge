@@ -91,6 +91,32 @@ def build_macros(paper_numbers: dict) -> str:
     # INCREASED gain (the term was suppressing MIL's advantage over BSGD
     # in the intact model), ~1 means the term isn't doing much for this
     # comparison.
+    # S8: slant-angle dependence of the paired gain (2x budget). Macro names
+    # cannot contain digits, so angles / K / n_z are spelled out.
+    _SLANT = {0.0: "Zero", 2.5: "TwoFive", 5.0: "Five", 7.5: "SevenFive",
+              10.0: "Ten", 15.0: "Fifteen", 20.0: "Twenty"}
+    _KLAB = {1.9635: "KLow", 3.927: "KMid"}
+    s8 = paper_numbers.get("s8_slant_summary", {})
+    for K, klab in _KLAB.items():
+        for sl, slab in _SLANT.items():
+            stat = (s8.get("by_K", {}).get(str(K), {}).get(str(sl), {}) if s8.get("status") == "ok" else {})
+            lines.append(macro(f"SEightGain{klab}Slant{slab}", fmt(stat.get("mean"), ".3f")))
+            lines.append(macro(f"SEightLo{klab}Slant{slab}", fmt(stat.get("ci95_lo"), ".3f")))
+            lines.append(macro(f"SEightHi{klab}Slant{slab}", fmt(stat.get("ci95_hi"), ".3f")))
+
+    # NZ0: n_z convergence at the frozen (unslanted) geometry, pooled over K.
+    _NZ = {32: "ThirtyTwo", 128: "OneTwentyEight", 256: "TwoFiftySix"}
+    nz0 = paper_numbers.get("nz0_convergence_summary", {})
+    for nz, nlab in _NZ.items():
+        stat = (nz0.get("pooled", {}).get(str(nz), {}) if nz0.get("status") == "ok" else {})
+        lines.append(macro(f"NZZeroPooledGain{nlab}", fmt(stat.get("mean"), ".3f")))
+        lines.append(macro(f"NZZeroPooledLo{nlab}", fmt(stat.get("ci95_lo"), ".3f")))
+        lines.append(macro(f"NZZeroPooledHi{nlab}", fmt(stat.get("ci95_hi"), ".3f")))
+    for K, klab in _KLAB.items():
+        for nz, nlab in _NZ.items():
+            stat = (nz0.get("by_K", {}).get(str(K), {}).get(str(nz), {}) if nz0.get("status") == "ok" else {})
+            lines.append(macro(f"NZZeroGain{klab}{nlab}", fmt(stat.get("mean"), ".3f")))
+
     s1 = paper_numbers.get("s1_ablation_summary", {})
     if s1.get("status") == "ok":
         by_cond = s1.get("by_condition", {})

@@ -945,6 +945,55 @@ def sub_cliff_non_monotonicity_status(grouped: dict) -> dict:
 
 
 # --------------------------------------------------------------- top level
+def _paired_gains_by(grouped: dict, exp_id: str, key_fn) -> dict:
+    """{key_fn(config): [per-seed MIL-BSGD gains, ...]} for one experiment."""
+    out: dict = {}
+    for (eid, ch), by_method in grouped.items():
+        if eid != exp_id:
+            continue
+        any_rows = next(iter(by_method.values()), None)
+        if not any_rows:
+            continue
+        pairs = paired_gain(by_method.get("MIL", []), by_method.get("BSGD", []), key="psnr")
+        if pairs:
+            out.setdefault(key_fn(any_rows[0]["config"]), []).extend(g for _, g in pairs)
+    return out
+
+
+def s8_slant_summary(grouped: dict) -> dict:
+    """S8: paired gain (MIL-BSGD) vs slant angle, per K (2x budget). Added
+    2026-09-19: the I2 slant-shear fix showed the gain is strongly
+    geometry-dependent, so the slant dependence is measured, not asserted."""
+    g = _paired_gains_by(grouped, "S8",
+                         lambda c: (round(c["K_nominal"], 4), float(c["slant_deg"])))
+    if not g:
+        return dict(status="no_data")
+    by_K: dict = {}
+    for (K, slant), vals in sorted(g.items()):
+        by_K.setdefault(str(K), {})[str(slant)] = mean_std_median_ci95(vals)
+    return dict(status="ok", by_K=by_K)
+
+
+def nz0_convergence_summary(grouped: dict) -> dict:
+    """NZ0: paired gain vs readout slice count n_z at the frozen geometry,
+    per K and pooled over K (per-seed mean across K, seeds present at every K)."""
+    g = _paired_gains_by(grouped, "NZ0",
+                         lambda c: (round(c["K_nominal"], 4), int(c["n_z"])))
+    if not g:
+        return dict(status="no_data")
+    by_K: dict = {}
+    for (K, nz), vals in sorted(g.items()):
+        by_K.setdefault(str(K), {})[str(nz)] = mean_std_median_ci95(vals)
+    Ks = sorted({k for k, _ in g})
+    pooled = {}
+    for nz in sorted({n for _, n in g}):
+        n_seeds = min(len(g[(K, nz)]) for K in Ks if (K, nz) in g)
+        per_seed = [statistics.fmean(g[(K, nz)][i] for K in Ks) for i in range(n_seeds)
+                    if all((K, nz) in g and len(g[(K, nz)]) > i for K in Ks)]
+        pooled[str(nz)] = mean_std_median_ci95(per_seed)
+    return dict(status="ok", by_K=by_K, pooled=pooled)
+
+
 def build_paper_numbers(results_root: str = RESULTS_ROOT) -> dict:
     results = load_all_results(results_root)
     grouped = group_by_config(results)
@@ -975,6 +1024,8 @@ def build_paper_numbers(results_root: str = RESULTS_ROOT) -> dict:
         s6_joint_mismatch_summary=s6_joint_mismatch_summary(grouped),
         s7_depth_absorption_summary=s7_depth_absorption_summary(grouped),
         sat_surrogate_summary=sat_surrogate_summary(grouped),
+        s8_slant_summary=s8_slant_summary(grouped),
+        nz0_convergence_summary=nz0_convergence_summary(grouped),
         # M2 carries SAT at the sub-cliff K = 1.31 rad/um, which lies
         # below M1's grid minimum of 1.96 -- i.e. exactly where
         # media-in-the-loop's advantage is largest and the cheap

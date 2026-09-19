@@ -327,18 +327,26 @@ The recorded transverse profile $\Delta n(x)$ is extruded uniformly
 through the slab thickness $T$ by default (Section~\ref{sec:discussion}
 states this scope precisely) and read out by scalar split-step beam
 propagation (BPM) at readout wavelength $\lambda$ and background index
-$n_0$: the slab is sliced into $n_z=32$ steps of thickness
+$n_0$: the slab is sliced into $n_z=128$ steps of thickness
 $\mathrm{d}z = T/n_z$, each applying a transmission phase kick
 $\exp\!\big(i k_0\, \Delta n(x, z)\, \mathrm{d}z_{\text{eff}}\big)$,
 $k_0 = 2\pi/\lambda$, followed by band-limited angular-spectrum
 propagation; after the slab, one angular-spectrum step propagates the
 field to the reconstruction plane, intensity formed as $|E|^2$.
-Post-exposure shrinkage $s$ detunes a fringe slanted at angle $\phi$ via
-a depth-dependent \emph{lateral} shift, $\delta x(z) = s \tan(\phi)\, z$
-(exact per-slice Fourier shift, $\mathrm{d}z_{\text{eff}} =
-\mathrm{d}z\,(1-s)$ for longitudinal compression) -- a real but bounded
-effect at this paper's default $20^\circ$ slant, quantified in
-Section~\ref{sec:discussion}. Kogelnik coupled-wave
+All headline results use an \emph{unslanted} transmission grating
+($\phi=0$), the geometry in which this readout model agrees with RCWA
+(Section~\ref{sec:discussion}); the simulated field is that of an
+infinitely repeated periodic grating, the same reading under which the
+FFT-based recording and propagation steps are exact and under which
+Kogelnik theory is stated. Post-exposure shrinkage $s$ compresses each
+slice longitudinally, $\mathrm{d}z_{\text{eff}} = \mathrm{d}z\,(1-s)$.
+For a grating whose fringes are slanted at angle $\phi$ the fringe planes
+satisfy $x - z\tan\phi = \mathrm{const}$, which the split-step model
+represents as an exact per-slice lateral Fourier shift
+$\delta x(z) = \tan(\phi)\,(1+s)\, z$; because the paired gain proves to
+depend strongly on $\phi$, slant is reported as a separate experiment
+(Section~\ref{sec:slant}) rather than folded into the headline
+configuration. Kogelnik coupled-wave
 theory~\cite{kogelnik1969coupled} is used only as closed-form validation
 context, cross-checked against RCWA (Section~\ref{sec:discussion}); BPM
 is the model inside every optimization loop and reported reconstruction,
@@ -414,7 +422,7 @@ $s$ (shrinkage) & $0.5\%$ &
   AA/PVA magnitude \\
 $T$ (thickness) & $30\,\mu\mathrm{m}$ & operating-point choice \\
 $n_0$ & $1.5$ & typical polymer bulk index \\
-$\phi$ (slant) & $20^\circ$ & \texttt{SlabBPM} default geometry \\
+$\phi$ (slant) & $0^\circ$ & unslanted; slant swept separately (Sec.~\ref{sec:slant}) \\
 \hline
 \end{tabularx}
 \end{table}
@@ -476,8 +484,8 @@ diffusive photopolymers~\cite{kowalski2016design}. What is \emph{not}
 established anywhere in that literature is where reshaping the exposure
 stops being able to compensate for it. We therefore derive that
 prediction ourselves and test it, rather than attributing it to anyone:
-a small-signal analysis of the recording transfer function predicts a
-compensation cliff, a spatial frequency $K_c(B_c)$ beyond which the
+a heuristic small-signal analysis of the recording transfer function (its
+status is discussed in Supplement S1) suggests a compensation cliff, a spatial frequency $K_c(B_c)$ beyond which the
 boost needed to pre-compensate the medium's rolloff exceeds the
 available contrast headroom, so paired gain (media-in-the-loop minus
 media-blind SGD) should cross from positive to negative near $K_c$.
@@ -494,8 +502,8 @@ every reported mean stays non-negative regardless). The same point holds directl
 crossing at any budget -- there is no observed $K^*$ to compare
 against the predicted $K_c$
 (\KcPredTwoX/\KcPredFourX/\KcPredEightX\,rad/\textmu m at
-$2\times/4\times/8\times$; derivation and the self-consistent-vs-naive
-$K_c$ definition in Supplement S1). We report this as a negative result for our own small-signal cliff
+$2\times/4\times/8\times$; the heuristic and the self-consistent-vs-naive
+$K_c$ definition are in Supplement S1). We report this as a negative result for our own small-signal cliff
 prediction, not as an inconclusive one: the data spans the predicted
 $K_c$ at all three budgets with dense sampling and still shows no sign
 change. The finding is methodological rather than a refutation of a
@@ -1005,6 +1013,25 @@ still rising, not yet saturated, at the full extent of the source's own
 plotted data -- a still-rising curve cannot identify $\Delta n_{\max}$ at
 all, so its low NRMSE reflects an under-constrained fit, not agreement.
 
+\textbf{A caveat on the dose axis.} The digitized curves are in units of
+exposure dose (or time), which the fit maps onto the twin's recording time
+directly, with the dye-bleaching rate $k_{\text{bleach}}=0.2$ held at its
+order-of-magnitude default rather than fitted or sourced. At that value the
+dye is more than $99.999\%$ depleted by a dose of about 150, so for every
+digitized curve most of its dose range is fitted in a regime where the
+twin's own equations predict essentially no further polymerization. In that
+regime the model's spatial contrast declines with further dose because
+diffusion keeps smoothing the recorded structure, which is the same
+mechanism we invoke above for the rise-then-decline shape. We verified that
+this behaviour is a converged property of the model, not a step-size
+artifact, but we have not validated it against an independent
+measurement, and we have not refitted with $k_{\text{bleach}}$ free or
+recovered the sources' illumination intensity to fix the dose-to-time
+conversion. The fitted $\kappa$ and $\Delta n_{\max}$ should therefore be
+read as effective parameters that reproduce the curve shapes, not as
+physically pinned values, and the agreement as a check on the shape of the
+response rather than on its dose scale.
+
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{../code/figures/paper/F2_twin_validation.pdf}
@@ -1032,8 +1059,8 @@ kind of error that does not cancel by any assumption). What this
 validation establishes is that the corrected twin reproduces the saturating,
 rise-then-decline index response identified in Section~\ref{sec:s1-ablation}
 as the dominant
-mechanism behind the paired-gain result, at parameter values consistent
-with (if not fully pinned to) a real published medium. A
+mechanism behind the paired-gain result, with effective parameter values
+that are not pinned to a real published medium (dose-axis caveat above). A
 parameter-spread extraction across independent sources (to justify or
 correct the sensitivity study's $\pm50\%$ perturbation range) still is
 not attempted, since one confirmed in-regime medium is not enough for
@@ -1054,10 +1081,12 @@ this against rigorous coupled-wave analysis (RCWA) directly rather than
 asserting a validity range, over a \RCWAVGridNCases-case grid spanning
 $K$, $\Delta n$, polarization and slant (Supplement S5). Agreement is
 close for unslanted gratings (deviation $\leq$ \RCWAUnslantedMaxDev) but
-degrades sharply for the slanted $20^\circ$ geometry this paper's
-default medium uses, reaching a maximum deviation of \RCWAVGridMaxDev\ at
-$K=12$\,rad/\textmu m. This is evidence for, not against, the modeling
-choice actually made: Kogelnik coupled-wave theory is used only as
+degrades sharply for a slanted $20^\circ$ geometry, reaching a maximum
+deviation of \RCWAVGridMaxDev\ at $K=12$\,rad/\textmu m. That is why the
+headline experiments are unslanted, where the scalar model is validated,
+and why the slanted geometries of Section~\ref{sec:slant} are reported as
+model-dependent rather than as validated results. It is also evidence for
+the modeling choice actually made: Kogelnik coupled-wave theory is used only as
 closed-form validation context, never inside an optimization loop or a
 reported reconstruction (Section~\ref{sec:model-readout}), and BPM's full
 split-step treatment has no single assumed diffraction order to lose
@@ -1076,10 +1105,11 @@ identical equations generalized to a full 2D grid and finds the same
 positive-gain result. What remains 1D regardless of transverse
 dimensionality is depth: the recorded index modulation is treated as
 uniform through the slab depth by default; depth ($z$) otherwise enters
-only at readout, via a depth-dependent lateral shift (not an amplitude
-change) from shrinkage at slant -- \ShrinkageShiftNm\,nm at full depth
-for this paper's default medium, applied identically to both arms of
-every paired comparison.
+only at readout, through the $n_z=128$ propagation slices and the
+shrinkage-induced longitudinal compression, applied identically to both
+arms of every paired comparison. The slice count itself was checked for
+convergence (Supplement): the paired gain at $n_z=32$, the value used in
+an earlier version of this study, was not converged.
 
 The size of the error the uniform-depth assumption admits is set by the
 film's optical density $\mathcal{D}$ at the recording wavelength: a
