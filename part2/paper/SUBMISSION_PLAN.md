@@ -54,9 +54,9 @@ Queue order (each worker runs it over its own balanced shard):
 5. M2: compute-matched arm.
 6. S4, S5 (target ensemble, readout noise), S1 (physics ablation).
 7. M1B: main grid fill-in (the other 7 K points, same configs as the full M1).
-8. S2R (one-K parameter sensitivity), then the rest of S2.
-Separate single-process jobs: S3 designs -> S6, S7 (twin miscalibration, joint,
-depth absorption); the 2D study (reduced seeds); R1/R3 figure data.
+(S2 and the 2D study were dropped from scope, see below.)
+Separate single-process jobs: S3 designs -> S6 -> S7 (twin miscalibration, joint,
+depth absorption); R1/R3 figure data.
 
 Cut rules (decided now, so the cutoff is not a judgement call under pressure):
 anything unfinished at the cutoff is reported at its reduced scale with the
@@ -77,6 +77,25 @@ run did not finish is removed rather than softened.
 * Sep 24: full build, `check_consistency.py`, `check_refs.py`, page count,
   supplement, cover letter, data/code release notes.
 * Sep 25: preprint + submission package handed to the author to post.
+
+## Venue and length (decided 2026-09-19)
+
+Target: **Applied Optics** (JOSA A is the fallback; same template, same policy).
+Both are Optica hybrid journals with **no mandatory author charges** (voluntary
+page charge $125/page; optional open access $2,300; print-colour figures are
+charged, online colour is free) [opg.optica.org/content/author/portal/item/review-pub-charge].
+**Overlength fee: $300/page beyond 10 published pages**, so the constraint is
+<= 10 pages in the two-column journal format (`oe_main_lengthcheck.tex`, 9pt).
+Optics Express is fully open access with a mandatory APC and is dropped.
+Verify these figures on the live Optica author page at submission time.
+
+## Scope cut (decided 2026-09-19, to fit 10 pages and the compute budget)
+
+Removed from the paper, not re-run: the bounded 2D study, the NPDD parameter-
+sensitivity study (S2), and the older diagnostics are kept only as clearly labelled
+pre-revision material in the supplement. Kept and re-run: NZ0, M1 (A then B), S8,
+M2, S4/S5 (supplement), S1, and S3 -> S6 -> S7. Two-column length after the cuts:
+9 pages + 2 lines, before adding the slant subsection.
 
 ## What "done" means
 

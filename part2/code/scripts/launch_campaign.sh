@@ -7,7 +7,7 @@
 # -> physics ablation -> main grid fill-in -> S2 (reduced, then full).
 set -euo pipefail
 N_SHARDS="${N_SHARDS:-4}"
-QUEUE="NZ0,M1A,S8,M2,S4,S5,S1,M1B,S2R,S2"
+QUEUE="${QUEUE:-NZ0,M1A,S8,M2,S4,S5,S1,M1B}"
 HOURS="${HOURS:-70}"
 for i in "$@"; do
   PYTHONUTF8=1 nohup python -u -m experiments.overnight_runner \

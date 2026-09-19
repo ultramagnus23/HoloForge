@@ -173,28 +173,43 @@ are within 5\%). Removing the saturation nonlinearity is qualitatively
 different: gain rises to \SOneNoSaturationGain~dB,
 \SOneNoSaturationRatio$\times$ the baseline.
 
-\section*{S3: Parameter sensitivity (full grid and figure)}
+\section*{S3: Readout slice count and grating slant (full values)}
 \label{sec:supp-s3}
-$D_0$, $\sigma$, and $\kappa$ are perturbed independently by
-$\{-50,-10,0,10,50\}\%$ at four $K$ spanning the collapse region
-(4.60--5.60\,rad/\textmu m), budget $2\times$.
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.8\linewidth]{../code/figures/paper/F8_sensitivity_band.pdf}
-\caption{Paired gain vs.\ parameter perturbation, one curve per NPDD
-parameter ($D_0$, $\sigma$, $\kappa$), $K$-averaged over the
-collapse-region grid, shaded 95\% CI. All three curves stay within a
-narrow band across the full $\pm50\%$ perturbation range tested.}
-\end{figure}
-Paired gain is \STwoBaselineGain~dB at the unperturbed baseline and stays
-within \STwoGainMin--\STwoGainMax~dB across every tested perturbation of
-every parameter -- a narrow absolute range, in sharp contrast to the S2
-ablations, where removing a mechanism entirely (not just perturbing its
-value) changes gain by up to \SOneNoSaturationRatio$\times$. Both arms
-are re-optimized on each perturbed medium here, so the perturbation is
-common to both and cancels in the paired difference -- this establishes
-sensitivity to the medium, not robustness to getting a parameter wrong
-(main text Section on twin miscalibration tests that).
+\textbf{Slice-count convergence.} The split-step readout slices the slab into
+$n_z$ steps. At the unslanted geometry, $n=1$ seed, 2$\times$ budget, the
+paired gain (media-in-the-loop minus media-blind SGD, dB) at $K=1.96$,
+$3.93$ and $5.24$\,rad/\textmu m is, for $n_z=32$, $128$ and $256$:
+\begin{center}
+\begin{tabular}{lccc}
+\hline
+$K$ (rad/\textmu m) & $n_z=32$ & $n_z=128$ & $n_z=256$ \
+\hline
+1.96 & \NZZeroGainKLowThirtyTwo & \NZZeroGainKLowOneTwentyEight & \NZZeroGainKLowTwoFiftySix \
+3.93 & \NZZeroGainKMidThirtyTwo & \NZZeroGainKMidOneTwentyEight & \NZZeroGainKMidTwoFiftySix \
+\hline
+\end{tabular}
+\end{center}
+The main experiments use $n_z=128$. An earlier version of this study used
+$n_z=32$, at which the gain had not converged.
+
+\textbf{Slant dependence.} Paired gain at the two lowest $K$, 2$\times$
+budget, versus grating slant $\phi$ (mean, with the 95\% $t$-interval in
+brackets, seeds as in the main text):
+\begin{center}
+\begin{tabular}{lcccc}
+\hline
+$\phi$ & $0^\circ$ & $5^\circ$ & $10^\circ$ & $20^\circ$ \
+\hline
+$K=1.96$ & \SEightGainKLowSlantZero & \SEightGainKLowSlantFive & \SEightGainKLowSlantTen & \SEightGainKLowSlantTwenty \
+ & [\SEightLoKLowSlantZero, \SEightHiKLowSlantZero] & [\SEightLoKLowSlantFive, \SEightHiKLowSlantFive] & [\SEightLoKLowSlantTen, \SEightHiKLowSlantTen] & [\SEightLoKLowSlantTwenty, \SEightHiKLowSlantTwenty] \
+$K=3.93$ & \SEightGainKMidSlantZero & \SEightGainKMidSlantFive & \SEightGainKMidSlantTen & \SEightGainKMidSlantTwenty \
+ & [\SEightLoKMidSlantZero, \SEightHiKMidSlantZero] & [\SEightLoKMidSlantFive, \SEightHiKMidSlantFive] & [\SEightLoKMidSlantTen, \SEightHiKMidSlantTen] & [\SEightLoKMidSlantTwenty, \SEightHiKMidSlantTwenty] \
+\hline
+\end{tabular}
+\end{center}
+The scalar readout model agrees with RCWA for unslanted gratings but not for
+the slanted geometry (Section~S5), so the slanted rows are model-dependent
+and are reported as such, not as validated results.
 
 \section*{S4: Twin miscalibration (full per-parameter curves and figure)}
 \label{sec:supp-s4}
@@ -344,6 +359,11 @@ kernel later moves it -- a chain initiated at $x'$ must deposit polymer
 at $x$, so the smearing kernel has to act on where polymer is actually
 \emph{produced}. This was caught and corrected before any of the results
 reported in this paper were generated.
+
+\emph{Note.} The three diagnostics below were produced before the
+2026-09-19 revision (earlier default geometry, $n_z$ as stated in each
+script) and have not been re-run with the revised code; they are retained as
+the earlier version's results and are not used in any claim in the main text.
 
 \section*{Gradient-Pathway Ablation}
 Checkpointed discrete-adjoint gradients match unrolled-autodiff gradients
