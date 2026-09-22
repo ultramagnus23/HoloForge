@@ -74,6 +74,17 @@ too.
 the ~39h lost, compressing the remaining schedule instead of the compute
 window; Sep 25 handoff is unchanged).
 
+### Paused for a laptop shutdown (2026-09-22, ~13:05)
+
+User is closing the laptop for a class. Stopped all workers and the watchdog
+cleanly (no partial files -- checked). Checkpoint at pause: 154/504 M1A,
+0 on S8/S4/S5/S1/M1B/M2. Resume: from `part2/code`, run
+`N_SHARDS=4 HOURS=<remaining> QUEUE="M1A,S8,S4,S5,S1,M1B,M2" scripts/launch_campaign.sh 0 1 2 3`
+(or a lower `N_SHARDS` if the laptop needs to stay usable) and restart a
+watchdog loop. This pause eats further into the Sep 24 08:00 compute cutoff,
+on top of the earlier 39h outage and the 2->1->4 worker throttling -- M2 is
+close to certain to be cut now, and M1B is a real risk.
+
 ### Throttled to 2 workers, then to 1 (2026-09-22, ~12:20-12:35)
 
 User reported the laptop lagging under 4 workers. Dropped to `N_SHARDS=2`;
