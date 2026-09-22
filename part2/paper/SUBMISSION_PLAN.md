@@ -74,15 +74,21 @@ too.
 the ~39h lost, compressing the remaining schedule instead of the compute
 window; Sep 25 handoff is unchanged).
 
-### Throttled to 2 workers (2026-09-22, ~12:20)
+### Throttled to 2 workers, then to 1 (2026-09-22, ~12:20-12:35)
 
-User reported the laptop lagging under 4 workers. Dropped to `N_SHARDS=2`
-(same priority queue, same jobs -- sharding is a pure filter, so switching
-shard count mid-run loses no progress); GPU utilization dropped from ~96% to
-~16% immediately. This roughly doubles the remaining wall-clock time for the
-same queue, accepted as the cost of keeping the laptop usable; the compute
-cutoff above is not pushed further to compensate, so M2 (already last) is now
-more likely to be cut, and M1B is at some risk too.
+User reported the laptop lagging under 4 workers. Dropped to `N_SHARDS=2`;
+GPU utilization dropped from ~96% to ~16%. User then asked to stop entirely,
+then to resume at a more manageable load -- stopped cleanly (no corrupted
+files; a job is done iff its result file exists, so stopping mid-job just
+means that job reruns), then relaunched at `N_SHARDS=1`, GPU ~34%. Sharding
+is a pure filter recomputed from (worker index, N), so changing N between
+launches loses no progress -- 149/504 M1A jobs were already done and stayed
+done. At 1 worker the remaining queue takes roughly 4x as long as the
+original 4-worker estimate; the compute cutoff is intentionally not pushed
+out further to compensate, so M2 (already last) is very likely to be cut
+entirely, and M1B is now also at real risk. If the laptop can tolerate 2
+workers again later, that is the first lever to raise before cutting scope
+further.
 
 Queue order (each worker runs it over its own balanced shard):
 
