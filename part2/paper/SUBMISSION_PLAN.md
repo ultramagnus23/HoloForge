@@ -74,6 +74,13 @@ too.
 the ~39h lost, compressing the remaining schedule instead of the compute
 window; Sep 25 handoff is unchanged).
 
+### Resumed at full 4 workers (2026-09-22, ~18:56)
+
+User back from class, confirmed full workload OK. Relaunched `N_SHARDS=4`
+from 154/504 M1A -- 98% GPU, 62C. Watchdog restarted. `--hours 37` targets
+the Sep 24 08:00 cutoff; if the laptop needs to drop workers again that
+cutoff is not extended to compensate (see the throttling history below).
+
 ### Paused for a laptop shutdown (2026-09-22, ~13:05)
 
 User is closing the laptop for a class. Stopped all workers and the watchdog
