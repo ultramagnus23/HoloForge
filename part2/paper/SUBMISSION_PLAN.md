@@ -69,13 +69,13 @@ run did not finish is removed rather than softened.
 * Now (no numbers needed): geometry scoping in Model/Readout and the parameter
   table; B4 periodic-grating statement; B5 Appendix (closed-form K_c does not hold
   as derived); I6 disclosure/refit of the twin fit; related-work TODOs.
-* After aggregation (Sep 22 night): `aggregate.py` -> `make_numbers_tex.py` ->
-  `figures/make_all.py`; rewrite abstract, Results, Discussion against the
-  regenerated numbers. Claims are conditioned on the data, with decision rules
-  fixed in advance: CI excluding zero -> "positive gain"; CI crossing zero ->
-  "no reliable gain in that region". `[PENDING]` macros must reach zero.
-* Sep 24: full build, `check_consistency.py`, `check_refs.py`, page count,
-  supplement, cover letter, data/code release notes.
+* After aggregation (Sep 24 08:00-20:00): `aggregate.py` -> `make_numbers_tex.py`
+  -> `figures/make_all.py`; rewrite abstract, Results, Discussion against the
+  regenerated numbers, including the S8 slant subsection. Claims are
+  conditioned on the data: CI excluding zero -> "positive gain"; CI crossing
+  zero -> "no reliable gain in that region". `[PENDING]` macros must reach zero.
+* Sep 24 evening: full build, `check_consistency.py`, `check_refs.py`, page
+  count, supplement, cover letter, data/code release notes.
 * Sep 25: preprint + submission package handed to the author to post.
 
 ## Venue and length (decided 2026-09-19)
