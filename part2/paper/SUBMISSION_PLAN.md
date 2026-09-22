@@ -43,7 +43,46 @@ saturates (~96-98% utilization) at 4-6 workers, so the parallel speed-up is
 ~2-3x (est, from BSGD/MIL timings under contention), not linear. Sequential
 cost of the full campaign is ~170 GPU-hours (est) -> ~60-80 wall-hours, which
 does NOT fit comfortably before the cutoff; hence the priority queue and the
-cut rules below. HARD CUTOFF Tue 2026-09-22 22:00.
+cut rules below.
+
+### Outage (discovered 2026-09-22 12:08)
+
+The campaign relaunched 2026-09-19 23:07 died silently around 2026-09-20 21:31
+(one worker's last heartbeat was even earlier, 18:02) and stayed dead for ~39
+hours -- the machine went to sleep or lost power mid-run; several logged job
+durations (51622s, 11783s for jobs that normally take ~300s) are wall-clock
+gaps across a sleep, not real compute, which is how this was diagnosed.
+`_prevent_idle_sleep()` (`ES_SYSTEM_REQUIRED`) does not stop a closed lid, a
+manual sleep, or a forced OS update reboot -- whichever happened, nothing was
+watching between Sep 19 evening and Sep 22 midday to catch it sooner.
+
+State at discovery: NZ0 complete (already used for the n_z verdict); M1A only
+~140/504 (~28%); S8/M2/S4/S5/S1/M1B: 0. The separate S3->S6->S7 chain (not in
+this queue) DID complete in full (504+540+54 evaluations) before the outage.
+No corrupted files -- atomic writes mean a job is either fully done or not
+attempted, so nothing needed repair, just ~39 hours of pure idle time.
+
+Relaunched 2026-09-22 12:08 with the queue reordered: `M1A,S8,S4,S5,S1,M1B,M2`
+(M2 moved last -- its own per-job timings imply ~14 GPU-hours across 4 workers
+just for M2, the single most expensive item, so it is the first thing cut if
+time runs out). Added a 90s-interval watchdog that flags zero running workers
+or 30 minutes with no new result files, instead of relying on a downstream
+"notify when N results exist" loop that would silently die with the machine
+too.
+
+**Revised compute cutoff: 2026-09-24 08:00** (was 2026-09-22 22:00 -- absorbs
+the ~39h lost, compressing the remaining schedule instead of the compute
+window; Sep 25 handoff is unchanged).
+
+### Throttled to 2 workers (2026-09-22, ~12:20)
+
+User reported the laptop lagging under 4 workers. Dropped to `N_SHARDS=2`
+(same priority queue, same jobs -- sharding is a pure filter, so switching
+shard count mid-run loses no progress); GPU utilization dropped from ~96% to
+~16% immediately. This roughly doubles the remaining wall-clock time for the
+same queue, accepted as the cost of keeping the laptop usable; the compute
+cutoff above is not pushed further to compensate, so M2 (already last) is now
+more likely to be cut, and M1B is at some risk too.
 
 Queue order (each worker runs it over its own balanced shard):
 
@@ -112,9 +151,10 @@ simulation-only paper: the honest ceiling is "submittable and defensible", not
 - [x] Code fully frozen: 1D and 3D recorders (B2), contrast projection (B3), slant + n_z in config
 - [x] Geometry / B5 / I6 / B4-scoping manuscript edits applied
 - [x] S8 + NZ0 aggregation, numbers.tex macros and figure F11 wired
-- [ ] NZ0 confirms n_z = 128
-- [ ] RSGD re-tuned (running)
-- [ ] Campaign queue launched (auto-starts when RSGD tuning finishes)
+- [x] NZ0 confirms n_z = 128 (converged within ~4% of n_z=256 at all 3 K tested)
+- [x] RSGD re-tuned (tv_weight=0 chosen at every budget)
+- [x] Campaign queue launched; survived a 39h outage (see above), relaunched
+      2026-09-22 12:08, throttled to 2 workers ~12:20
 - [ ] Aggregation + numbers.tex + figures regenerated
 - [ ] Manuscript rewrite, zero [PENDING]
 - [ ] Final build + consistency checks
