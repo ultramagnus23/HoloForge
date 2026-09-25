@@ -69,7 +69,7 @@ from style import (new_fig, savefig, no_data_placeholder, COLORS,
                    BUDGET_LINESTYLES, BUDGET_MARKERS,
                    SINGLE_COL_IN, DOUBLE_COL_IN)
 from analysis.aggregate import (load_all_results as _load_all_results_raw,
-                                group_by_config,
+                                group_by_config, split_complete_m1,
                                 headroom_closure, gain_curve, BUDGETS,
                                 mean_std_median_ci95, paired_gain,
                                 gain_vs_bsgd_seed_mean)
@@ -92,6 +92,12 @@ def load_all_results():
     regression test that fixed a broken byte-size heuristic and then
     found the figure it was "testing" wasn't even seeing the test data)."""
     return _load_all_results_raw(rm.RESULTS_ROOT)
+
+
+def load_grouped_complete():
+    """Grouped results with incomplete M1 cells dropped (same rule as
+    analysis.aggregate.load_grouped_complete), from run_manifest.RESULTS_ROOT."""
+    return split_complete_m1(group_by_config(load_all_results()))[0]
 
 
 def _load_json(*parts):
@@ -252,7 +258,7 @@ def make_F4_headline_gain_vs_K():
     second panel and final two-panel layout are deferred until M1 data
     exists to design around (agreed run-order: look at M1 before
     committing to a panel layout for the headline figure)."""
-    grouped = group_by_config(load_all_results())
+    grouped = load_grouped_complete()
     closure = headroom_closure(grouped, "M1", budgets=BUDGETS)
     if all(r.get("status") == "no_data" for r in closure):
         no_data_placeholder(
@@ -314,7 +320,7 @@ def make_F4b_baseline_comparison():
     for the investigated, target-dependent degeneracy) -- shown here
     rather than hidden, sharing GPC's color with LPC in figures/style.py
     to make that visually legible."""
-    grouped = group_by_config(load_all_results())
+    grouped = load_grouped_complete()
     budget = 2.0
     curves = {"MIL": gain_curve(grouped, "M1", budget, method="MIL"),
               # SAT/RSGD are seeded optimizers like MIL, so they get the
@@ -354,7 +360,7 @@ def make_F4b_baseline_comparison():
 
 
 def make_F5_Kstar_vs_Kc_scatter():
-    grouped = group_by_config(load_all_results())
+    grouped = load_grouped_complete()
     closure = headroom_closure(grouped, "M1", budgets=BUDGETS)
     valid = [r for r in closure if r.get("status") != "no_data"]
     if not valid:
@@ -394,7 +400,7 @@ def make_F6_cliff_shift():
     gain at M2's matched K's, side by side with M1's gain at the same K's,
     shows the compute-matched arm doesn't change the story -- MIL's
     advantage isn't an artifact of more optimizer iterations."""
-    grouped = group_by_config(load_all_results())
+    grouped = load_grouped_complete()
     m1_curve = gain_curve(grouped, "M1", BUDGETS[0])
     m2_curve = gain_curve(grouped, "M2", BUDGETS[0])
     if not m1_curve or not m2_curve:

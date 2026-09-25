@@ -18,14 +18,14 @@ import sys
 HERE = os.path.dirname(__file__)
 sys.path.insert(0, os.path.join(HERE, ".."))
 
-from analysis.aggregate import load_all_results, group_by_config, paired_gain
+from analysis.aggregate import load_grouped_complete, paired_gain
 
 NUMBERS_TEX = os.path.join(HERE, "..", "..", "paper", "numbers.tex")
 MARKER = "% --- diffraction-efficiency confirmation (Sec. 5.1) macros ---"
 
 
 def main():
-    grouped = group_by_config(load_all_results())
+    grouped = load_grouped_complete()
     per_budget = {}
     for (exp_id, config_hash), by_method in grouped.items():
         if exp_id != "M1":

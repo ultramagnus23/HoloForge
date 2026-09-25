@@ -71,6 +71,12 @@ class MediumParams:
     # dict(DEFAULT_MEDIUM, **overrides) ablation-condition machinery can
     # set it exactly like every other physics toggle (sigma=0, D0=0, ...).
     linearize_index_map: bool = False
+    # Mechanism ablation (PATH_TO_7 item 2): hold the free-monomer field at
+    # its initial value u = 1 (an infinite monomer reservoir), so monomer
+    # depletion can no longer saturate N. Polymer production and dye
+    # bleaching are unchanged; with u uniform, diffusion of u is a no-op.
+    # Off by default -- every existing result is bit-for-bit unaffected.
+    fixed_monomer: bool = False
 
     def to_tensor_dict(self, device, dtype=torch.float64):
         return {k: torch.as_tensor(v, device=device, dtype=dtype)
@@ -253,6 +259,14 @@ class NPDDRecorder(torch.nn.Module):
             # conserved to floating-point precision at ANY step size --
             # this is the standard positivity-preserving fix for an explicit
             # reaction step, not a finer-timestep workaround.
+            if self.p.fixed_monomer:
+                # infinite reservoir: production draws on a monomer supply
+                # that never depletes, so u stays at 1 and is not updated
+                N = N + self.dt * poly_rate
+                d = d * torch.exp(-self.p.k_bleach * I * self.dt)
+                if return_history:
+                    hist.append((u.detach().clone(), N.detach().clone()))
+                continue
             consumed = torch.minimum(self.dt * poly_rate, u)
             u = u - consumed
             N = N + consumed
@@ -276,6 +290,10 @@ class NPDDRecorder(torch.nn.Module):
         # u alone after an unconstrained explicit update.
         F_loc = self.p.kappa * torch.clamp(I * d, min=0.0) ** self.p.gamma
         poly_rate = self._nonlocal(F_loc * torch.clamp(u, min=0.0))
+        if self.p.fixed_monomer:
+            N = N + self.dt * poly_rate
+            d = d * torch.exp(-self.p.k_bleach * I * self.dt)
+            return u, N, d
         consumed = torch.minimum(self.dt * poly_rate, u)
         u = u - consumed
         N = N + consumed

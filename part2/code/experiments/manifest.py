@@ -377,6 +377,69 @@ def build_S1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
     return jobs
 
 
+
+# =====================================================================
+# S1X: saturation-mechanism factorial (PATH_TO_7 item 2).
+# S1's "no_saturation" linearizes only the tanh index map; two further
+# mechanisms also saturate the dose response -- monomer depletion (finite u)
+# and dye bleaching (d -> 0). S1X crosses all three on/off (2^3 cells; the
+# three S1 already covers are re-run here on the same device for a
+# like-for-like reference), plus one slope-matched linear control in which
+# the recording is exactly the media-blind baseline's own assumed model
+# (dn = dn_max * E) up to the non-local blur and shrinkage.
+#   M = monomer depletion (off: fixed_monomer=True)
+#   D = dye depletion     (off: k_bleach=0)
+#   T = tanh index map    (off: linearize_index_map=True)
+# Job order is seed-major so an interrupted run still covers every cell.
+# =====================================================================
+S1X_CONDITIONS = {
+    "baseline": {},                                                   # M D T
+    "no_monomer_depletion": dict(fixed_monomer=True),                 #   D T
+    "no_dye_depletion": dict(k_bleach=0.0),                           # M   T
+    "no_saturation": dict(linearize_index_map=True),                  # M D
+    "only_tanh": dict(fixed_monomer=True, k_bleach=0.0),              #     T
+    "only_dye": dict(fixed_monomer=True, linearize_index_map=True),   #   D
+    "only_monomer": dict(k_bleach=0.0, linearize_index_map=True),     # M
+    "linear_recording": dict(fixed_monomer=True, k_bleach=0.0,
+                             linearize_index_map=True),               # none
+    # kappa = 1/(1.5 T_exp) with T_exp = 10 s makes dn = dn_max * (G*E),
+    # i.e. media-blind SGD's own model up to blur and shrinkage.
+    "linear_slope_matched": dict(fixed_monomer=True, k_bleach=0.0,
+                                 linearize_index_map=True, kappa=1.0 / 15.0),
+    # Operating-point-matched variants. Removing monomer depletion at fixed
+    # kappa moves the medium far past its baseline operating point (at
+    # uniform unit dose the baseline cures to N ~= 1, but with u held at 1,
+    # N = kappa*(1-exp(-k_bleach*T))/k_bleach = 8.65, or kappa*T = 20 with
+    # no bleaching). These rescale kappa so N(E=1) = 1, matching the
+    # baseline's cured level, so the comparison isolates the mechanism
+    # rather than the dose scale.
+    "no_monomer_depletion_matched": dict(fixed_monomer=True,
+                                         kappa=0.2 / (1.0 - math.exp(-2.0))),
+    "only_dye_matched": dict(fixed_monomer=True, linearize_index_map=True,
+                             kappa=0.2 / (1.0 - math.exp(-2.0))),
+    "only_tanh_matched": dict(fixed_monomer=True, k_bleach=0.0, kappa=0.1),
+}
+
+
+def build_S1X_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
+                   seeds=None) -> list[dict]:
+    seeds = seeds if seeds is not None else [0, 1, 2]
+    dx = 51.2 / n_x
+    jobs = []
+    for seed in seeds:
+        for cond_name, overrides in S1X_CONDITIONS.items():
+            medium = dict(DEFAULT_MEDIUM, **overrides)
+            for K in S1_K_POINTS:
+                period_px = period_from_K(K, dx)
+                config = dict(n_x=n_x, dx=dx, lam_um=0.405, n_iters=n_iters,
+                              converge_tol=converge_tol, contrast_cap=S1_BUDGET,
+                              dose_budget=1.0, medium=medium,
+                              target=_bars_target_spec(period_px), K_nominal=K,
+                              ablation_condition=cond_name)
+                for method_id in ["BSGD", "MIL"]:
+                    jobs.append(_job("S1X", method_id, seed, config))
+    return jobs
+
 # =====================================================================
 # NZ: slice-count (n_z) convergence of the headline paired gain.
 # Peer-review item B4 -- CONFIRMED at reduced scale (see commit 68f0afd):
@@ -583,6 +646,22 @@ def build_S2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
                     for seed in seeds:
                         jobs.append(_job("S2", method_id, seed, config))
     return jobs
+
+
+# M1C: the single M1B cell K = 3.927 rad/um (period 32 px) at all three
+# budgets -- IDENTICAL hashes to M1B, so it only completes what M1B started.
+# It is the near-cliff point S1/S3/S4/S5 share, and S4/S5 reuse M1's data
+# there as their "bars"/noiseless reference, so it is filled first.
+def build_M1C_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4) -> list[dict]:
+    return [j for j in build_M1B_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
+            if abs(j["config"]["K_nominal"] - 3.926991) < 1e-3]
+
+
+# M2R: reduced M2 (budget 2x only, PATH_TO_7 nice-to-have) -- a subset of M2
+# with IDENTICAL configs/hashes, so running full M2 later only adds 4x/8x.
+def build_M2R_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4) -> list[dict]:
+    return [j for j in build_M2_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
+            if j["config"]["contrast_cap"] == 2.0]
 
 
 # S2R: reduced S2 (ONE of S2's K points, the p=24 px period) -- a subset of the
@@ -957,7 +1036,8 @@ def build_all_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e
 
 BUILDERS = {
     "M1": build_M1_jobs, "M1A": build_M1A_jobs, "M1B": build_M1B_jobs, "M2": build_M2_jobs,
-    "S1": build_S1_jobs, "S2": build_S2_jobs, "S2R": build_S2R_jobs,
+    "S1": build_S1_jobs, "S1X": build_S1X_jobs, "M1C": build_M1C_jobs, "M2R": build_M2R_jobs,
+    "S2": build_S2_jobs, "S2R": build_S2R_jobs,
     "S4": build_S4_jobs, "S5": build_S5_jobs,
     "NZ": build_NZ_jobs, "NZ_1024": build_NZ1024_jobs, "NZ0": build_NZ0_jobs, "S8": build_S8_jobs,
 }

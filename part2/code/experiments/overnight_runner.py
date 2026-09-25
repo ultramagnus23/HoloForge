@@ -43,6 +43,7 @@ import run_manifest as _rm
 from run_manifest import result_path, RESULTS_ROOT, apply_shard
 
 HERE = os.path.dirname(__file__)
+ALLOW_CPU = False  # set by --allow-cpu; forwarded to every run_manifest chunk
 
 
 def jobs_remaining(manifest_name: str, n_x: int, n_iters: int, converge_tol: float,
@@ -92,6 +93,8 @@ def run_one_manifest(manifest: str, deadline: float, chunk_minutes: float,
                "--manifest", manifest, "--max-minutes", str(chunk),
                "--n-x", str(n_x), "--n-iters", str(n_iters),
                "--converge-tol", str(converge_tol)]
+        if ALLOW_CPU:
+            cmd += ["--allow-cpu"]
         if shard is not None:
             cmd += ["--shard", f"{shard[0]}/{shard[1]}"]
             if _rm.SHARD_BALANCED:
@@ -142,6 +145,8 @@ def main():
                          "-- smaller means faster crash detection, larger "
                          "means less subprocess-restart overhead")
     ap.add_argument("--max-consecutive-crashes", type=int, default=5)
+    ap.add_argument("--allow-cpu", action="store_true",
+                    help="forward --allow-cpu to run_manifest (CPU-only machines)")
     ap.add_argument("--n-x", type=int, default=1024)
     ap.add_argument("--n-iters", type=int, default=800)
     ap.add_argument("--converge-tol", type=float, default=1e-4)
@@ -152,6 +157,8 @@ def main():
                          "manifest (launch N workers, one per shard, to share the GPU)")
     args = ap.parse_args()
     _rm.SHARD_BALANCED = bool(args.balanced_shard)
+    global ALLOW_CPU
+    ALLOW_CPU = bool(args.allow_cpu)
     shard = None
     if args.shard is not None:
         _i, _n = args.shard.split("/")
