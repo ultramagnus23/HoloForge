@@ -147,26 +147,33 @@ def group_by_config(results: list[dict]) -> dict:
     return g
 
 
-# Minimum per-method seed counts for an M1 (K, budget) cell to count as
-# complete. M1B finished only part of its grid, so some cells on disk hold a
-# subset of methods/seeds; headline statistics use complete cells only.
-# ORU (unconstrained oracle) is not required: no headline number uses it.
-M1_REQUIRED_SEEDS = {"BSGD": 3, "MIL": 3, "ORC": 3, "SAT": 3, "RSGD": 3,
-                     "GS": 1, "LPC": 1, "GPC": 1}
+# Methods exempt from the M1 completeness rule: no headline number uses the
+# unconstrained oracle, and one otherwise-complete cell is missing one ORU seed.
+M1_COMPLETENESS_EXEMPT = {"ORU"}
 
 
 def split_complete_m1(grouped: dict) -> tuple[dict, list[dict]]:
-    """(grouped without incomplete M1 cells, [description of each dropped cell])."""
+    """(grouped without incomplete M1 cells, [description of each dropped cell]).
+
+    M1B finished only part of its grid, so some M1 cells on disk hold a subset
+    of methods or seeds. A cell counts as complete when it has every method
+    that appears anywhere in M1 (except M1_COMPLETENESS_EXEMPT), each with that
+    method's maximum seed count across M1. Headline statistics use complete
+    cells only."""
+    m1 = {k: v for k, v in grouped.items() if k[0] == "M1"}
+    need: dict = {}
+    for by_method in m1.values():
+        for m, rows in by_method.items():
+            if m not in M1_COMPLETENESS_EXEMPT:
+                need[m] = max(need.get(m, 0), len({r["seed"] for r in rows}))
     kept, dropped = {}, []
     for key, by_method in grouped.items():
-        if key[0] == "M1":
-            missing = {m: n for m, n in M1_REQUIRED_SEEDS.items()
-                       if len(by_method.get(m, [])) < n}
-            if missing:
-                cfg = next(iter(by_method.values()))[0]["config"]
-                dropped.append(dict(K=cfg["K_nominal"], budget=cfg["contrast_cap"],
-                                    have={m: len(r) for m, r in by_method.items()}))
-                continue
+        if key[0] == "M1" and any(len({r["seed"] for r in by_method.get(m, [])}) < n
+                                  for m, n in need.items()):
+            cfg = next(iter(by_method.values()))[0]["config"]
+            dropped.append(dict(K=cfg["K_nominal"], budget=cfg["contrast_cap"],
+                                have={m: len(r) for m, r in by_method.items()}))
+            continue
         kept[key] = by_method
     return kept, sorted(dropped, key=lambda d: (d["budget"], d["K"]))
 

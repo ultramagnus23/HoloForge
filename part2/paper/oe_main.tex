@@ -1,27 +1,25 @@
 % paper/oe_main.tex -- Applied Optics manuscript, media-in-the-loop
-% holography (Part 2). Page budget is treated as a hard constraint
-% throughout (see scripts/check_consistency.py and the page-budget notes
-% in figure/prose comments below for what was trimmed to fit it) --
-% CONFIRM Applied Optics's current per-page/APC policy against the
-% journal's own author guidelines before submission; not independently
-% verified from inside this environment.
+% holography (Part 2).
 %
-% Template: optica-article.cls, opticajnl.bst, styles/opticajournal.sty,
-% jabbrv.sty, jabbrv-ltwa-{all,en}.ldf are the REAL files from Optica
-% Publishing Group's official Universal Manuscript Template
-% (opg.optica.org/resources/author/templates/latex-universal-template.zip),
-% not a stopgap. \journal{opticajournal} is the correct, generic value
-% for the Universal Template regardless of target journal -- the specific
-% target journal is selected at submission time via Prism, not in the
-% LaTeX source.
+% REWRITE 2026-09-26 (PATH_TO_7.md, must-do #1). Written against numbers.tex
+% regenerated from the post-freeze results only (n_z = 128, unslanted, complete
+% M1 cells only -- analysis/aggregate.py::split_complete_m1). Every number in
+% this file is a macro; scripts/check_consistency.py fails the build otherwise.
+%
+% Evidence classes used throughout (see Section 1 and Supplement S10):
+%   [L] literature-reported / established theory -- always cited;
+%   [P] a stated HoloForge model or simulation parameter (Table 1, Sec. 3-4);
+%   [D] derived here from stated inputs by an equation or algorithm;
+%   [S] a simulation output of this study (a "measurement" in the twin).
+% Interpretations that go beyond what the data directly show are labelled
+% "Interpretation" in the text.
+%
+% Template: optica-article.cls (Optica Universal Manuscript Template).
 
 \documentclass{optica-article}
 \journal{opticajournal}
 \articletype{Research Article}
-\usepackage{amsmath}  % align/cases/\text{} for the numbered Model equations (WP1) --
-                      % optica-article.cls loads newtxmath but not amsmath itself;
-                      % plain \begin{equation} is kernel-level and worked without this,
-                      % but \begin{align} and \text{} inside math mode are not.
+\usepackage{amsmath}
 \input{numbers}  % scripts/make_numbers_tex.py output -- all quantitative macros
 
 \begin{document}
@@ -34,617 +32,383 @@ Through a Differentiable Model of Volume Photopolymer Recording}
 \address{\authormark{1}Ashoka University, Sonipat, India}
 
 \email{\authormark{*}chaitanya.tripathi\_ug2025@ashoka.edu.in}
-% address/email copied from the Part 1 paper (paper/Final Paper.pdf) for
-% consistency -- CONFIRM this is still the right contact address before
-% submission, not verified against anything live here.
 
 \begin{abstract*}
-% ~110 words, matching the Universal Template's abstract limit and the
-% length discipline of the previous version. Ordering is deliberate (see
-% the abstract-restructure pass): the failure-rate result leads, because
-% it is the quantity write-once recording is actually billed in; the raw
-% per-budget dB gains moved to the body, where they undersell nothing.
-% Every number stays macro-sourced.
-Camera-in-the-loop correction is structurally unavailable for write-once
-volume photopolymer media: the reconstruction error becomes measurable
-only once it is permanent. We replace it with a differentiable digital
-twin of the NPDD recording chemistry inside the hologram-design loop.
-Against a media-blind optimizer this cuts the fraction of exposures
-falling more than \WastedMediaThreshDB\,dB short of a strong reference
-optimizer's score from \WastedMediaBSGDFrac\% to \WastedMediaMILFrac\% -- the
-quantity write-once recording is billed in. We find no sharp compensation
-cliff, but a smooth ceiling collapse tracked by a saturation-respecting
-oracle, and identify saturation, not transport kinetics, as the binding
-physical constraint. Code and results are released.
+Camera-in-the-loop correction is unavailable for write-once volume
+photopolymers, because the reconstruction error can be measured only after
+it is permanent. We study, in simulation, the alternative of placing a
+differentiable model of the recording chemistry -- a non-local
+polymerization-driven diffusion (NPDD) model coupled to split-step
+beam-propagation readout -- inside the exposure-design loop. On an
+unslanted one-dimensional grating benchmark of \MOneNCells{}
+spatial-frequency/contrast-budget cells, the simulated gain over a
+media-blind optimizer is positive in \MOneNPositive{} cells (at most
+\MaxGainEightX{}\,dB) and decays toward zero at high spatial frequency. The
+fraction of exposures more than \WastedMediaThreshDB\,dB short of an oracle
+reference falls from \WastedMediaBSGDFrac\% to \WastedMediaMILFrac\%; at a
+1\,dB threshold the two methods are similar. The gain largely disappears
+for fringes slanted by $10^\circ$ or more. The twin is checked against one
+published photopolymer family only; all results are simulation outputs,
+reproducible from the released code.
 \end{abstract*}
 
+% ======================================================================
 \section{Introduction}
-Phase-only CGH computes a modulation pattern whose diffracted field
-approximates a target image. Camera-in-the-loop (CITL) optimization
-closed the gap between the computed pattern and physical spatial light
-modulator hardware by measuring the actual reconstruction and
-backpropagating the residual into the display model~\cite{peng2020neural}.
+Phase-only computer-generated holography (CGH) computes a modulation
+pattern whose diffracted field approximates a target. Camera-in-the-loop
+(CITL) optimization reduces the mismatch between a computed pattern and a
+physical spatial light modulator by measuring the reconstruction and
+back-propagating the residual into the display model~\cite{peng2020neural}.
+That feedback loop requires a rewritable modulator.
 
-This solution is structurally unavailable to an entire class of
-holographic devices. Volume photopolymer media -- Bayfol HX~\cite{bruder2017bayfol},
-PVA/acrylamide, PQ/PMMA~\cite{hsieh2022pqpmma} -- record a hologram as a
-permanent refractive-index distribution formed by photopolymerization and
-mass transport. The medium is write-once: measurement of the
-reconstruction error is possible only after the error has become
-unerasable. CITL's feedback signal arrives, by construction, too late.
-Yet these media are precisely where model mismatch is most severe: the
-recorded index profile is not a scaled copy of the exposure, but the
-product of monomer diffusion~\cite{sheridan2012reply}, non-local polymer
-chain growth~\cite{gleeson2008chain}, dye depletion, saturable index
-response, and post-exposure shrinkage, each depending nonlinearly on the
-exposure itself.
+Volume photopolymers -- Bayfol HX~\cite{bruder2017bayfol},
+acrylamide/PVA, PQ/PMMA~\cite{hsieh2022pqpmma} -- record a permanent
+refractive-index distribution formed by photopolymerization and mass
+transport. The recorded index profile is not a scaled copy of the exposure:
+monomer diffusion~\cite{zhao1994diffusion,sheridan2012reply}, non-local
+chain growth~\cite{sheridan2000nonlocal,gleeson2008chain}, dye depletion
+and a saturating index response each act nonlinearly on the exposure
+[L]. Because the medium is write-once, a CITL-style measurement of the
+reconstruction error arrives only after the error has become permanent.
 
-We close this gap by placing a differentiable model of the recording
-chemistry -- not just the readout optics -- inside the design loop.
+This paper asks, entirely in simulation, how much an exposure optimized
+through a differentiable model of the recording process (``media-in-the-loop'',
+MIL) improves on the same optimizer run with a linear, media-blind recording
+assumption, and where that improvement comes from. The contribution is an
+engineering synthesis and a characterization, not a new physical model: the
+recording model (NPDD), the readout model (split-step beam propagation) and
+the optimizer (Adam with reverse-mode automatic differentiation) are
+established and cited where they are introduced; what is ours is their
+combination into an exposure-domain design loop and the systematic
+simulated evaluation of that loop (Section~\ref{sec:results}).
 
-This is a simulation study, and the twin it depends on is validated at
-the level of mechanism rather than absolute optical response
-(Section~\ref{sec:twin-validation-ref}). That is a weaker guarantee than
-it may appear to need, because of what the claims are: every headline
-result is a \emph{paired} comparison in which both arms are designed
-and scored against the literal same twin instance, so an
-\emph{exposure-independent} systematic offset or ceiling error in the
-twin's calibration cancels in the difference. This is an assumption
-about the twin-vs-reality gap, not a guarantee the paired design proves
-on its own: if the gap between this twin and a real medium instead
-varies with the specific exposure shape being recorded -- plausible for
-any unmodeled higher-order effect -- it would not cancel, since
-media-in-the-loop's and media-blind SGD's exposures are different
-shapes. What the paired design does depend on is the twin's
-\emph{qualitative} response being right -- the saturating,
-rise-then-decline index response -- which is what
-Section~\ref{sec:twin-validation-ref} verifies against published data.
-Independently, Section~\ref{sec:mismatch} shows the result survives a
-50\% error in any single recording parameter between design time and
-recording time, which is a stronger and one-sided test: there the error
-does not cancel by any assumption, exposure-dependent or not.
+\textbf{How claims are sourced.} Every quantitative statement belongs to one
+of four classes, marked where the distinction matters: literature-reported
+or established theory [L], always cited; a stated HoloForge model or
+simulation parameter [P] (Table~\ref{tab:mediumparams}, Sections~\ref{sec:model}--\ref{sec:method}); a result derived here by an equation or
+algorithm from stated inputs [D]; and a simulation output of this study
+[S]. [S] results are measurements \emph{in the twin}, not of a physical
+medium, and are reported with the seed count and interval method used.
+Statements that go beyond what the data directly show are labelled as
+interpretation. Supplement S10 maps each headline number to its source
+file and generating script.
 
-This work is the second in a two-part study; Part 1 characterized phase-only
-CGH degradation under idealized-modulator assumptions using purely
-objective image-quality metrics~\cite{tripathi2025holoforge}.
+\textbf{Why a paired design, and what it does not buy.} Every headline
+number is a paired difference -- MIL minus media-blind SGD -- with both arms
+designed and scored against the same twin instance. An
+exposure-independent calibration error in the twin (an offset or a ceiling
+error common to every exposure) cancels in that difference [D]. An
+exposure-dependent twin-vs-reality gap does not cancel, because the two arms
+record different exposures. We therefore also test one-sided robustness
+directly: the exposure is designed on the nominal twin and scored on a
+deliberately miscalibrated one (Section~\ref{sec:mismatch}).
 
-\section{Related Work}
+This work is the second of a two-part study; Part~1 characterized phase-only
+CGH degradation under idealized-modulator assumptions~\cite{tripathi2025holoforge}.
 
-\textbf{Model-mismatch correction for holographic displays.} CITL
-optimization~\cite{peng2020neural} and its extensions correct the
-display's forward model using camera measurements: gradient-based
-Wirtinger optimization of the SLM phase~\cite{chakravarthula2019wirtinger},
-learned proxy models for real-time photorealistic
-reconstruction~\cite{shi2021towards}, and time-multiplexed control of
-heavily-quantized modulators~\cite{choi2022time}. All require a
-rewritable modulator observed live. Our setting inverts the
-availability: the medium is write-once, so the model must carry the
-full burden.
+% ======================================================================
+\section{Related work}
+\textbf{Model-mismatch correction for holographic displays.}
+CITL~\cite{peng2020neural}, Wirtinger holography~\cite{chakravarthula2019wirtinger},
+learned proxy models~\cite{shi2021towards} and time-multiplexed control of
+quantized modulators~\cite{choi2022time} correct a display model with
+camera measurements of a rewritable modulator. In the write-once setting
+considered here the model has to carry that burden without feedback.
 
-\textbf{Fabrication-aware surface-relief optics.} Neural
-lithography~\cite{zheng2023neural} inserts a learned digital twin of a
-lithographic process into differentiable design, but models surface
-geometry -- an etched height map. Volume photopolymers differ in kind:
-the recorded object is a volumetric index distribution produced by
-chemistry, and readout is Bragg-selective.
+\textbf{Fabrication-aware design.} Neural lithography~\cite{zheng2023neural}
+places a learned twin of a lithographic process inside differentiable
+design of surface-relief optics. Adjoint inverse design~\cite{hughes2018adjoint}
+treats a physical forward model as a differentiable layer; MIL applies the
+same pattern to a recording chemistry's governing PDE. Proximity-effect
+correction in electron-beam lithography~\cite{li2015proximity} is a
+correction problem bounded by the resist's response, conceptually related
+though physically unrelated.
 
-% Verified against the full method section (arxiv.org/html/2601.16330),
-% not just the abstract: their model generates radicals pointwise,
-% proportional to local light intensity, quenched by inhibitors at that
-% same location before contributing to polymerization -- production is
-% local. Their "chemical blur" is stated explicitly to come from ordinary
-% diffusive transport of inhibitor species (oxygen/TEMPO) between
-% locations, not from a non-local production kernel. This confirms the
-% distinction drawn below.
-\textbf{Concurrent work.} Wechsler et al.~\cite{wechsler2026shvam} couple
-a differentiable wave-optical forward model to a photochemical model for
-holographic volumetric 3D printing, optimizing time-multiplexed
-phase-only holograms against a target dose distribution -- a printed,
-threshold-converted solid evaluated by dose distribution, with inhibitor
-diffusion but not the non-local production kernel central to NPDD (where
-polymer initiated at $x'$ deposits at $x$). Ours is a Bragg-selective
-index grating evaluated by diffraction, testing the spatial-frequency-
-dependent compensation limit of Section~\ref{sec:no-cliff}. The two
-contributions are complementary, not competing, and we claim no
-precedence: they demonstrate the paradigm experimentally, with physical
-prints at the ten-micron scale, evidence this simulation study does not
-offer. What this paper provides instead is the systematic
-characterization -- a spatial-frequency sweep, a mechanism-wise
-ablation, an achievability oracle, a compute-matched control, a
-reduced-physics surrogate, a miscalibration study, and a failure-rate
-quantification in the units write-once recording is actually billed in.
+\textbf{Concurrent work.} Wechsler et al.~\cite{wechsler2026shvam} couple a
+differentiable wave-optical model to a photochemical model for holographic
+volumetric printing, with inhibitor diffusion but no non-local production
+kernel, and demonstrate printed parts experimentally -- evidence this
+simulation study does not provide. The present work addresses a
+Bragg-selective index grating scored by diffraction, and contributes a
+simulated characterization across spatial frequency, contrast budget,
+recording mechanism, grating slant and twin miscalibration. We make no
+priority claim for differentiable recording models in a design loop.
 
-\textbf{Adjoint/PDE-constrained inverse design.} More broadly, treating a
-physical forward model as a differentiable layer inside a design loop is
-established practice in nanophotonic inverse
-design~\cite{hughes2018adjoint}, where adjoint methods compute the
-gradient of a design objective with respect to many structural degrees of
-freedom from two forward simulations. Media-in-the-loop holography is
-this same paradigm applied to a recording chemistry's own governing PDE
-rather than a static structure's electromagnetic response.
-
-\textbf{Correction-limited by physics, elsewhere.} The compensation-cliff
-hypothesis this paper tests -- that a linear pre-correction fails once the
-correction it demands exceeds a physical budget -- has a conceptual
-cousin in proximity-effect correction for electron-beam
-lithography~\cite{li2015proximity}, where dose or shape correction for
-electron scattering is itself bounded by the resist's own response and
-by adjacent-feature interactions; the correction problem is well studied
-there even though the physical mechanism (electron scattering vs.\
-photopolymer index saturation) is unrelated.
-
-Our contribution claim is scoped accordingly, and deliberately not as
-a priority claim: this is the first systematic characterization of
-where, why, and how reliably chemistry-aware optimization helps for
-Bragg-selective volume recording -- across spatial frequency, contrast
-budget, physical mechanism, and twin miscalibration -- rather than a
-claim to the first differentiable recording model in a design loop,
-which the concurrent work above makes contestable and which is in any
-case the less useful thing to have established.
-
+% ======================================================================
 \section{Model}
 \label{sec:model}
-This section specifies the forward model in full: the exposure and its
-feasible set (\ref{sec:model-exposure}), the recording chemistry
-(\ref{sec:model-npdd}), the numerical integrator that produces the
-gradient (\ref{sec:model-imex}), the readout optics
-(\ref{sec:model-readout}), and the loss/optimizer that drives design
-(\ref{sec:model-loss}). Table~\ref{tab:mediumparams} lists every physical
-constant with its source. Reproducing this section is sufficient to
-reimplement the twin; the released code (see Data availability) is the
-reference implementation, not a separate description of it.
+Sections~\ref{sec:model-exposure}--\ref{sec:model-loss} specify the forward
+model completely; Table~\ref{tab:mediumparams} lists every physical
+constant and its source class. The released code is the reference
+implementation.
 
-\subsection{Exposure and the feasible set}
+\subsection{Exposure and feasible set [P]}
 \label{sec:model-exposure}
-The design variable is the delivered exposure $E(x) \geq 0$, a
-nonnegative intensity pattern over the transverse coordinate $x$. It is
-constrained to a fixed mean dose $E_0$ and a contrast (peak-to-mean)
-budget $B_c$:
+The design variable is the delivered exposure $E(x)\ge 0$ on the transverse
+coordinate $x$, constrained to a mean dose $E_0$ and a peak-to-mean
+contrast budget $B_c$:
 \begin{equation}
 \label{eq:feasible-set}
-\mathcal{E}(E_0, B_c) = \Big\{\, E : x \mapsto \mathbb{R}_{\geq 0} \;\Big|\;
-\overline{E} = E_0,\;\; \frac{\max_x E(x)}{\overline{E}} \leq B_c \,\Big\}.
+\mathcal{E}(E_0,B_c)=\Big\{E:\;E\ge0,\;\overline{E}=E_0,\;
+\max_x E(x)/\overline{E}\le B_c\Big\}.
 \end{equation}
-$B_c$ is what any pre-compensating design can actually spend: boosting
-one spatial-frequency component's exposure to counteract the medium's
-rolloff draws down the headroom available everywhere else. Projection
-onto $\mathcal{E}$ is neither a single Euclidean projection nor a purely
-iterative one but an alternating clip-and-renormalize scheme
-(\texttt{contrast\_project}), applied after \emph{every} optimizer step,
-not only at convergence:
-\begin{align}
-\label{eq:contrast-project}
-E &\leftarrow E \cdot \frac{E_0}{\overline{E} + \epsilon}
-   &&\text{(dose projection)}\\
-E &\leftarrow \min(E,\, B_c E_0)
-   &&\text{(peak clip)}
-\end{align}
-iterated for 20 passes (dose projection, then peak clip, then dose
-projection again). Clipping the peak removes mass, which perturbs the
-mean the next dose-projection pass restores; the two constraints are not
-satisfied simultaneously by a single pass, and convergence is geometric
-in the number of passes (empirically $\sim\!2\times$ error reduction per
-pass on typical intermediate exposures; 20 passes reaches
-$\lesssim 10^{-6}$ relative error on the tested targets). Both operations
-are elementwise and differentiable, so the projection is safe to place
-inside the unrolled optimization loop, which is where every method in
-this paper places it: exposures are re-projected onto $\mathcal{E}$ at
-every iteration, not only reported after a final rescale.
+After every optimizer step the exposure is projected onto $\mathcal{E}$ by
+20 alternating passes of dose rescaling $E\leftarrow E\,E_0/(\overline{E}+\epsilon)$
+and peak clipping $E\leftarrow\min(E,B_cE_0)$ [P]. Both operations are
+elementwise and differentiable. The residual constraint violation after
+20 passes is below $10^{-6}$ (relative) on the tested targets [S].
 
-\subsection{Recording: non-local polymerization-driven diffusion (NPDD)}
+\subsection{Recording: NPDD [L] with stated simplifications [P]}
 \label{sec:model-npdd}
-Three coupled fields evolve on the transverse coordinate $x$ over the
-exposure duration: free monomer $u(x,t)$ (normalized so $u(x,0)=1$),
-immobile polymerized material $N(x,t)$ (with $N(x,0)=0$), and
-unreacted photoinitiating dye $d(x,t)$ (normalized, $d(x,0)=1$). The
-system~\cite{sheridan2000nonlocal}, built on the earlier local
-photopolymerization-driven-diffusion model~\cite{zhao1994diffusion}, is
+Free monomer $u(x,t)$ ($u(x,0)=1$), polymer $N(x,t)$ ($N(x,0)=0$) and
+unreacted dye $d(x,t)$ ($d(x,0)=1$) evolve as in the non-local
+polymerization-driven diffusion model~\cite{sheridan2000nonlocal}, itself
+built on the local model of Zhao and Mouroulis~\cite{zhao1994diffusion}:
 \begin{align}
-\frac{\partial u}{\partial t}
-   &= \frac{\partial}{\partial x}\!\left( D_{\text{eff}}(N)\,
-      \frac{\partial u}{\partial x} \right) - G_\sigma * \big(F(x,t)\,u(x,t)\big),
-   \label{eq:npdd-u}\\
-\frac{\partial N}{\partial t} &= + G_\sigma * \big(F(x,t)\,u(x,t)\big),
-   \label{eq:npdd-N}\\
-\frac{\partial d}{\partial t} &= - k_{\text{bleach}}\, I(x)\, d(x,t),
-   \label{eq:npdd-d}
+\partial_t u &= \partial_x\!\big(D_{\text{eff}}(N)\,\partial_x u\big) - G_\sigma*(F u), \label{eq:npdd-u}\\
+\partial_t N &= G_\sigma*(F u), \label{eq:npdd-N}\\
+\partial_t d &= -k_{\text{bleach}}\,I\,d, \label{eq:npdd-d}
 \end{align}
-with local initiation rate, non-local kernel, and effective diffusivity
-\begin{align}
-F(x,t) &= \kappa\,\big[I(x)\,d(x,t)\big]^\gamma, \label{eq:npdd-F}\\
-G_\sigma(x) &= \frac{1}{\sigma\sqrt{2\pi}}\exp\!\left(-\frac{x^2}{2\sigma^2}\right), \quad
-   \widehat{G_\sigma}(K) = \exp\!\left(-\tfrac{1}{2}K^2\sigma^2\right), \label{eq:npdd-G}\\
-D_{\text{eff}}(N) &= D_0 \exp(-\alpha_D N). \label{eq:npdd-D}
-\end{align}
-The non-local kernel acts on the \emph{production term} $F \cdot u$, not
-on the bare monomer field $u$ before production acts on it --
-$G_\sigma * (F u)$, not $F \cdot (G_\sigma * u)$: a chain initiated at
-$x'$ terminates and deposits polymer at $x$, so the smearing kernel must
-act on where polymer is \emph{produced} (applying $G_\sigma$ to $u$
-alone would leave $\sigma$ with no effect on recorded fringe contrast,
-since $u$ is consumed pointwise regardless of where the kernel later
-moves it -- Supplement S9). Monomer transport itself slows as polymer
-accumulates, Eq.~\eqref{eq:npdd-D}, coupling diffusion to the
-recording's own progress.
-
-The recorded index modulation is a saturating function of accumulated
-polymer, bounded by the medium's physical index budget $\Delta n_{\max}$:
+with $F=\kappa\,(I d)^\gamma$, a Gaussian non-local kernel
+$G_\sigma$ of width $\sigma$ ($\widehat{G_\sigma}(K)=e^{-K^2\sigma^2/2}$),
+and $D_{\text{eff}}(N)=D_0e^{-\alpha_D N}$. The kernel acts on the production
+term $Fu$: polymer initiated at $x'$ is deposited at $x$~\cite{sheridan2000nonlocal}.
+The recorded index modulation is
 \begin{equation}
 \label{eq:npdd-dn}
-\Delta n(x) = \Delta n_{\max}\, \tanh\!\big(\beta\, N(x)\big), \qquad \beta = 1.5,
+\Delta n(x)=\Delta n_{\max}\tanh\!\big(\beta N(x)\big),\qquad \beta=1.5 .
 \end{equation}
-where $\beta$ is a fixed shape constant of the saturating map (not a
-literature-sourced or fitted parameter; every fit in this paper --
-Section~\ref{sec:twin-validation-ref}, the SAT surrogate calibration --
-treats $\beta$ as given and fits $\kappa$, $D_0$, or $\Delta n_{\max}$
-against it). Section~\ref{sec:s1-ablation}'s ablation identifies
-$\Delta n_{\max}$-bounded saturation, not non-locality, diffusion, or dye
-depletion, as the dominant constraint on achievable gain.
+The saturating map and the value $\beta=1.5$ are modelling choices of this
+work [P], not literature-sourced; every fit in this paper holds $\beta$
+fixed. Three mechanisms in this model saturate the dose response: monomer
+depletion ($u\to0$), dye bleaching ($d\to0$) and the $\tanh$ map
+(Section~\ref{sec:mechanism} separates them).
 
-\subsection{Spectral IMEX integrator}
+\subsection{Integrator and gradients [D]}
 \label{sec:model-imex}
 Equations~\eqref{eq:npdd-u}--\eqref{eq:npdd-d} are integrated over
-$n_{\text{steps}}$ steps of size $\mathrm{d}t = t_{\text{total}} /
-n_{\text{steps}}$ ($t_{\text{total}} = 10\,\mathrm{s}$,
-$n_{\text{steps}} = 300$ throughout this paper) by a first-order
-implicit-explicit (IMEX) splitting per step:
-\begin{enumerate}
-\item \textbf{Explicit reaction half-step}: evaluate $F$
-      (Eq.~\eqref{eq:npdd-F}), the non-local production
-      $G_\sigma * (Fu)$ via one forward/inverse FFT pair using the
-      precomputed kernel $\widehat{G_\sigma}(K)$, and update $u
-      \mathrel{-}= \mathrm{d}t \cdot G_\sigma*(Fu)$, $N \mathrel{+}=
-      \mathrm{d}t \cdot G_\sigma*(Fu)$, $d \mathrel{*}= \exp(-k_{\text{bleach}}
-      I\, \mathrm{d}t)$ (exact for the linear bleaching ODE at fixed
-      $I$); clamp $u \geq 0$.
-\item \textbf{Implicit diffusion step}: with $D_{\text{eff}}$
-      (Eq.~\eqref{eq:npdd-D}) evaluated at the post-reaction $N$ and
-      spatially averaged to a scalar $\bar{D}$ per step, diffusion is
-      applied \emph{exactly} in Fourier space,
-      $u \leftarrow \mathcal{F}^{-1}\!\big[\exp(-\bar{D} K^2\,
-      \mathrm{d}t)\, \widehat{u}\big]$ -- unconditionally stable
-      regardless of $\mathrm{d}t$, unlike an explicit diffusion update.
-\end{enumerate}
-Gradients with respect to the exposure $E(x) = I(x)$ (Eq.~\eqref{eq:npdd-F})
-are obtained by unrolling all $n_{\text{steps}}$ and backpropagating
-through the full trajectory (reverse-mode automatic differentiation
-through the FFT-based operators above), i.e. the discrete adjoint of the
-integrator just described, not a continuous adjoint of
-Eqs.~\eqref{eq:npdd-u}--\eqref{eq:npdd-d}. A checkpointed variant trades
-recompute for memory (\texttt{forward\_checkpointed}); gradients from the
-two are not bit-identical (measured cosine similarity
-$\AblationCheckpointCosSim$ against the full unrolled gradient, vs.\
-$\AblationSurrogateCosSim$ for a neural-surrogate gradient on the same
-probe, Section~\ref{sec:s1-ablation}'s supplement) because the FFT
-recomputation inside checkpointing's backward pass does not retrace the
-identical floating-point path, not because the adjoint itself differs.
+$t_{\text{total}}=10$\,s in $n_{\text{steps}}=300$ first-order
+implicit--explicit steps [P]. The explicit reaction step evaluates the
+non-local production by FFT, caps the consumed monomer at the monomer
+available (so that $u\ge0$ and $u+N$ is conserved to rounding error), and
+updates $d$ exactly for fixed $I$. The implicit diffusion step applies
+$\exp(-\bar{D}K^2\,\mathrm{d}t)$ in Fourier space, with $\bar{D}$ the
+spatial mean of $D_{\text{eff}}$ -- an approximation to the variable-coefficient
+operator in Eq.~\eqref{eq:npdd-u}, whose one-step error we measured as
+$\approx0.1\%$ of $u$'s scale at a representative late-trajectory state
+[S]; the error accumulated over a full trajectory was not bounded.
+Gradients with respect to $E$ are the discrete adjoint of this integrator,
+obtained by reverse-mode automatic differentiation through all
+$n_{\text{steps}}$~\cite{griewank2008evaluating,paszke2019pytorch}. A
+checkpointed variant gives gradients with cosine similarity
+\AblationCheckpointCosSim{} to the unrolled ones [S].
 
-\subsection{Readout: split-step beam propagation}
+\subsection{Readout: split-step beam propagation [L]}
 \label{sec:model-readout}
-The recorded transverse profile $\Delta n(x)$ is extruded uniformly
-through the slab thickness $T$ by default (Section~\ref{sec:discussion}
-states this scope precisely) and read out by scalar split-step beam
-propagation (BPM) at readout wavelength $\lambda$ and background index
-$n_0$: the slab is sliced into $n_z=128$ steps of thickness
-$\mathrm{d}z = T/n_z$, each applying a transmission phase kick
-$\exp\!\big(i k_0\, \Delta n(x, z)\, \mathrm{d}z_{\text{eff}}\big)$,
-$k_0 = 2\pi/\lambda$, followed by band-limited angular-spectrum
-propagation; after the slab, one angular-spectrum step propagates the
-field to the reconstruction plane, intensity formed as $|E|^2$.
-All headline results use an \emph{unslanted} transmission grating
-($\phi=0$), the geometry in which this readout model agrees with RCWA
-(Section~\ref{sec:discussion}); the simulated field is that of an
-infinitely repeated periodic grating, the same reading under which the
-FFT-based recording and propagation steps are exact and under which
-Kogelnik theory is stated. Post-exposure shrinkage $s$ compresses each
-slice longitudinally, $\mathrm{d}z_{\text{eff}} = \mathrm{d}z\,(1-s)$.
-For a grating whose fringes are slanted at angle $\phi$ the fringe planes
-satisfy $x - z\tan\phi = \mathrm{const}$, which the split-step model
-represents as an exact per-slice lateral Fourier shift
-$\delta x(z) = \tan(\phi)\,(1+s)\, z$; because the paired gain proves to
-depend strongly on $\phi$, slant is reported as a separate experiment
-(Section~\ref{sec:slant}) rather than folded into the headline
-configuration. Kogelnik coupled-wave
-theory~\cite{kogelnik1969coupled} is used only as closed-form validation
-context, cross-checked against RCWA (Section~\ref{sec:discussion}); BPM
-is the model inside every optimization loop and reported reconstruction,
-covering the intermediate-diffraction regime some tested conditions fall
-into (below).
+The recorded profile $\Delta n(x)$ is extruded uniformly through a slab of
+thickness $T$ [P] and read out at wavelength $\lambda$ by scalar split-step
+beam propagation~\cite{feit1978light}: $n_z=128$ slices [P], each applying
+the phase $\exp(ik_0\Delta n\,\mathrm{d}z(1-s))$ ($k_0=2\pi/\lambda$,
+shrinkage $s$) followed by band-limited angular-spectrum
+propagation~\cite{goodman2005fourier}, then one angular-spectrum step to
+the reconstruction plane; the reconstruction is the intensity $|E|^2$.
+Slanted fringes ($x-z\tan\phi=\text{const}$) are represented by a
+per-slice lateral Fourier shift. All headline results use an unslanted
+grating ($\phi=0$) [P], the geometry in which this scalar readout agrees
+with rigorous coupled-wave analysis (RCWA)~\cite{moharam1981rigorous}
+(Section~\ref{sec:discussion}); slant is studied separately
+(Section~\ref{sec:slant}). The slice count was checked for convergence at
+this geometry: between $n_z=128$ and $256$ the paired gain changes by
+\NZZeroGainKLowOneTwentyEight$\to$\NZZeroGainKLowTwoFiftySix\,dB at
+$K=1.96$ and \NZZeroGainKMidOneTwentyEight$\to$\NZZeroGainKMidTwoFiftySix\,dB
+at $K=3.93$\,rad/\textmu m (one seed; Supplement S3) [S].
 
-\textbf{Diffraction regime.} The Klein--Cook parameter
-$Q = 2\pi\lambda T / (n_0 \Lambda^2)$, $\Lambda = 2\pi/K$, separates
-thin, intermediate, and thick (Bragg, $Q \gg 10$) volume-grating
-regimes. At the default medium, $Q$ crosses 10 at
-$K \approx 2.79\,\mathrm{rad}/\mu\mathrm{m}$: the two lowest tested $K$
-points sit below it, in the intermediate regime, not deep Bragg --
-precisely where Section~\ref{sec:no-cliff} finds media-in-the-loop's
-largest gains, where a purely Kogelnik-regime intuition would least
-apply and BPM's full treatment of non-Bragg orders is doing real work.
+\textbf{Diffraction regime [D].} The Klein--Cook parameter
+$Q=2\pi\lambda T/(n_0\Lambda^2)$, $\Lambda=2\pi/K$~\cite{klein1967unified},
+crosses 10 at $K\approx2.79$\,rad/\textmu m for the default medium, so the
+two lowest tested $K$ lie in the intermediate regime rather than the Bragg
+regime. Kogelnik coupled-wave theory~\cite{kogelnik1969coupled} is used only
+as a closed-form cross-check, never inside an optimization loop.
 
-\subsection{Loss and optimizer}
+\subsection{Loss and optimizer [L]+[P]}
 \label{sec:model-loss}
-The loss is scale-invariant MSE between the readout intensity $R = |E|^2$
-(bpm output) and target intensity $I_t$: writing
-$\alpha^\star = \langle R, I_t\rangle / \langle R, R\rangle$ (closed-form,
-differentiable), the loss is
+With reconstruction $R$ and target intensity $I_t$, the loss is the
+scale-invariant mean-squared error
 \begin{equation}
 \label{eq:si-mse}
-\mathcal{L}(R, I_t) = \frac{1}{n_x}\big\| \alpha^\star R - I_t \big\|_2^2 \Big/ \max(I_t)^2,
+\mathcal{L}(R,I_t)=\frac{1}{n_x}\big\|\alpha^\star R-I_t\big\|_2^2\big/\max(I_t)^2,\qquad
+\alpha^\star=\langle R,I_t\rangle/\langle R,R\rangle,
 \end{equation}
-reported as $\mathrm{PSNR}_{\text{si}} = -10\log_{10}\mathcal{L}$. This
-replaces an earlier max-normalized PSNR metric that was not the same
-objective every optimizer minimized (a sum-normalized internal loss vs. a
-max-normalized reported score); loss and metric are now the same function
-up to a monotone transform, so an optimizer cannot minimize what it is
-asked to minimize and still score worse on what is reported.
-Optimization is Adam, learning rate $5\times 10^{-2}$, $n_{\text{iters}} =
-800$ (M1/M2; other tiers as noted at first use), on a softplus
-parameterization $E = \mathrm{softplus}(\theta) + 10^{-6}$ that enforces
-nonnegativity without a hard constraint, with $\mathcal{E}$-projection
-(Eq.~\eqref{eq:contrast-project}) applied after every step. The seed
-enters \emph{only} at initialization: $\theta_0 = \epsilon\, z$, $z \sim
-\mathcal{N}(0, I)$, $\epsilon = 10^{-2}$, drawn from a seeded generator;
-the forward model, loss, and optimizer updates are otherwise
-deterministic given $\theta$, so seed variation measures sensitivity to
-starting point, not to any other source of randomness.
+and we report $\mathrm{PSNR}_{\text{si}}=-10\log_{10}\mathcal{L}$, so the
+reported metric is a monotone transform of the optimized objective. The
+optimizer is Adam~\cite{kingma2015adam} (learning rate $5\times10^{-2}$,
+$800$ iterations, convergence tolerance $10^{-4}$) on a softplus
+parameterization $E=\mathrm{softplus}(\theta)+10^{-6}$ [P]. The random seed
+enters only through the initialization $\theta_0=10^{-2}z$,
+$z\sim\mathcal{N}(0,I)$; seed-to-seed spread therefore measures sensitivity
+to the starting point, not model or parameter uncertainty.
 
 \begin{table}[htbp]
 \centering
-\caption{\texttt{MediumParams}: every physical constant of the default
-medium (used throughout every experiment tier) and its
-source. Values are
-PVA/acrylamide-\emph{like} illustrative points chosen inside the cited
-literature ranges to produce the operating regime this paper analyzes,
-not a literature-exact refit of one specific published medium: where the
-default differs from a directly literature-anchored value (e.g.\ $D_0$,
-$\sigma$), both are given.}
+\caption{Default medium [P] and the source class of each value. The defaults
+are acrylamide/PVA-like illustrative values chosen inside cited ranges;
+they are not a refit of one published medium.}
 \label{tab:mediumparams}
 \begin{tabularx}{\linewidth}{l l X}
 \hline
 Parameter & Default & Source \\
 \hline
-$D_0$ & $0.1\,\mu\mathrm{m}^2/\mathrm{s}$ &
-  illustrative; literature-anchored PVA/AA value $0.01$,
-  Sheridan et al.~\cite{sheridan2012reply} \\
-$\sigma$ & $0.08\,\mu\mathrm{m}$ &
-  illustrative; literature range $0.01$--$0.04\,\mu\mathrm{m}$,
-  Gleeson et al.~\cite{gleeson2008chain} \\
-$\kappa$ & $2.0$ & calibration target, not literature-read \\
-$\gamma$ & $1.0$ & bimolecular-termination limit ($\gamma=0.5$--$1.0$) \\
-$\Delta n_{\max}$ & $3.5\times 10^{-3}$ &
-  illustrative; literature range $1.5$--$5\times 10^{-3}$ (AA/PVA studies) \\
-$k_{\text{bleach}}$ & $0.2$ & order-of-magnitude, not independently sourced \\
-$\alpha_D$ & $1.0$ & order-of-magnitude, not independently sourced \\
-$s$ (shrinkage) & $0.5\%$ &
-  unsourced placeholder (see Section~\ref{sec:discussion}); typical
-  AA/PVA magnitude \\
-$T$ (thickness) & $30\,\mu\mathrm{m}$ & operating-point choice \\
-$n_0$ & $1.5$ & typical polymer bulk index \\
-$\phi$ (slant) & $0^\circ$ & unslanted; slant swept separately (Sec.~\ref{sec:slant}) \\
+$D_0$ & $0.1\,\mu\mathrm{m}^2/\mathrm{s}$ & [P] illustrative; literature value for AA/PVA $0.01$~\cite{sheridan2012reply} [L] \\
+$\sigma$ & $0.08\,\mu\mathrm{m}$ & [P] illustrative; literature range $0.01$--$0.04\,\mu\mathrm{m}$~\cite{gleeson2008chain} [L] \\
+$\kappa$ & $2.0$ & [P] calibration choice, not literature-read \\
+$\gamma$ & $1.0$ & [P] within the literature range $0.5$--$1.0$~\cite{sheridan2000nonlocal} \\
+$\Delta n_{\max}$ & $3.5\times10^{-3}$ & [P] within the literature range $1.5$--$5\times10^{-3}$ (AA/PVA) \\
+$k_{\text{bleach}}$ & $0.2$ & [P] order of magnitude, not independently sourced \\
+$\alpha_D$ & $1.0$ & [P] order of magnitude, not independently sourced \\
+$\beta$ & $1.5$ & [P] shape constant of Eq.~\eqref{eq:npdd-dn} \\
+$s$ & $0.5\%$ & [P] placeholder of typical AA/PVA magnitude \\
+$T$, $n_0$, $\lambda$ & $30\,\mu$m, $1.5$, $405$\,nm & [P] operating point \\
+$\phi$ & $0^\circ$ & [P] unslanted; slant swept in Section~\ref{sec:slant} \\
+Grid & $n_x=1024$, $\mathrm{d}x=0.05\,\mu$m & [P] $51.2\,\mu$m periodic window \\
 \hline
 \end{tabularx}
 \end{table}
 
-\section{Media-in-the-Loop Optimization}
-Given target intensity $I_t$, we optimize the exposure $E(x)$ over the
-feasible set $\mathcal{E}(E_0, B_c)$ (Eq.~\eqref{eq:feasible-set}), with
-the twin (Section~\ref{sec:model-npdd}) inside the loss
-(Eq.~\eqref{eq:si-mse}). What follows defines the baselines and oracles
-compared against this optimization; the exposure parameterization,
-projection, loss, and optimizer are all as specified in
-Section~\ref{sec:model-loss} and used identically across every method
-below unless stated otherwise.
+% ======================================================================
+\section{Methods compared}
+\label{sec:method}
+All methods share the exposure parameterization, the projection onto
+$\mathcal{E}$ and the scoring on the full twin. \textbf{MIL} optimizes
+Eq.~\eqref{eq:si-mse} with the twin (NPDD + BPM) inside the loss.
+\textbf{Media-blind SGD (BSGD)} runs the same optimizer with the linear
+recording assumption $\Delta n=\Delta n_{\max}(E-\overline{E})$ and no
+shrinkage, then scores its exposure on the twin -- the practice MIL is
+compared against. \textbf{Gerchberg--Saxton (GS)} is the established
+alternating-projection phase-retrieval algorithm~\cite{gerchberg1972practical,fienup1982phase}
+[L]; its retrieved phase is converted to an exposure by the same linear
+assumption. \textbf{Linear pre-compensation (LPC)} [D] boosts each
+spatial-frequency component of the target by $1/H(K)$, with $H(K)$ the
+heuristic small-signal transfer function of Supplement S1, then projects.
+\textbf{Gamma pre-compensation (GPC)} [D] inverts a fitted pointwise
+saturating map in real space. \textbf{TV-regularized SGD (RSGD)} is BSGD
+with a total-variation penalty whose weight was tuned on the twin per budget
+(disclosed; the tuned weight is zero at all three budgets, so RSGD reduces
+to BSGD). \textbf{Saturation-only surrogate (SAT)} [D] optimizes against a
+pointwise saturating model with all transport removed, calibrated to the
+twin by one fitted parameter (NRMSE \SATFitNRMSE{} [S]). Two oracles
+optimize against an ideal linear medium: the \textbf{constrained oracle
+(ORC)} under the same exposure constraints, and an unconstrained oracle
+that optimizes $\Delta n$ directly. ORC is a gradient-optimized reference,
+not a proven bound on the true recording problem.
 
-\subsection{Baselines and oracle}
-\label{sec:baselines}
-We compare against three media-blind baselines, one reduced-physics
-surrogate, and two oracles, all
-under the identical exposure-domain constraints ($E \geq 0$, dose
-budget, contrast cap) where applicable. \emph{Media-blind SGD} optimizes
-assuming a linear, unsaturating medium ($\delta n \propto E$), then
-evaluates the resulting exposure on the real twin -- the standard
-practice this work argues against. \emph{Gerchberg-Saxton (GS)} performs
-classic far-field phase retrieval, then converts the retrieved phase to
-an exposure via the same naive linear assumption; closed-form, no
-optimizer~\cite{gerchberg1972practical}. \emph{Linear pre-compensation (LPC)} is a closed-form
-frequency-domain boost by $1/H(K)$ (the linearized recording transfer
-function), capped at the contrast budget -- the direct realization of
-the small-signal theory Section~\ref{sec:no-cliff} tests. The \emph{saturation-only surrogate} optimizes against a cheap
-pointwise model that keeps the medium's saturating index response and
-discards its transport physics entirely, then evaluates on the real twin
--- the control for whether the full recording PDE earns its cost
-(Section~\ref{sec:baseline-completeness}). The
-\emph{constrained oracle} optimizes and evaluates against an ideal
-linear medium under the same exposure-domain constraints as
-media-in-the-loop; the \emph{unconstrained oracle} optimizes an index
-profile $\delta n(x)$ directly against the ideal linear medium, with no
-exposure-domain constraints, only the physical saturation bound
-$|\delta n| \leq \delta n_{\max}$ (enforced via a soft $\tanh$ clamp).
-Comparing the two oracles isolates the cost of the exposure-domain
-constraints from the cost of the medium's own saturation physics; by
-construction the unconstrained oracle's feasible set is a superset of
-the constrained oracle's, so it can never score worse (verified as a
-regression test in the released code).
+The benchmark target is a binary bar pattern at spatial frequency $K$
+[P]; K values are rounded to even pixel periods so that each nominal $K$
+is rendered exactly. Iterative methods are run with three seeds;
+deterministic methods (GS, LPC, GPC) once. Intervals are two-sided 95\%
+Student-$t$ intervals over seeds unless a nonparametric
+bootstrap~\cite{efron1993bootstrap} is stated.
 
+% ======================================================================
 \section{Results}
-Every number below is generated directly from the raw per-job result
-data by an automated pipeline (see Data availability), never
-hand-transcribed -- \SeedCount\ seeds per
-iterative method, 15 spatial
-frequencies $K$ spanning 1.96--15.71\,rad/\textmu m, three contrast
-budgets $B_c \in \{2\times, 4\times, 8\times\}$.
+\label{sec:results}
+All numbers in this section are [S] unless marked, produced by the
+automated pipeline in the released code from per-job result files. The
+main grid (M1) covers \MOneNK{} spatial frequencies
+($K\in\{\MOneKList\}$\,rad/\textmu m) at three budgets
+$B_c\in\{2,4,8\}$, i.e.\ \MOneNCells{} cells; cells for which not every
+method finished all seeds are excluded (\MOneNExcluded{} such cells).
 
-\subsection{No sharp compensation cliff, but a smooth ceiling collapse}
+\subsection{Paired gain across spatial frequency and budget}
 \label{sec:no-cliff}
-That the recorded index response departs from a scaled copy of the
-exposure, in a way that depends on spatial frequency, is established for
-diffusive photopolymers~\cite{kowalski2016design}. What is \emph{not}
-established anywhere in that literature is where reshaping the exposure
-stops being able to compensate for it. We therefore derive that
-prediction ourselves and test it, rather than attributing it to anyone:
-a heuristic small-signal analysis of the recording transfer function (its
-status is discussed in Supplement S1) suggests a compensation cliff, a spatial frequency $K_c(B_c)$ beyond which the
-boost needed to pre-compensate the medium's rolloff exceeds the
-available contrast headroom, so paired gain (media-in-the-loop minus
-media-blind SGD) should cross from positive to negative near $K_c$.
-Figure~\ref{fig:F4} shows this is not what happens. Mean paired gain is
-\MeanGainTwoX{}/\MeanGainFourX{}/\MeanGainEightX{}~dB at
-$2\times/4\times/8\times$, and stays at or above zero at every one of the
-15 tested $K$ -- the minimum observed value across all budgets is
-\MinGainAllBudgets{}~dB (at $K=7.85$\,rad/\textmu m, $2\times$ budget,
-where the 95\% CI does include zero, as it also does at a small number
-of other high-$K$, high-budget points where both methods approach the
-medium's ceiling and the paired difference is correspondingly small;
-every reported mean stays non-negative regardless). The same point holds directly under the K* estimators
-(Supplement S1): because gain never crosses zero, neither returns a
-crossing at any budget -- there is no observed $K^*$ to compare
-against the predicted $K_c$
-(\KcPredTwoX/\KcPredFourX/\KcPredEightX\,rad/\textmu m at
-$2\times/4\times/8\times$; the heuristic and the self-consistent-vs-naive
-$K_c$ definition are in Supplement S1). We report this as a negative result for our own small-signal cliff
-prediction, not as an inconclusive one: the data spans the predicted
-$K_c$ at all three budgets with dense sampling and still shows no sign
-change. The finding is methodological rather than a refutation of a
-standing claim -- small-signal theory over-predicts the compensation
-limit, and what the data shows instead is a smooth collapse of the
-achievable ceiling, tracked by the saturation-respecting oracle
-(below). Across the full grid the sign is unanimous: mean paired gain is
-non-negative in all \WastedMediaNConfigs\ $(K,\text{budget})$ cells.
-Under a null hypothesis of no effect, with each cell's sign an
-independent fair coin, that outcome has probability
-$2^{-\WastedMediaNConfigs}$. The cells are not fully independent -- they
-share seeds and neighbouring $K$ -- so this is a consistency statement
-about the direction of the effect rather than a calibrated $p$-value,
-and the per-point confidence intervals above remain the quantitative
-claim. Diffraction efficiency -- an independent
-metric already computed alongside PSNR for every job in the sweep -- tells the same
-story: mean paired gain of
-\DEMeanGainTwoX/\DEMeanGainFourX/\DEMeanGainEightX\ percentage points at
-$2\times/4\times/8\times$, rising with budget exactly as the PSNR gain
-does, with \DENNegative\ negative value in \DENPairs\ paired comparisons
-(\DEMinGainAllBudgets\ percentage points, effectively zero). The two
-metrics do not diverge.
+Figure~\ref{fig:F4} shows the paired gain (MIL $-$ BSGD, PSNR$_{\text{si}}$)
+across the grid. It is positive in \MOneNPositive{} of \MOneNCells{} cells
+and its 95\% interval excludes zero in \MOneNCIAboveZero{} of them. The
+largest cell means are \MaxGainTwoX, \MaxGainFourX{} and \MaxGainEightX\,dB
+at $2\times$, $4\times$ and $8\times$, all at $K\le2.62$\,rad/\textmu m;
+grid means are \MeanGainTwoX/\MeanGainFourX/\MeanGainEightX\,dB. At the
+highest tested $K=\MOneKMax$ the gain is \GainHighKTwoX, \GainHighKFourX{}
+and \GainHighKEightX\,dB. One cell is negative: $K=\MOneNegK$\,rad/\textmu m
+at $\MOneNegBudget\times$, \MOneNegGain\,dB (95\% interval
+[\MOneNegCILo, \MOneNegCIHi]). The seed intervals are narrow because the
+seed only changes the initialization (Section~\ref{sec:model-loss}); they
+do not express parameter or model uncertainty, which
+Sections~\ref{sec:mismatch}--\ref{sec:joint-mismatch} address.
+
+Diffraction efficiency, computed alongside PSNR for every job, shows the
+same budget ordering (mean paired gain
+\DEMeanGainTwoX/\DEMeanGainFourX/\DEMeanGainEightX\ percentage points), but
+is less uniform in sign: \DENNegative{} of \DENPairs{} per-seed pairs are
+negative (minimum \DEMinGainAllBudgets\ percentage points).
+
+\textbf{The small-signal cliff prediction [D] versus the data [S].} A
+heuristic linearization of the recording equations (Supplement S1) predicts a
+spatial frequency $K_c(B_c)$ beyond which the pre-boost needed to undo the
+medium's rolloff exceeds the realized contrast, and hence a sign change of
+the paired gain. Evaluated with the realized contrast, it gives
+$K_c=\KcPredTwoX$, \KcPredFourX{} and \KcPredEightX\,rad/\textmu m. At
+$2\times$ the gain does cross zero, by linear interpolation at
+$K^*=\KstarTwoXInterp$\,rad/\textmu m, close to the predicted $K_c$, but it
+is positive again at every larger tested $K$; at $4\times$ and $8\times$ no
+crossing occurs. The data therefore do not show the persistent sign change
+the heuristic predicts; the single crossing at $2\times$ rests on one grid
+cell and a nine-point grid, and we do not treat its agreement with $K_c$ as
+confirmation. What the data do show is a decay of the gain with $K$ that is
+not monotone at this sampling: in every budget the gain at
+$K=\MOneNegK$ is lower than at the next grid point, $K=4.83$\,rad/\textmu m.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.95\linewidth]{../code/figures/paper/F4_headline_gain_vs_K.pdf}
-\caption{Paired gain (media-in-the-loop minus media-blind SGD) vs.\
-spatial frequency $K$, one curve per contrast budget, 95\% CI bands
-(\SeedCount\ seeds). Gain stays at or above zero at every tested $K$ and
-every budget; dashed vertical lines mark the predicted $K_c(B_c)$, at
-which no sign change occurs.}
+\caption{Simulated paired gain (MIL $-$ BSGD) vs.\ spatial frequency $K$,
+one curve per contrast budget, 95\% $t$-intervals over three seeds (which
+capture initialization sensitivity only). Dashed lines: heuristic
+$K_c(B_c)$ [D].}
 \label{fig:F4}
 \end{figure}
 
-What the gain curve does show is a smooth decay from a large advantage
-at low $K$ toward a small, non-zero plateau at high $K$, with the
-plateau value increasing with budget. We interpret this via the
-oracle comparison already in the pipeline: the gap between
-media-in-the-loop and the saturation-respecting constrained oracle
-(Section~\ref{sec:baselines}) narrows as $K$ increases, while the oracle's
-own achievable gain over media-blind SGD falls. That is, the ceiling
-itself collapses at high $K$, and media-in-the-loop tracks it down --
-the ``cliff'' in the original hypothesis is real headroom loss, but it
-is a property of what any exposure-domain-constrained method can
-achieve, not a location where media-in-the-loop specifically fails.
-The distinction matters for what a designer should expect: not a
-frequency past which chemistry-aware optimization stops paying, but a
-progressively smaller prize that it continues to collect in full.
+\textbf{Interpretation.} The constrained oracle's own advantage over BSGD
+falls with $K$ as MIL's does, which we read as a shrinking achievable
+ceiling for any exposure-constrained method rather than a frequency at
+which MIL specifically fails. This reading is consistent with the oracle
+data but is not a separately tested claim.
 
-Figure~\ref{fig:R1} shows this directly rather than only in aggregate PSNR: target,
-media-blind SGD, and media-in-the-loop reconstructions (1D transverse
-intensity profiles, matching this paper's 1D recording geometry, not 2D
-images) at the same sub-/near-/post-cliff $K$ used by the
-compute-matched control (Section~\ref{sec:compute-matched}), budget
-$2\times$. At low $K$ media-in-the-loop visibly tracks the target's bars
-while media-blind SGD barely modulates around a flat offset; at high $K$
-both reconstructions degrade to comparable fine-fringe error, the same
-ceiling collapse the gain curve shows numerically.
+Figure~\ref{fig:R1} shows single-seed reconstructions at the three
+$K$ points shared by the ablation and robustness studies, $2\times$ budget;
+Supplement S1 shows the corresponding exposures and index profiles.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{../code/figures/paper/R1_reconstructions.pdf}
-\caption{Target vs.\ media-blind SGD vs.\ media-in-the-loop, 1D
-profile overlays (left) and reconstruction error (right), at the three
-$K$ points the compute-matched control shares, budget $2\times$, seed
-\ROneSeedValue. Illustrative single-seed
-reconstructions, not the statistical claim (Figure~\ref{fig:F4} carries
-that); consistent with it.}
+\caption{Target, BSGD and MIL reconstructions (1D intensity profiles, left)
+and their errors (right) at $K=\SOneKSub$, \SOneKNear{} and
+\SOneKPost\,rad/\textmu m, budget $2\times$, seed \ROneSeedValue.
+Illustrative single-seed simulations; Fig.~\ref{fig:F4} carries the
+statistics.}
 \label{fig:R1}
 \end{figure}
 
-The mechanism behind R1's outcome (exposure and recorded-index profiles,
-Supplement S1) is direct: media-blind SGD's naive linear assumption
-drives the exposure toward near-binary swings that, at high $K$, clip
-$\Delta n(x)$ against $\Delta n_{\max}$ almost everywhere, wasting most
-of the available contrast budget on an index modulation the medium
-cannot deliver. Media-in-the-loop's optimized exposure stays inside the
-medium's linear-to-saturating transition -- the same saturation
-mechanism the component ablation (Section~\ref{sec:s1-ablation})
-identifies as the dominant constraint, visible here as an
-exposure-domain trade-off rather than only an aggregate number.
-
-\subsection{What write-once recording actually pays for}
+\subsection{Failure rate against an oracle reference}
 \label{sec:failure-rate}
-A mean PSNR gain is the wrong unit for this setting. What a write-once
-medium charges for is not average quality but ruined material: an
-exposure either yields a usable hologram or consumes a piece of film
-that cannot be reused. So we measure the failure rate directly, and
-measure ``wasted'' rather than asserting it, against a strong reference
-rather than a proven bound: the constrained oracle (Section~\ref{sec:baselines})
-is a gradient-optimized upper reference under a simplified
-exposure-to-index map, not a formally established ceiling on the true
-recording problem -- we verified its assumed index amplitude does not
-fall below the real recorder's on a range of representative exposures,
-but a finite-run numerical optimizer is never a proven global optimum.
-An exposure fails if its PSNR falls more than \WastedMediaThreshDB\,dB
-below this reference at the same $K$ and budget -- a round number tied
-to the oracle framework Section~\ref{sec:baselines} already defines,
-chosen before looking at the result, not fit to it. Across the
-\WastedMediaNConfigs\ $(K,\text{budget})$ configurations in the headline
-sweep, \WastedMediaBSGDFrac\% of media-blind SGD exposures fail this
-bar, against \WastedMediaMILFrac\% of media-in-the-loop exposures. The
-direction of the effect is stable across thresholds, though its size is
-not, and the spread is worth stating rather than summarizing: at
-\WastedMediaThreshDB\,dB the rates are \WastedMediaBSGDFrac\% vs.\
-\WastedMediaMILFrac\%, at 3\,dB \WastedMediaBSGDFracThreeDB\% vs.\
-\WastedMediaMILFracThreeDB\%, and at 1\,dB \WastedMediaBSGDFracOneDB\%
-vs.\ \WastedMediaMILFracOneDB\%. Media-in-the-loop is better at every
-threshold, but the gap narrows sharply at 1\,dB: a 1\,dB shortfall from
-the reference is common for both methods, and it is the larger, more
-consequential shortfalls that media-in-the-loop essentially removes.
-Under this criterion media-in-the-loop does not merely score a higher
-mean PSNR -- it lands close to this reference far more consistently
-than media-blind SGD does, at every threshold tested.
-
-Table~\ref{tab:failure-rate} extends the same measurement to every
-non-oracle baseline defined in Section~\ref{sec:baselines}, including
-the two added for this revision (RSGD, GPC). None of the added
-baselines closes the gap to media-in-the-loop: RSGD's failure rate
-tracks BSGD's closely at every threshold (expected, since the two
-coincide exactly at two of the three budgets, Section~\ref{sec:baseline-completeness}),
-and GPC's tracks LPC's closely, consistent with the same near-degeneracy.
-The saturation-only surrogate (SAT) is the closest any cheap baseline
-gets to media-in-the-loop by this measure at the two looser thresholds --
-lowest failure rate of any baseline at 2\,dB and matching media-in-the-loop's
-0\% at 3\,dB -- but at the stricter 1\,dB bar it fails as often as plain
-media-blind SGD (\WastedMediaSATFracOneDB\% vs.\ \WastedMediaBSGDFracOneDB\%),
-both well above media-in-the-loop's \WastedMediaMILFracOneDB\%. No baseline
-overtakes media-in-the-loop at any threshold tested, and the closed-form
-methods (GS, LPC, GPC) are consistently among the worst of the group at
-1\,dB and 2\,dB, never better than any seeded optimizer at either
-threshold.
+Because each exposure of a write-once medium consumes material, we also
+report how often a method falls far short of what is achievable. An
+exposure is counted as failed if its PSNR is more than a threshold below
+the constrained oracle's at the same cell; the 2\,dB threshold was fixed
+before the results were computed, and 1 and 3\,dB are reported to show
+sensitivity to that choice (Table~\ref{tab:failure-rate}). At 2\,dB,
+\WastedMediaBSGDFrac\% of BSGD cells and \WastedMediaMILFrac\% of MIL cells
+fail; at 3\,dB, \WastedMediaBSGDFracThreeDB\% and
+\WastedMediaMILFracThreeDB\%. At 1\,dB the rates are similar
+(\WastedMediaBSGDFracOneDB\% and \WastedMediaMILFracOneDB\%): MIL removes
+the large shortfalls but not the small ones. These rates are relative to a
+numerical reference (ORC), not to a proven optimum, and are computed over
+\WastedMediaNConfigs{} grid cells, not over independent physical trials.
 
 \begin{table}[htbp]
 \centering
-\caption{Failure rate (\% of the \WastedMediaNConfigs\ $(K,\text{budget})$
-configurations in the headline M1 grid whose PSNR falls more than the
-column threshold below the constrained oracle's reference score at the
-same $(K,\text{budget})$), for every non-oracle method. GS, LPC and GPC are
-single deterministic runs per configuration (closed-form, no optimizer
-seed -- Section~\ref{sec:baselines}); BSGD, SAT, RSGD and MIL are
-averaged over the same three seeds Section~\ref{sec:failure-rate} uses
-first.}
+\caption{Simulated failure rate: percentage of the \WastedMediaNConfigs{}
+M1 cells in which a method's seed-mean PSNR is more than the column
+threshold below the constrained oracle's. GS, LPC, GPC: one deterministic
+run per cell; others: mean over three seeds.}
 \label{tab:failure-rate}
 \begin{tabular}{lccc}
 \hline
@@ -656,427 +420,309 @@ GPC & \WastedMediaGPCFracOneDB\% & \WastedMediaGPCFrac\% & \WastedMediaGPCFracTh
 BSGD & \WastedMediaBSGDFracOneDB\% & \WastedMediaBSGDFrac\% & \WastedMediaBSGDFracThreeDB\% \\
 RSGD & \WastedMediaRSGDFracOneDB\% & \WastedMediaRSGDFrac\% & \WastedMediaRSGDFracThreeDB\% \\
 SAT & \WastedMediaSATFracOneDB\% & \WastedMediaSATFrac\% & \WastedMediaSATFracThreeDB\% \\
-MIL (ours) & \WastedMediaMILFracOneDB\% & \WastedMediaMILFrac\% & \WastedMediaMILFracThreeDB\% \\
+MIL & \WastedMediaMILFracOneDB\% & \WastedMediaMILFrac\% & \WastedMediaMILFracThreeDB\% \\
 \hline
 \end{tabular}
 \end{table}
 
-\subsection{Compute-matched confound control}
-\label{sec:compute-matched}
-A compute-matched arm repeats the comparison at three representative $K$
-(sub-/near-/post-cliff) with media-blind SGD given
-\texttt{compute\_match\_ratio}$\times$ more optimizer iterations,
-\texttt{compute\_match\_ratio} set from one representative per-iteration
-wall-clock measurement (a design-time target, not a per-job invariant
-this arm re-verifies -- archived wall-clock ratios between the two
-methods' actual jobs vary far more than this single ratio, since
-wall-clock is a noisy proxy sensitive to scheduling and hardware state)
-so its iteration allowance is intended to approximate media-in-the-loop's
-full-NPDD-forward-pass cost per iteration rather than matching its
-iteration count outright (full comparison figure in Supplement S6).
-Gain remains positive in both arms at all three $K$ and all three
-budgets; giving media-blind SGD a substantially larger iteration
-allowance, on this basis, does not close the gap. Media-in-the-loop's
-advantage is not an iteration-budget artifact, though this arm
-establishes robustness to a much larger baseline allowance rather than
-a verified equal-wall-clock comparison.
-
-\subsection{Baseline completeness}
+\subsection{Other baselines and the saturation-only surrogate}
 \label{sec:baseline-completeness}
-Section~\ref{sec:baselines} defines media-blind GS and linear
-pre-compensation (LPC) alongside SGD, but the results above compare only
-against media-blind SGD. Figure~\ref{fig:F4b} closes that gap: paired
-gain of GS, LPC, the saturation-only surrogate (SAT), a TV-regularized
-SGD variant (RSGD), and a pointwise gamma pre-compensation baseline
-(GPC), all over media-blind SGD, alongside media-in-the-loop, at budget
-$2\times$. GS and LPC are frequently \emph{worse} than plain media-blind
-SGD (GS: \GSGainMin{}--\GSGainMax{}\,dB; LPC: \LPCGainMin{}--\LPCGainMax{}\,dB,
-no consistent trend); media-in-the-loop stays non-negative at every
-tested $K$ (minimum \MILGainMinAtTwoX{}\,dB). LPC is the direct
-closed-form realization of the small-signal theory Section~\ref{sec:no-cliff}
-tests, so that it does not reliably beat even a media-blind optimizer is
-itself evidence for the paper's thesis. RSGD tests whether media-blind
-SGD's straw-man weakness is poor regularization rather than
-media-blindness itself: its per-budget penalty weight is twin-tuned
-(disclosed), and at the two lower budgets the tuned weight is exactly
-zero -- RSGD is numerically identical to BSGD there (gain
-\RSGDGainMin{}--\RSGDGainMax{}\,dB by construction); at $8\times$ gain
-stays centered on zero, within the tuning grid's noise floor. GPC
-inverts the medium's saturating map pointwise in real space (the
-standard display-calibration ``gamma correction'' recipe) rather than
-LPC's linearized frequency-domain inverse; its gain
-(\GPCGainMin{}--\GPCGainMax{}\,dB) is numerically close to LPC's at low
-$K$/heavy clipping (\GPCLPCMaxAbsDiffTwoX{}\,dB maximum difference) -- a
-real degeneracy, not a coincidence: any monotonic pre-boost survives the
-shared hard-clip step identically. Neither straw man rescues a
-media-blind or pointwise-only approach.
+Figure~\ref{fig:F4b} compares every non-oracle method with BSGD at
+$2\times$. GS (\GSGainMin{} to \GSGainMax\,dB) never improves on BSGD, and LPC
+(\LPCGainMin{} to \LPCGainMax\,dB) improves on it by at most
+\LPCGainMax\,dB; GPC (\GPCGainMin{} to \GPCGainMax\,dB) differs from LPC by at
+most \GPCLPCMaxAbsDiffTwoX\,dB, consistent with both hitting the same
+contrast clip. RSGD equals BSGD because its tuned penalty weight is zero.
+LPC is the direct closed-form use of the heuristic transfer function, so its
+failure to beat BSGD is further evidence that the small-signal picture does
+not describe this regime [S].
 
-\paragraph{Is the full recording model necessary?} Section~\ref{sec:s1-ablation}
-finds saturation dominant and the transport terms individually
-non-critical, inviting the obvious economy: keep the saturating
-nonlinearity, drop the PDE. The saturation-only surrogate (SAT) is the
-exact closed-form limit of the twin with every transport term removed,
-calibrated to the real twin by a one-parameter offline fit (NRMSE
-\SATFitNRMSE), then optimized and evaluated exactly as every other
-method. Calibrated, it is a real competitor, clearly better than the
-media-blind baselines, but does not close the gap: it recovers
-\SATFracOfMILTwoX\%, \SATFracOfMILFourX\% and \SATFracOfMILEightX\% of
-media-in-the-loop's mean gain at $2\times/4\times/8\times$, averaged --
-but that average conceals a strongly spatial-frequency-dependent
-shortfall: \SATSubCliffFracMin--\SATSubCliffFracMax\% recovered at
-sub-cliff $K=\SATSubCliffK$\,rad/\textmu m, falling to
-\SATNearCliffFrac\% by $K=\SATNearCliffK$, and
-\SATPostCliffFracMin--\SATPostCliffFracMax\% (sometimes failing to beat
-media-blind SGD at all) past the cliff. At low spatial frequency the
-medium's response is dominated by the pointwise saturating nonlinearity
-alone; at high frequency the transport terms are exactly the mechanism
-that smears the recorded fringe, so a model omitting them has nothing to
-say about the regime where compensation is hardest -- making the
-Section~\ref{sec:cost-benefit} compute argument evidence-backed and
-conditional rather than asserted, and showing the transport terms carry
-real joint information despite each being individually non-critical
-(Section~\ref{sec:s1-ablation}: that ablation measures redundancy
-between mechanisms one at a time; this measures their joint
-contribution once all three are removed together).
+The saturation-only surrogate asks whether the transport terms are needed at
+all. Averaged over $K$, SAT's gain is \SATFracOfMILTwoX\%,
+\SATFracOfMILFourX\% and \SATFracOfMILEightX\% of MIL's at
+$2\times/4\times/8\times$. Resolved by cell, SAT recovers
+\SATFracLowKMin--\SATFracLowKMax\% of MIL's gain at $K=1.96$ and
+\SATFracSecondKMin--\SATFracSecondKMax\% at $K=2.62$, but scores below BSGD
+in \SATNBelowBSGD{} of the \SATNCells{} cells where the ratio is defined.
+The pointwise surrogate is therefore useful only at the lowest spatial
+frequencies tested; elsewhere the full recording model is required for any
+gain in this benchmark.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.8\linewidth]{../code/figures/paper/F4b_baseline_comparison.pdf}
-\caption{Paired gain over media-blind SGD for GS, LPC, SAT, RSGD, GPC,
-and media-in-the-loop, budget $2\times$. RSGD coincides exactly with
-BSGD here since its tuned regularization weight at this budget is zero;
-GPC shares LPC's color (distinct marker) to flag where the two nearly
-coincide.}
+\caption{Simulated paired gain over BSGD for GS, LPC, GPC, RSGD, SAT and
+MIL, budget $2\times$. RSGD coincides with BSGD (tuned penalty weight zero).}
 \label{fig:F4b}
 \end{figure}
 
-\subsection{Is the compute worth it}
-\label{sec:cost-benefit}
-Media-in-the-loop's per-iteration cost is \ComputeMatchRatio$\times$
-media-blind SGD's (a full NPDD forward pass per iteration against one
-linear multiply), and its mean advantage at the lowest budget is only
-\MeanGainTwoX~dB. Whether that trade is worth making depends on what a
-failed exposure costs. For a rewritable spatial light modulator, a
-failed exposure costs one more display frame -- compute is the only
-resource spent, and \ComputeMatchRatio$\times$ the compute for
-\MeanGainTwoX~dB is a hard sell. Write-once photopolymer recording is
-different in kind: every exposure consumes physical medium that cannot
-be reused, so a media-blind exposure that turns out wrong is not a
-wasted frame but permanently degraded material -- the relevant
-comparison is compute cost against wasted-media cost, not compute
-against compute, and physical medium does not get cheaper by waiting
-for faster hardware. Nor is the choice binary: the saturation-only
-surrogate of Section~\ref{sec:baseline-completeness} recovers a
-substantial share of the gain at a small fraction of the cost, and is
-the right answer where the medium is cheap enough that the full twin
-cannot pay for itself.
+\subsection{Compute-matched control}
+\label{sec:compute-matched}
+MIL's per-iteration cost is about \ComputeMatchRatio$\times$ BSGD's
+(measured once, wall-clock). To test whether the gain is an iteration-count
+effect, BSGD was rerun with \ComputeMatchRatio$\times$ more iterations at the
+three $K$ points of Section~\ref{sec:mechanism}, budget $2\times$
+(Supplement S6). With that allowance the paired gain is
+\MTwoRGainSub, \MTwoRGainNear{} and \MTwoRGainPost\,dB at
+$K=\SOneKSub$, \SOneKNear{} and \SOneKPost\,rad/\textmu m. Wall-clock is a
+noisy proxy for compute, so this arm tests robustness to a much larger
+baseline iteration budget rather than an equal-FLOP comparison.
 
-\subsection{Physics-component ablation}
+\subsection{Which recording mechanism produces the gain}
+\label{sec:mechanism}
 \label{sec:s1-ablation}
-A component ablation isolates which NPDD mechanism drives the gain,
-removing one term at a time (non-locality, diffusion, dye depletion, or
-the saturating nonlinearity) and re-measuring paired gain at the three
-sub-/near-/post-cliff $K$, budget $2\times$ (full conditions and
-per-condition figure in Supplement S2). Removing non-locality,
-diffusion, or dye depletion individually leaves gain within
-\SOneNoDiffusionRatio--\SOneNoNonlocalityRatio$\times$ of the
-\SOneBaselineGain~dB baseline. Removing the saturation nonlinearity is
-qualitatively different: gain rises to \SOneNoSaturationGain~dB,
-\SOneNoSaturationRatio$\times$ the baseline. Saturation -- not
-non-locality, transport, or dye kinetics -- is the dominant physical
-constraint on how much media-in-the-loop can recover, consistent with
-the oracle-convergence picture in Section~\ref{sec:no-cliff}: it is
-specifically the medium's saturating index response that caps the
-achievable ceiling at high $K$.
+Table~\ref{tab:ablation} removes one mechanism at a time at three spatial
+frequencies, budget $2\times$ (three seeds). Every single-mechanism removal
+leaves a positive gain at every $K$; which removal matters depends on $K$.
+Linearizing the index map raises the gain at $K=\SOneKSub$ and
+\SOneKPost{} but lowers it at \SOneKNear\,rad/\textmu m; removing diffusion
+raises it at the two lower $K$. An earlier draft of this paper concluded
+that saturation, not transport, is the binding constraint; that conclusion
+came from $K$-averaged numbers, and the $K$-resolved data above do not
+support it.
+
+\begin{table}[htbp]
+\centering
+\caption{Simulated paired gain (dB) with one mechanism removed, budget
+$2\times$, mean of three seeds. ``No saturation'' replaces the $\tanh$ map
+by its linear limit; monomer depletion and dye bleaching still saturate $N$.}
+\label{tab:ablation}
+\begin{tabular}{lccc}
+\hline
+Condition & $K=\SOneKSub$ & $K=\SOneKNear$ & $K=\SOneKPost$ \\
+\hline
+Full model & \SOneGBaselineSub & \SOneGBaselineNear & \SOneGBaselinePost \\
+No non-locality ($\sigma=0$) & \SOneGNoNonlocSub & \SOneGNoNonlocNear & \SOneGNoNonlocPost \\
+No diffusion ($D_0=0$) & \SOneGNoDiffSub & \SOneGNoDiffNear & \SOneGNoDiffPost \\
+No dye depletion & \SOneGNoDyeSub & \SOneGNoDyeNear & \SOneGNoDyePost \\
+No saturation ($\tanh$ linearized) & \SOneGNoSatSub & \SOneGNoSatNear & \SOneGNoSatPost \\
+\hline
+\end{tabular}
+\end{table}
+
+\textbf{Mechanism factorial.} Because three mechanisms saturate the dose
+response, removing any one leaves the others. We therefore ran all $2^3$
+on/off combinations of monomer depletion (removed by holding $u=1$, an
+infinite monomer reservoir), dye bleaching ($k_{\text{bleach}}=0$) and the
+$\tanh$ map (Supplement S2, Fig.~S2). Removing monomer depletion at fixed
+$\kappa$ moves the medium far from its operating point (at unit dose the
+cured polymer rises from $N\approx1$ to $N\approx8.7$), so each such cell is
+also run with $\kappa$ rescaled to restore $N(E{=}1)=1$ [D]. A final
+control removes all three and sets $\kappa=1/(1.5\,t_{\text{total}})$, which
+makes the recording exactly BSGD's own linear model up to non-local blur and
+shrinkage [D]. In that control the paired gain is \SXGLinearMatchedSub,
+\SXGLinearMatchedNear{} and \SXGLinearMatchedPost\,dB; with only the $\tanh$
+map active (operating point matched) it is \SXGOnlyTanhMatchedSub,
+\SXGOnlyTanhMatchedNear{} and \SXGOnlyTanhMatchedPost\,dB; with only monomer
+depletion, \SXGOnlyMonomerSub, \SXGOnlyMonomerNear{} and
+\SXGOnlyMonomerPost\,dB; with only dye bleaching (matched),
+\SXGOnlyDyeMatchedSub, \SXGOnlyDyeMatchedNear{} and
+\SXGOnlyDyeMatchedPost\,dB, at $K=\SOneKSub$, \SOneKNear{} and
+\SOneKPost\,rad/\textmu m. These jobs ran on CPU; the full-model cell
+reproduces the GPU result to within \SXDeviceMaxDiff\,dB.
+
+\subsection{Dependence on grating slant}
+\label{sec:slant}
+Holding everything else fixed, the paired gain depends strongly on fringe
+slant $\phi$ (Fig.~\ref{fig:F11}, Supplement S3). At $K=1.96$\,rad/\textmu m
+it is \SEightGainKLowSlantZero, \SEightGainKLowSlantTwoFive,
+\SEightGainKLowSlantFive, \SEightGainKLowSlantTen{} and
+\SEightGainKLowSlantTwenty\,dB at $\phi=0^\circ$, $2.5^\circ$, $5^\circ$,
+$10^\circ$ and $20^\circ$; at $K=3.93$\,rad/\textmu m,
+\SEightGainKMidSlantZero, \SEightGainKMidSlantTwoFive,
+\SEightGainKMidSlantFive, \SEightGainKMidSlantTen{} and
+\SEightGainKMidSlantTwenty\,dB. The dependence is non-monotone: small slants
+increase the gain, and by $10^\circ$ it is below 0.2\,dB. The scalar readout
+disagrees with RCWA for slanted gratings (Section~\ref{sec:discussion}), so
+the slanted values are model-dependent. The headline results are restricted
+to unslanted gratings for that reason, and they should not be read as
+predictions for slanted reflection or transmission holograms.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.7\linewidth]{../code/figures/paper/F11_slant_dependence.pdf}
+\caption{Simulated paired gain vs.\ grating slant at two spatial frequencies,
+budget $2\times$, 95\% $t$-intervals over three seeds. Slanted values rely on
+a scalar readout outside its RCWA-checked range.}
+\label{fig:F11}
+\end{figure}
 
 \subsection{Robustness to twin miscalibration}
 \label{sec:mismatch}
-The practical question a write-once medium raises is not how the gain
-varies across media, but what happens when the twin used at design time
-is simply wrong about the medium that is later recorded. That requires
-breaking the two arms apart in time: we optimize the exposure once
-against the twin at its nominal parameters, then evaluate that same,
-already-committed exposure on a twin whose parameters have been
-perturbed, with no re-optimization. The exposure never learns it was
-designed for the wrong medium -- which is the situation a practitioner
-is actually in. Media-blind SGD needs no special handling as the control
-arm: it never used a medium parameter in the first place, so it is the
-arm that cannot be miscalibrated.
+Here the exposure is designed once on the nominal twin and scored, without
+re-optimization, on a twin with one parameter perturbed. BSGD uses no
+medium parameters in design, so only MIL can be hurt by the error. At the
+three $K$ points, budget $2\times$, with $D_0$, $\sigma$, $\kappa$ or
+$\Delta n_{\max}$ perturbed by $\pm10$, $\pm25$ or $\pm50\%$, the
+$K$-averaged gain ranges from \SThreeWorstWithinFifty{} to
+\SThreeBestWithinFifty\,dB (nominal \SThreeNominalGain\,dB; Supplement S4).
+$\Delta n_{\max}$ was swept further because our own Bayfol fits disagree on
+it by \BayfolDnMaxRatio$\times$ (Section~\ref{sec:twin-validation-ref}):
+the gain is \SThreeDnMaxAtMinusFifty\,dB at $-50\%$,
+\SThreeDnMaxAtMostNegative\,dB at $\SThreeDnMaxMostNegativePct\%$,
+\SThreeDnMaxAtPlusFifty\,dB at $+50\%$, \SThreeDnMaxAtHundred\,dB at
+$+100\%$ and \SThreeDnMaxAtMostPositive\,dB at
+$+\SThreeDnMaxMostPositivePct\%$. A twin that underestimates the medium's
+index budget by a factor of several can therefore make MIL worse than the
+media-blind baseline; between $+100\%$ and $+\SThreeDnMaxMostPositivePct\%$
+the sign-change point was not resolved.
 
-We perturb $D_0$, $\sigma$, $\kappa$ and $\Delta n_{\max}$ one at a
-time by $\{\pm10, \pm25, \pm50\}\%$, at the same three
-sub-/near-/post-cliff $K$ and budget $2\times$ used elsewhere (full
-per-parameter curves in Supplement S4). Media-in-the-loop's advantage
-survives the entire range: paired gain is \SThreeNominalGain~dB at
-nominal and stays between \SThreeWorstWithinFifty\ and
-\SThreeBestWithinFifty~dB across every tested perturbation of every
-parameter, never approaching zero.
-
-$\Delta n_{\max}$ is swept wider than the other three, because our own
-fits disagree about Bayfol's $\Delta n_{\max}$ by a factor of
-\BayfolDnMaxRatio{}$\times$ (Section~\ref{sec:twin-validation-ref}), and
-it is the one parameter where the advantage is not simply safe in one
-direction: the exposure is always designed at the nominal
-$\Delta n_{\max}$ and recorded on a medium whose \emph{true} ceiling is
-perturbed relative to that design. A perturbation of
-$\SThreeDnMaxMostNegativePct\%$ (bracketing the measured literature
-disagreement in the direction where the true medium holds \emph{less}
-index modulation than the design assumed -- the design over-estimates
-the true ceiling) leaves gain at \SThreeDnMaxAtMostNegative~dB:
-essentially at the boundary of zero, not comfortably positive. In the
-opposite direction, a $+\SThreeDnMaxFlipPct\%$ perturbation (the true
-medium holding \emph{more} than the design assumed -- the design
-under-estimates the true ceiling) is where gain is worst,
-\SThreeDnMaxWorstGain~dB, having already gone negative from
-\SThreeDnMaxAtHundred~dB at $+100\%$; gain is plausibly explained here by
-an under-estimating design driving the exposure harder than necessary to
-compensate for an assumed shortfall that was never real, then recording
-that over-driven exposure on the \emph{actually} higher-capacity medium
-at an amplitude beyond what was intended -- the same clipping-adjacent
-saturation mechanism Section~\ref{sec:s1-ablation} identifies as
-dominant. This does not worsen monotonically, though: at the most
-extreme perturbation tested, $+\SThreeDnMaxMostPositivePct\%$, gain is
-back to \SThreeDnMaxAtMostPositive~dB -- still slightly negative, but a
-partial recovery from the $+\SThreeDnMaxFlipPct\%$ minimum, not a
-continuing collapse. Taken together, $\Delta n_{\max}$ miscalibration at
-the magnitude actually observed across independent literature fits is a
-real risk in both directions, not a one-sided caveat.
-
-\subsection{Joint miscalibration}
+\subsection{Joint miscalibration, depth absorption, targets and noise}
 \label{sec:joint-mismatch}
-Section~\ref{sec:mismatch} perturbs one NPDD parameter at a time, but a
-real calibration error is never that clean -- every parameter is
-uncertain simultaneously. We repeat the same design/evaluate split with
-all four parameters ($D_0$, $\sigma$, $\kappa$, $\Delta n_{\max}$) drawn
-independently per trial, Uniform($-$\SSixPctRange\%, $+$\SSixPctRange\%)
-each, over \SSixNDraws\ independent Monte Carlo draws, reusing the exact
-exposures Section~\ref{sec:mismatch} already optimized rather than
-re-optimizing per draw. Paired gain stays positive on every single draw
-(\SSixNNegative\ of \SSixNDraws\ draws negative), ranging from
-\SSixWorstDrawGain\ to \SSixBestDrawGain~dB (mean \SSixMeanGain~dB, bootstrap
-95\% CI [\SSixBootCILo, \SSixBootCIHi]~dB over draws). The one-parameter-at-a-
-time robustness of Section~\ref{sec:mismatch} is not an artifact of
-testing parameters in isolation: the advantage survives all four being
-wrong together, at the same magnitude of error.
+With all four parameters drawn independently from
+Uniform($\pm$\SSixPctRange\%) in each of \SSixNDraws{} Monte Carlo draws,
+reusing the same designed exposures, the $K$-averaged gain ranges from
+\SSixWorstDrawGain{} to \SSixBestDrawGain\,dB (mean \SSixMeanGain\,dB,
+bootstrap 95\% interval [\SSixBootCILo, \SSixBootCIHi]); \SSixNNegative{} of
+\SSixNDraws{} draws are negative. Thirty draws bound the probability of a
+negative draw only loosely; this is not a proof that none exists.
 
-\paragraph{Target content and readout noise.} At one representative
-near-cliff $K$, the gain holds across three target families (periodic bars,
-sparse random spots, uncorrelated random binary) but varies in magnitude with
-content (Supplement S8), so it is real across scenes yet scene-dependent. It
-is also unchanged by a disclosed Gaussian detector-noise model at
-\SFiveNoiseStdPct\% of the reconstructed peak: \SFiveNoiselessGain~dB
-noiseless against \SFiveNoisyGain~dB noisy.
+Recording with Beer--Lambert attenuation through depth (16 independently
+recorded depth slices, same designed exposures) gives \SSevenGainODZero,
+\SSevenGainODOneTenth{} and \SSevenGainODThreeTenths\,dB at optical density
+0, 0.1 and 0.3. At a single near-cliff point, the gain for three target
+families is \SFourGainBarsTwoX{} (bars), \SFourGainSpotsTwoX{} (sparse
+spots) and \SFourGainRandomBinaryTwoX\,dB (random binary) at $2\times$, and
+a Gaussian detector-noise model at \SFiveNoiseStdPct\% of peak changes it
+from \SFiveNoiselessGain{} to \SFiveNoisyGain\,dB (Supplement S8).
 
-\section{Twin Validation}
+% ======================================================================
+\section{Twin validation against published data}
 \label{sec:twin-validation-ref}
-We fit the twin against \NLiteratureSources{} digitized curves from two
-independent, open-access sources: Bruder et
-al.~\cite{bruder2017bayfol} (Bayfol HX, $\Delta n_1$ vs.\ exposure dose at
-$K=8.98$\,rad/\textmu m, both their experimental and their own simulated
-series -- inside this paper's own tested range of
-1.96--15.71\,rad/\textmu m) and Hsieh et al.~\cite{hsieh2022pqpmma}
-(PQ/PMMA, $\Delta n_1$ vs.\ exposure time at $K=24.94$\,rad/\textmu m --
-outside that range, so an out-of-range check, not a same-regime one; this
-curve is that source's own simulated output from their
-independently-derived kinetic model, not a raw measurement).
+We fit the twin to digitized $\Delta n_1$(dose) curves from Bruder et
+al.~\cite{bruder2017bayfol} (Bayfol HX, $K=8.98$\,rad/\textmu m; the
+source's own kinetic simulation at 16.7\,mW/cm$^2$ and its measurement at
+19.2\,mW/cm$^2$) [L], and a $\Delta n_1$(time) curve from Hsieh et
+al.~\cite{hsieh2022pqpmma} (PQ/PMMA, $K=24.94$\,rad/\textmu m, itself a
+model output, outside our tested $K$ range) [L]. The curves were read
+visually from the published figures (estimated $\pm10\%$ in $x$, $\pm3$--5\%
+in $y$), not with a calibrated digitizer.
 
-An initial fit of $(\kappa, D_0)$, every other \texttt{MediumParams} field
-held at its literature-sourced default, fit all three curves poorly
-(NRMSE 0.68--0.87). A self-consistency check (refitting a synthetic
-curve generated by the twin itself, known parameters) recovered those
-parameters to within 2\% at NRMSE 0.03, ruling out a fitting-code bug.
-The cause was instead a citation-scoping error in the input: the
-Bayfol config's $\Delta n_{\max}$ had been taken from the source's
-Table~3, which its own text assigns to a \emph{separate} dye-screening
-experiment, rather than the dosage-response condition its Figure~3
-reports. Refitting with $\Delta n_{\max}$ free in place of $D_0$ dropped
-NRMSE to \NRMSEBestInRegime--\NRMSEWorstInRegime\ on the two in-regime
-Bayfol series (Figure~\ref{fig:F2}, best of 10 random-initialized fits).
+\textbf{In-sample fits [S].} With $(\kappa,\Delta n_{\max})$ free and
+$k_{\text{bleach}}=0.2$ held, best-of-ten fits reach NRMSE
+\NRMSEBestInRegime--\NRMSEWorstInRegime{} on the two Bayfol series and
+reproduce their rise-then-decline shape (Fig.~\ref{fig:F2}). An earlier fit
+with $D_0$ free was poor (NRMSE 0.68--0.87) because the medium configuration
+had imported $\Delta n_{\max}$ from a separate dye-screening experiment in
+the same source rather than from the dose-response condition being fitted;
+with $\Delta n_{\max}$ free that error is removed. The two Bayfol series'
+fitted $\Delta n_{\max}$ differ by \BayfolDnMaxRatio$\times$, which a single
+material ceiling should not do. With $k_{\text{bleach}}$ also free, in-sample
+NRMSE is \HoldoutBSimIn{} (simulated series) and \HoldoutBExpIn{}
+(measured series).
 
-Both in-regime fits clear NRMSE $<0.3$ (Figure~\ref{fig:F2}): the twin, with a
-corrected saturation ceiling, reproduces Bayfol HX's rise-then-decline
-$\Delta n_1$(dose) shape. That shape is not excluded by the saturating
-index response, as one might expect: it is the model's own diffusive
-smoothing of the recorded fringe that lets $\Delta n_1$ fall after a peak
-while the local index modulation keeps saturating. One residual
-inconsistency is reported directly, not smoothed over: the two Bayfol
-series' fitted $\Delta n_{\max}$ values (same material, two exposure
-intensities) disagree by a factor of \BayfolDnMaxRatio{}$\times$, which a
-single shared saturation ceiling should not do. The PQ/PMMA fit
-(NRMSE~0.10) is shown in Figure~\ref{fig:F2} but excluded from this in-regime
-conclusion for two reasons, not one: $K=24.94$\,rad/\textmu m sits
-1.6$\times$ above this paper's own tested grid, and its digitized curve is
-still rising, not yet saturated, at the full extent of the source's own
-plotted data -- a still-rising curve cannot identify $\Delta n_{\max}$ at
-all, so its low NRMSE reflects an under-constrained fit, not agreement.
-
-\textbf{A caveat on the dose axis.} The digitized curves are in units of
-exposure dose (or time), which the fit maps onto the twin's recording time
-directly, with the dye-bleaching rate $k_{\text{bleach}}=0.2$ held at its
-order-of-magnitude default rather than fitted or sourced. At that value the
-dye is more than $99.999\%$ depleted by a dose of about 150, so for every
-digitized curve most of its dose range is fitted in a regime where the
-twin's own equations predict essentially no further polymerization. In that
-regime the model's spatial contrast declines with further dose because
-diffusion keeps smoothing the recorded structure, which is the same
-mechanism we invoke above for the rise-then-decline shape. We verified that
-this behaviour is a converged property of the model, not a step-size
-artifact, but we have not validated it against an independent
-measurement, and we have not refitted with $k_{\text{bleach}}$ free or
-recovered the sources' illumination intensity to fix the dose-to-time
-conversion. The fitted $\kappa$ and $\Delta n_{\max}$ should therefore be
-read as effective parameters that reproduce the curve shapes, not as
-physically pinned values, and the agreement as a check on the shape of the
-response rather than on its dose scale.
+\textbf{Held-out prediction [S].} Both Bayfol series are plotted against dose
+and the twin is dose-reciprocal at $\gamma=1$, so parameters fitted to one
+series predict the other without refitting. With $k_{\text{bleach}}$ held,
+fitting the simulated series and predicting the measured one gives NRMSE
+\HoldoutASimOut; the reverse gives \HoldoutAExpOut. With $k_{\text{bleach}}$
+free the held-out NRMSEs are \HoldoutBSimOut{} and \HoldoutBExpOut. This is a
+weak test -- the two series share the material, grating and nearly the same
+intensity, and one is itself a model output -- and it does not test transfer
+across $K$ or across media.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{../code/figures/paper/F2_twin_validation.pdf}
-\caption{Twin (fitted $\kappa$, $\Delta n_{\max}$) vs.\ digitized
-literature curves, one panel per source series, best of 10 random-start
-fits. The two in-regime Bayfol HX series (left, center) both clear
-NRMSE~$<0.3$; the out-of-range, under-constrained PQ/PMMA series (right)
-is shown but not counted as in-regime evidence.}
+\caption{Twin fits (free $\kappa$, $\Delta n_{\max}$) to digitized literature
+curves, best of ten random starts. Left, center: Bayfol HX simulated and
+measured series~\cite{bruder2017bayfol}; right: PQ/PMMA~\cite{hsieh2022pqpmma},
+outside the tested $K$ range and still rising, so under-constrained.}
 \label{fig:F2}
 \end{figure}
 
-This is a mechanism-level validation, not a claim of quantitative
-agreement with either medium's absolute optical response: only one
-independent medium family is confirmed in-regime (two series from one
-Bayfol HX figure), $D_0$ and $\sigma$ were not independently re-audited to
-their exact source condition the way $\Delta n_{\max}$ was, and this
-paper's own headline claims are paired comparisons (media-in-the-loop minus
-media-blind SGD, same twin for both arms), so they do not require the
-twin's absolute response to match real photopolymers -- an
-exposure-independent systematic offset or ceiling error would cancel in
-the difference, common to both arms by construction, though this does
-not cover an exposure-dependent gap between the twin and a real medium
-(Section~\ref{sec:mismatch} tests robustness to a different, one-sided
-kind of error that does not cancel by any assumption). What this
-validation establishes is that the corrected twin reproduces the saturating,
-rise-then-decline index response identified in Section~\ref{sec:s1-ablation}
-as the dominant
-mechanism behind the paired-gain result, with effective parameter values
-that are not pinned to a real published medium (dose-axis caveat above). A
-parameter-spread extraction across independent sources still is not
-attempted, since one confirmed in-regime medium is not enough for that
-claim (documented alongside the released code). The two
-Optica-published NPDD papers identified as primary sources (multi-$K$
-growth-curve families, the regime this model was actually designed
-against, and a genuinely independent second medium family) remain
-paywalled; the released code documents what closing that gap needs.
+\textbf{What this establishes.} The twin can reproduce the qualitative
+Bayfol dose response with effective parameters; it is not pinned to a real
+medium. With $k_{\text{bleach}}=0.2$ held, the dye is almost fully depleted
+early in the digitized dose range, so the late decline of $\Delta n_1$ is
+produced in the model by diffusive smoothing after polymerization has
+stopped; we have not validated that mechanism independently. $D_0$ and
+$\sigma$ are identifiable only from multi-$K$ growth-curve families, which
+for NPDD media are in subscription-only sources we could not access. The
+headline claims rest on the paired design and on the one-sided
+miscalibration tests, not on absolute agreement with a real medium.
 
-\section{Discussion and Limitations}
+% ======================================================================
+\section{Discussion and limitations}
 \label{sec:discussion}
-This study is simulation-only; its claims are conditioned on a physics
-model (NPDD, Kogelnik coupled-wave theory~\cite{kogelnik1969coupled},
-split-step BPM), validated at the mechanism level against published data
-in Section~\ref{sec:twin-validation-ref}. Scalar
-diffraction bounds validity to moderate numerical apertures; we quantify
-this against rigorous coupled-wave analysis (RCWA) directly rather than
-asserting a validity range, over a \RCWAVGridNCases-case grid spanning
-$K$, $\Delta n$, polarization and slant (Supplement S5). Agreement is
-close for unslanted gratings (deviation $\leq$ \RCWAUnslantedMaxDev) but
-degrades sharply for a slanted $20^\circ$ geometry, reaching a maximum
-deviation of \RCWAVGridMaxDev\ at $K=12$\,rad/\textmu m. That is why the
-headline experiments are unslanted, where the scalar model is validated,
-and why the slanted geometries of Section~\ref{sec:slant} are reported as
-model-dependent rather than as validated results. It is also evidence for
-the modeling choice actually made: Kogelnik coupled-wave theory is used only as
-closed-form validation context, never inside an optimization loop or a
-reported reconstruction (Section~\ref{sec:model-readout}), and BPM's full
-split-step treatment has no single assumed diffraction order to lose
-track of the way Kogelnik does. Readout-side error of this kind moves
-absolute PSNRs more than paired gains, since the recording-side
-phenomena Section~\ref{sec:no-cliff} examines (and finds no sharp cliff
-in, only a smooth ceiling collapse) are, by construction of the paired
-comparison, upstream of readout.
+\textbf{Scope.} All results are simulation outputs of one model family,
+for one-dimensional transverse recording of binary bar targets, unslanted
+gratings, one default medium and three seeds per cell. Whether any of the
+gains transfer to a physical photopolymer is untested; the decisive
+experiment -- recording optimized and media-blind exposures in a
+characterized medium and comparing measured reconstructions -- is future
+work.
 
-The headline results (Sections~\ref{sec:no-cliff}--\ref{sec:baseline-completeness})
-use 1D transverse recording kinetics, isolating the recording-chemistry
-compensation problem from image-formation questions specific to a full
-2D hologram. Whether the gain persists for full 2D holograms is not tested
-here and is future work. Depth is also treated simply: the recorded index modulation is treated as
-uniform through the slab depth by default; depth ($z$) otherwise enters
-only at readout, through the $n_z=128$ propagation slices and the
-shrinkage-induced longitudinal compression, applied identically to both
-arms of every paired comparison. The slice count itself was checked for
-convergence (Supplement): the paired gain at $n_z=32$, the value used in
-an earlier version of this study, was not converged.
+\textbf{Readout validity.} Against RCWA~\cite{moharam1981rigorous}
+(computed with TORCWA~\cite{kim2023torcwa}) over a \RCWAVGridNCases-case grid
+of $K$, $\Delta n$, polarization and slant, Kogelnik theory deviates by at
+most \RCWAUnslantedMaxDev{} in diffraction efficiency for unslanted
+geometries but up to \RCWAVGridMaxDev{} for a $20^\circ$ slant (Supplement
+S5) [S]. This check concerns the closed-form reference, and the scalar BPM
+used in the design loop shares the paraxial-scalar approximation, so we
+restrict validated claims to unslanted gratings. The slant study
+(Section~\ref{sec:slant}) shows that this restriction is not a detail: the
+simulated gain changes by an order of magnitude over $0$--$10^\circ$.
 
-The size of the error the uniform-depth assumption admits is set by the
-film's optical density $\mathcal{D}$ at the recording wavelength: a
-back-surface exposure of 89\%, 79\% and 50\% of the front-surface value
-for $\mathcal{D} = 0.05$, $0.1$ and $0.3$ (weakly, borderline, and
-strongly absorbing films, respectively, at the default thickness). We
-test this directly rather than leave it purely parametric: extending the
-NPDD recorder to attenuate the recording exposure with depth
-(Beer--Lambert, independently re-recording at each of 16 depth slices)
-and propagating the resulting depth-resolved index profile through the
-BPM, the same exposures used in Section~\ref{sec:mismatch} give a paired
-gain of \SSevenGainODZero~dB at $\mathcal{D}=0$ (reproducing the
-uniform-depth result exactly, by construction), falling to
-\SSevenGainODOneTenth~dB at $\mathcal{D}=0.1$ and
-\SSevenGainODThreeTenths~dB at $\mathcal{D}=0.3$ -- narrowing by roughly
-13\% but never closing, even at the strongly-dyed end of the range. Dye
-bleaching is self-limiting and the gradient is common to both arms of
-every paired comparison, which is why the effect size narrows rather
-than the qualitative claim breaking. We did not measure $\mathcal{D}$
-for the media modelled here; a practitioner can close it with a single
-transmission measurement.
+\textbf{Model simplifications [P].} The recorded profile is uniform through
+depth except in the Beer--Lambert check; diffusion uses a spatially averaged
+coefficient; the index map and its shape constant are modelling choices;
+shrinkage is a placeholder value; the medium parameters are illustrative.
+The one-at-a-time ablation measures the effect of removing each mechanism in
+the presence of the others; the factorial of Section~\ref{sec:mechanism}
+covers interactions among the three saturating mechanisms only. We did not
+study how the gain varies with the medium parameters themselves.
 
-The physics
-ablation (Section~\ref{sec:s1-ablation}) is one-at-a-time and does not
-capture interactions between NPDD mechanisms, and we did not test how the
-gain varies with the medium parameters themselves (Section~\ref{sec:mismatch}
-tests miscalibration of the twin, which is a different question).
-Experimental two-beam closure (recording
-optimized vs. naive exposures in a characterized medium and comparing
-measured reconstructions) is explicitly future work.
+\textbf{Statistics.} Three seeds per cell measure initialization sensitivity,
+which is small here; the uncertainty that matters for application --
+model and parameter error -- is probed only by the miscalibration studies,
+over the ranges stated. The main grid samples \MOneNK{} spatial frequencies;
+features between grid points (such as the zero crossing at $2\times$) are
+not resolved.
 
-\paragraph{Calibrating this twin for a new medium.} Our own fitting
-experience (Section~\ref{sec:twin-validation-ref}) separates the
-parameter costs cleanly (full guidance in Supplement S7). Two --
-dose sensitivity $\kappa$ and saturation ceiling $\Delta n_{\max}$ -- are
-identifiable from a single published dose-response growth curve
-(NRMSE \NRMSEBestInRegime--\NRMSEWorstInRegime here). Two are not: $D_0$
-and $\sigma$ need a multi-$K$ growth-curve family or an independent
-measurement, since their signature is the spatial-frequency dependence
-of the response, not the single-$K$ curve most sources publish. The
-non-obvious lesson is provenance, not procedure: $\Delta n_{\max}$ must
-come from the same dosage-response condition being fitted, not a
-separate screening experiment at a different composition -- exactly the
-citation-scoping error this section's own fit caught and corrected.
+\textbf{Interpretation for practice.} If the twin's qualitative response
+is right, the results suggest that exposure-domain optimization through a
+recording model is most useful at low spatial frequency and unslanted
+geometry, and that its main practical benefit is removing large shortfalls
+(Table~\ref{tab:failure-rate}) rather than improving average quality. That
+is our reading of the simulated evidence, not a demonstrated property of a
+physical system.
+
+\textbf{Calibrating the twin for a new medium.} From our fitting experience
+(Supplement S7): $\kappa$ and $\Delta n_{\max}$ are identifiable from a single
+dose-response curve; $D_0$ and $\sigma$ need several spatial frequencies;
+$\Delta n_{\max}$ must come from the same experimental condition as the curve
+being fitted; and the miscalibration study shows that underestimating
+$\Delta n_{\max}$ by a large factor is the error most likely to reverse the
+benefit.
 
 \begin{backmatter}
 
 \bmsection{Funding}
-% Confirmed by the author: no external funding; all compute was run on
-% the author's own laptop GPU.
-This work received no external funding. All computation was performed
-on the author's personal hardware (a laptop-class NVIDIA RTX 3050 GPU).
+This work received no external funding. All computation was performed on
+the author's personal hardware (a laptop with an NVIDIA RTX 3050 GPU; the
+mechanism factorial, reduced compute-matched arm and parameter-sensitivity
+jobs ran on its CPU).
 
 \bmsection{Disclosures}
-% Confirmed by the author. Checked the rest of the repository (commit
-% history, docs, READMEs) for any other mention of funding sources,
-% collaborators, or conflicts before asserting this -- found none.
 The author declares no conflicts of interest.
 
 \bmsection{Data availability}
 {\sloppy
-All source code, experiment manifests, and raw result JSONs are available
+All source code, experiment manifests, raw per-job result files, and the
+scripts that generate every number and figure in this paper are available
 at \url{https://github.com/ultramagnus23/HoloForge} under
-\texttt{part2/code/}, released under the Apache 2.0 license.
+\texttt{part2/code/} (Apache 2.0); \texttt{part2/code/REPRODUCE.md} lists
+the commands.
 \par}
-A versioned snapshot of this release (v1.0.0) is archived at Zenodo:
-\url{https://doi.org/10.5281/zenodo.22202762}.
+% The Zenodo DOI below referred to an earlier release (v1.0.0). Mint a new
+% versioned release for this revision and update the DOI before submission.
+An archived snapshot of an earlier release is at
+\url{https://doi.org/10.5281/zenodo.22202762}; the snapshot corresponding to
+this version will be archived at submission.
 
 \end{backmatter}
 
-% optica-article.cls sets \bibliographystyle{opticajnl} internally --
-% do NOT override it here (an earlier version of this file had an
-% explicit \bibliographystyle{plain} after this point, which would have
-% silently clobbered the class's setting back to the wrong style).
 \bibliography{refs}
 
 \end{document}

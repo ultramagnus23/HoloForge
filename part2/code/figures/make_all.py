@@ -471,9 +471,10 @@ def make_F7_physics_ablation():
     return True
 
 
-def _render_F7(results):
+def _render_F7(results, conditions=None, out_name="F7_physics_ablation.pdf"):
     from manifest import S1_CONDITIONS, S1_K_POINTS
-    conditions = list(S1_CONDITIONS.keys())  # baseline first, by construction
+    if conditions is None:
+        conditions = list(S1_CONDITIONS.keys())  # baseline first, by construction
     Ks = sorted(round(k, 3) for k in S1_K_POINTS)
     by_key = {}
     for r in results:
@@ -484,7 +485,8 @@ def _render_F7(results):
     n_cond = len(conditions)
     w = 0.8 / n_cond
     colors = [COLORS["black"], COLORS["blue"], COLORS["bluish_green"],
-             COLORS["vermillion"], COLORS["orange"]]
+             COLORS["vermillion"], COLORS["orange"], COLORS["sky_blue"],
+             COLORS["reddish_purple"], COLORS["yellow"], "0.55", "0.75", "0.35", "0.9"]
     for i, cond in enumerate(conditions):
         means, los, his = [], [], []
         for K in Ks:
@@ -504,8 +506,23 @@ def _render_F7(results):
     ax.set_xticklabels([f"{k:.2f}" for k in Ks])
     ax.set_xlabel("K (rad/um) [sub-/near-/post-cliff]")
     ax.set_ylabel("paired gain MIL-BSGD (dB)")
-    ax.legend(frameon=False, fontsize=5, ncol=2)
-    savefig(fig, os.path.join(OUT_DIR, "F7_physics_ablation.pdf"))
+    ax.legend(frameon=False, fontsize=5, ncol=2 if n_cond <= 6 else 3)
+    savefig(fig, os.path.join(OUT_DIR, out_name))
+
+
+def make_F12_mechanism_factorial():
+    """S1X: 2^3 factorial over the three saturating mechanisms (monomer
+    depletion, dye depletion, tanh index map) plus operating-point-matched
+    and slope-matched linear controls, at the S1 K points, budget 2x."""
+    from manifest import S1X_CONDITIONS
+    path = os.path.join(OUT_DIR, "F12_mechanism_factorial.pdf")
+    results = [r for r in load_all_results() if r["experiment_id"] == "S1X"]
+    if not results:
+        no_data_placeholder(path, "F12 (S1X): mechanism factorial", "needs S1X manifest results.")
+        return False
+    _render_F7(results, conditions=list(S1X_CONDITIONS.keys()),
+               out_name="F12_mechanism_factorial.pdf")
+    return True
 
 
 def _k_averaged_seed_gains(by_key, key_prefix, all_K):
@@ -926,7 +943,7 @@ ALL_FIGURES = [
     make_F3a_rcwa_validity_envelope, make_F3b_regime_map,
     make_F4_headline_gain_vs_K, make_F4b_baseline_comparison, make_F5_Kstar_vs_Kc_scatter,
     make_F6_cliff_shift, make_F7_physics_ablation, make_F8_sensitivity_band,
-    make_F10_twin_mismatch, make_F11_slant_dependence,
+    make_F10_twin_mismatch, make_F11_slant_dependence, make_F12_mechanism_factorial,
     make_F9a_gradient_ablation, make_F9b_mesh_convergence, make_F9c_wavelength_detuning,
     make_R1_reconstructions, make_R2_2d_reconstructions, make_R3_exposure_profiles,
 ]
