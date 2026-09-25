@@ -1,0 +1,122 @@
+{
+ "git_commit": "ba144276e4db56c3a94e51ed05816b89df0561d5",
+ "experiment_id": "S1X",
+ "method_id": "MIL",
+ "seed": 2,
+ "config": {
+  "n_x": 1024,
+  "dx": 0.05,
+  "lam_um": 0.405,
+  "n_iters": 800,
+  "converge_tol": 0.0001,
+  "contrast_cap": 2.0,
+  "dose_budget": 1.0,
+  "medium": {
+   "D0": 0.1,
+   "sigma": 0.08,
+   "kappa": 0.23130352854993314,
+   "gamma": 1.0,
+   "dn_max": 0.0035,
+   "k_bleach": 0.2,
+   "alpha_D": 1.0,
+   "shrinkage": 0.005,
+   "thickness": 30.0,
+   "n0": 1.5,
+   "fixed_monomer": true,
+   "linearize_index_map": true
+  },
+  "target": {
+   "kind": "bars",
+   "period_px": 96
+  },
+  "K_nominal": 1.308996938995747,
+  "ablation_condition": "only_dye_matched",
+  "n_z": 128,
+  "slant_deg": 0.0
+ },
+ "config_hash": "3fffc770be3502f4",
+ "device": "cpu",
+ "device_name": "cpu:AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+ "dtype": "torch.float32",
+ "loss_curve": [
+  [
+   0,
+   0.24981224536895752
+  ],
+  [
+   50,
+   0.06505189090967178
+  ],
+  [
+   100,
+   0.05703328549861908
+  ],
+  [
+   150,
+   0.053652651607990265
+  ],
+  [
+   200,
+   0.05185619741678238
+  ],
+  [
+   250,
+   0.05075540766119957
+  ],
+  [
+   300,
+   0.05002227798104286
+  ],
+  [
+   350,
+   0.049513205885887146
+  ],
+  [
+   400,
+   0.04904278367757797
+  ],
+  [
+   450,
+   0.04868202283978462
+  ],
+  [
+   500,
+   0.0484459362924099
+  ],
+  [
+   550,
+   0.048139818012714386
+  ],
+  [
+   600,
+   0.04772607982158661
+  ],
+  [
+   650,
+   0.04741985350847244
+  ],
+  [
+   700,
+   0.047167882323265076
+  ],
+  [
+   750,
+   0.04694768041372299
+  ],
+  [
+   799,
+   0.04677349328994751
+  ]
+ ],
+ "iterations_run": 799,
+ "early_stop_reason": "n_iters_exhausted",
+ "wall_s": 119.82991552352905,
+ "peak_mem_mb": null,
+ "psnr": 13.300276756286621,
+ "psnr_maxnorm_legacy": 12.685972213745117,
+ "diffraction_efficiency": 0.8144852225914562,
+ "contrast": {
+  "max_over_mean": 2.0000014305114746,
+  "p95_over_mean": 2.0000014305114746
+ }
+}

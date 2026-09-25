@@ -301,8 +301,8 @@ All numbers in this section are [S] unless marked, produced by the
 automated pipeline in the released code from per-job result files. The
 main grid (M1) covers \MOneNK{} spatial frequencies
 ($K\in\{\MOneKList\}$\,rad/\textmu m) at three budgets
-$B_c\in\{2,4,8\}$, i.e.\ \MOneNCells{} cells; cells for which not every
-method finished all seeds are excluded (\MOneNExcluded{} such cells).
+$B_c\in\{2,4,8\}$, i.e.\ \MOneNCells{} cells, each with every method and
+seed complete.
 
 \subsection{Paired gain across spatial frequency and budget}
 \label{sec:no-cliff}
@@ -450,9 +450,13 @@ effect, BSGD was rerun with \ComputeMatchRatio$\times$ more iterations at the
 three $K$ points of Section~\ref{sec:mechanism}, budget $2\times$
 (Supplement S6). With that allowance the paired gain is
 \MTwoRGainSub, \MTwoRGainNear{} and \MTwoRGainPost\,dB at
-$K=\SOneKSub$, \SOneKNear{} and \SOneKPost\,rad/\textmu m. Wall-clock is a
-noisy proxy for compute, so this arm tests robustness to a much larger
-baseline iteration budget rather than an equal-FLOP comparison.
+$K=\SOneKSub$, \SOneKNear{} and \SOneKPost\,rad/\textmu m, against
+\SOneGBaselineSub, \SOneGBaselineNear{} and \SOneGBaselinePost\,dB when both
+arms get the same iteration count (Table~\ref{tab:ablation}, full model). The
+extra iterations narrow the gap at the two lower $K$ and leave it unchanged at
+$K=\SOneKPost$; it stays positive at all three. Wall-clock is a noisy proxy for compute, so this arm
+tests robustness to a much larger baseline iteration budget rather than an
+equal-FLOP comparison.
 
 \subsection{Which recording mechanism produces the gain}
 \label{sec:mechanism}
@@ -504,8 +508,38 @@ depletion, \SXGOnlyMonomerSub, \SXGOnlyMonomerNear{} and
 \SXGOnlyMonomerPost\,dB; with only dye bleaching (matched),
 \SXGOnlyDyeMatchedSub, \SXGOnlyDyeMatchedNear{} and
 \SXGOnlyDyeMatchedPost\,dB, at $K=\SOneKSub$, \SOneKNear{} and
-\SOneKPost\,rad/\textmu m. These jobs ran on CPU; the full-model cell
-reproduces the GPU result to within \SXDeviceMaxDiff\,dB.
+\SOneKPost\,rad/\textmu m (with both nonlinearities besides the $\tanh$
+map removed, the default $\kappa$ already cures the medium to $N\approx1$ at
+unit dose, so the monomer-only cell needs no rescaling). With the
+$\tanh$ map and dye bleaching active and monomer depletion removed (matched),
+the gain is \SXGNoMonomerMatchedSub, \SXGNoMonomerMatchedNear{} and
+\SXGNoMonomerMatchedPost\,dB. The factorial jobs ran on CPU; the full-model
+cell reproduces the GPU result of Table~\ref{tab:ablation} to within
+\SXDeviceMaxDiff\,dB.
+
+Three observations follow directly from these numbers [S]. First, when the
+recording is exactly the media-blind model up to blur and shrinkage, MIL
+gains essentially nothing at the two lower $K$, so the gain there requires a
+nonlinear dose response; at $K=\SOneKPost$ the linear control's gain
+(\SXGLinearMatchedPost\,dB) is comparable to the full model's
+(\SOneGBaselinePost\,dB), so the small gain at that $K$ may come from the blur
+and shrinkage BSGD ignores rather than from nonlinearity. Second, each of the three saturating mechanisms on
+its own, at a matched operating point, produces a gain at the two lower $K$,
+so no single mechanism is necessary. Third, among the operating-point-matched
+conditions, monomer depletion alone produces the largest gain at every $K$ --
+larger than the full model, especially at
+$K=\SOneKPost$ -- so combining mechanisms does not add their effects.
+Without operating-point matching, removing monomer depletion either saturates
+the $\tanh$ map everywhere (both methods then fail equally) or, with the map
+linearized, leaves an index modulation an order of magnitude or more
+deeper than BSGD assumes, where the gain measures modulation-depth mismatch rather than
+saturation (Supplement S2).
+
+\textbf{Interpretation.} In this model the low-$K$ gain comes from designing
+through whichever dose-response nonlinearity is present, not from one
+privileged mechanism. The matched-operating-point criterion ($N(E{=}1)=1$) is our
+choice; other normalizations could change the ranking of the single
+mechanisms, though not the null result of the linear control.
 
 \subsection{Dependence on grating slant}
 \label{sec:slant}
@@ -542,8 +576,8 @@ three $K$ points, budget $2\times$, with $D_0$, $\sigma$, $\kappa$ or
 $\Delta n_{\max}$ perturbed by $\pm10$, $\pm25$ or $\pm50\%$, the
 $K$-averaged gain ranges from \SThreeWorstWithinFifty{} to
 \SThreeBestWithinFifty\,dB (nominal \SThreeNominalGain\,dB; Supplement S4).
-$\Delta n_{\max}$ was swept further because our own Bayfol fits disagree on
-it by \BayfolDnMaxRatio$\times$ (Section~\ref{sec:twin-validation-ref}):
+$\Delta n_{\max}$ was swept further because our own Bayfol fits with $k_{\text{bleach}}$ held
+disagree on it by \BayfolDnMaxRatio$\times$ (Section~\ref{sec:twin-validation-ref}):
 the gain is \SThreeDnMaxAtMinusFifty\,dB at $-50\%$,
 \SThreeDnMaxAtMostNegative\,dB at $\SThreeDnMaxMostNegativePct\%$,
 \SThreeDnMaxAtPlusFifty\,dB at $+50\%$, \SThreeDnMaxAtHundred\,dB at
@@ -602,7 +636,14 @@ and the twin is dose-reciprocal at $\gamma=1$, so parameters fitted to one
 series predict the other without refitting. With $k_{\text{bleach}}$ held,
 fitting the simulated series and predicting the measured one gives NRMSE
 \HoldoutASimOut; the reverse gives \HoldoutAExpOut. With $k_{\text{bleach}}$
-free the held-out NRMSEs are \HoldoutBSimOut{} and \HoldoutBExpOut. This is a
+free the held-out NRMSEs are \HoldoutBSimOut{} and \HoldoutBExpOut. Freeing
+$k_{\text{bleach}}$ also changes the fitted parameters: $k_{\text{bleach}}$
+comes out at \HoldoutBSimKbleach{} and \HoldoutBExpKbleach{} (below the
+default 0.2), and the two series' fitted $\Delta n_{\max}$ become
+\HoldoutBSimDnMax{} and \HoldoutBExpDnMax, much closer than the
+\HoldoutASimDnMax{} and \HoldoutAExpDnMax{} obtained with $k_{\text{bleach}}$
+held. Most of the \BayfolDnMaxRatio$\times$ disagreement noted above is
+therefore an artefact of the held dye-bleaching rate. This is a
 weak test -- the two series share the material, grating and nearly the same
 intensity, and one is itself a model output -- and it does not test transfer
 across $K$ or across media.
@@ -656,8 +697,12 @@ coefficient; the index map and its shape constant are modelling choices;
 shrinkage is a placeholder value; the medium parameters are illustrative.
 The one-at-a-time ablation measures the effect of removing each mechanism in
 the presence of the others; the factorial of Section~\ref{sec:mechanism}
-covers interactions among the three saturating mechanisms only. We did not
-study how the gain varies with the medium parameters themselves.
+covers interactions among the three saturating mechanisms only. How the
+gain varies with the medium itself was checked at one point only
+($K=\SOneKPost$\,rad/\textmu m, budget $2\times$): with both arms
+re-optimized on media whose $D_0$, $\sigma$ or $\kappa$ is changed by up to
+$\pm50\%$, the gain ranges from \STwoGainMin{} to \STwoGainMax\,dB
+(nominal \STwoBaselineGain\,dB) [S].
 
 \textbf{Statistics.} Three seeds per cell measure initialization sensitivity,
 which is small here; the uncertainty that matters for application --

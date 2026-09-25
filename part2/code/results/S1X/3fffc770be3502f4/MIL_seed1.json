@@ -1,0 +1,122 @@
+{
+ "git_commit": "ba144276e4db56c3a94e51ed05816b89df0561d5",
+ "experiment_id": "S1X",
+ "method_id": "MIL",
+ "seed": 1,
+ "config": {
+  "n_x": 1024,
+  "dx": 0.05,
+  "lam_um": 0.405,
+  "n_iters": 800,
+  "converge_tol": 0.0001,
+  "contrast_cap": 2.0,
+  "dose_budget": 1.0,
+  "medium": {
+   "D0": 0.1,
+   "sigma": 0.08,
+   "kappa": 0.23130352854993314,
+   "gamma": 1.0,
+   "dn_max": 0.0035,
+   "k_bleach": 0.2,
+   "alpha_D": 1.0,
+   "shrinkage": 0.005,
+   "thickness": 30.0,
+   "n0": 1.5,
+   "fixed_monomer": true,
+   "linearize_index_map": true
+  },
+  "target": {
+   "kind": "bars",
+   "period_px": 96
+  },
+  "K_nominal": 1.308996938995747,
+  "ablation_condition": "only_dye_matched",
+  "n_z": 128,
+  "slant_deg": 0.0
+ },
+ "config_hash": "3fffc770be3502f4",
+ "device": "cpu",
+ "device_name": "cpu:AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+ "dtype": "torch.float32",
+ "loss_curve": [
+  [
+   0,
+   0.2498159408569336
+  ],
+  [
+   50,
+   0.06505779922008514
+  ],
+  [
+   100,
+   0.05702873691916466
+  ],
+  [
+   150,
+   0.05366291105747223
+  ],
+  [
+   200,
+   0.051872458308935165
+  ],
+  [
+   250,
+   0.050766319036483765
+  ],
+  [
+   300,
+   0.05002955347299576
+  ],
+  [
+   350,
+   0.04952063038945198
+  ],
+  [
+   400,
+   0.049083173274993896
+  ],
+  [
+   450,
+   0.04868798330426216
+  ],
+  [
+   500,
+   0.048448290675878525
+  ],
+  [
+   550,
+   0.04818267375230789
+  ],
+  [
+   600,
+   0.04781990870833397
+  ],
+  [
+   650,
+   0.047473736107349396
+  ],
+  [
+   700,
+   0.047151125967502594
+  ],
+  [
+   750,
+   0.04691288247704506
+  ],
+  [
+   799,
+   0.046755995601415634
+  ]
+ ],
+ "iterations_run": 799,
+ "early_stop_reason": "n_iters_exhausted",
+ "wall_s": 124.55553269386292,
+ "peak_mem_mb": null,
+ "psnr": 13.301886558532715,
+ "psnr_maxnorm_legacy": 12.691720962524414,
+ "diffraction_efficiency": 0.8144586118575146,
+ "contrast": {
+  "max_over_mean": 2.0000014305114746,
+  "p95_over_mean": 2.0000014305114746
+ }
+}

@@ -67,3 +67,22 @@ contradicted by the data, M2 not run, main grid at 9 of 15 K points).
 - Item #4 depends on the author obtaining the two paywalled papers.
 - All GPU-hour figures are estimates from observed 4-worker job times (~25 min per MIL
   job, ~4-5 min per BSGD/oracle job).
+
+## Status after the 2026-09-26 rewrite session
+
+- #1 Write-up: DONE. Manuscript and supplement rewritten against regenerated macros
+  (complete M1 cells only, now 10 K x 3 budgets = 30 cells after M1C), with
+  [L]/[P]/[D]/[S] evidence classes, a claim-provenance table (S10) and an errata
+  section (S11). Composed length 8 pages (generated `oe_main_lengthcheck.tex`).
+- #2 Decisive ablation: DONE (S1X, 216 jobs, CPU). Slope-matched linear control
+  gives ~0 gain at the two lower K; each saturating mechanism alone (matched
+  operating point) gives gain; monomer depletion alone gives the most.
+- #3 Structural uncertainty: PARTIAL. S2R (one K, D0/sigma/kappa +-50%, both arms
+  re-optimized) done: gain 0.08-0.15 dB vs 0.11 nominal. Seed CIs are now described
+  as initialization sensitivity only.
+- #4 Twin fit: PARTIAL. k_bleach-free refit + held-out cross-series prediction
+  (Bayfol sim <-> exp) done: held-out NRMSE 0.31-0.40; the 5.7x dn_max disagreement
+  shrinks to ~1.3x. Cross-K / cross-media validation still needs the paywalled data.
+- #5 Outside expert read: NOT DONE (author's side).
+- Nice-to-haves: reduced M2 (M2R) DONE; M1B partially (K = 3.93 cell via M1C);
+  release: REPRODUCE.md DONE, new Zenodo DOI not minted; 2D check not run.
