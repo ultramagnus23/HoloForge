@@ -69,7 +69,7 @@ from style import (new_fig, savefig, no_data_placeholder, COLORS,
                    BUDGET_LINESTYLES, BUDGET_MARKERS,
                    SINGLE_COL_IN, DOUBLE_COL_IN)
 from analysis.aggregate import (load_all_results as _load_all_results_raw,
-                                group_by_config,
+                                group_by_config, split_complete_m1,
                                 headroom_closure, gain_curve, BUDGETS,
                                 mean_std_median_ci95, paired_gain,
                                 gain_vs_bsgd_seed_mean)
@@ -92,6 +92,12 @@ def load_all_results():
     regression test that fixed a broken byte-size heuristic and then
     found the figure it was "testing" wasn't even seeing the test data)."""
     return _load_all_results_raw(rm.RESULTS_ROOT)
+
+
+def load_grouped_complete():
+    """Grouped results with incomplete M1 cells dropped (same rule as
+    analysis.aggregate.load_grouped_complete), from run_manifest.RESULTS_ROOT."""
+    return split_complete_m1(group_by_config(load_all_results()))[0]
 
 
 def _load_json(*parts):
@@ -252,7 +258,7 @@ def make_F4_headline_gain_vs_K():
     second panel and final two-panel layout are deferred until M1 data
     exists to design around (agreed run-order: look at M1 before
     committing to a panel layout for the headline figure)."""
-    grouped = group_by_config(load_all_results())
+    grouped = load_grouped_complete()
     closure = headroom_closure(grouped, "M1", budgets=BUDGETS)
     if all(r.get("status") == "no_data" for r in closure):
         no_data_placeholder(
@@ -314,7 +320,7 @@ def make_F4b_baseline_comparison():
     for the investigated, target-dependent degeneracy) -- shown here
     rather than hidden, sharing GPC's color with LPC in figures/style.py
     to make that visually legible."""
-    grouped = group_by_config(load_all_results())
+    grouped = load_grouped_complete()
     budget = 2.0
     curves = {"MIL": gain_curve(grouped, "M1", budget, method="MIL"),
               # SAT/RSGD are seeded optimizers like MIL, so they get the
@@ -354,7 +360,7 @@ def make_F4b_baseline_comparison():
 
 
 def make_F5_Kstar_vs_Kc_scatter():
-    grouped = group_by_config(load_all_results())
+    grouped = load_grouped_complete()
     closure = headroom_closure(grouped, "M1", budgets=BUDGETS)
     valid = [r for r in closure if r.get("status") != "no_data"]
     if not valid:
@@ -394,7 +400,7 @@ def make_F6_cliff_shift():
     gain at M2's matched K's, side by side with M1's gain at the same K's,
     shows the compute-matched arm doesn't change the story -- MIL's
     advantage isn't an artifact of more optimizer iterations."""
-    grouped = group_by_config(load_all_results())
+    grouped = load_grouped_complete()
     m1_curve = gain_curve(grouped, "M1", BUDGETS[0])
     m2_curve = gain_curve(grouped, "M2", BUDGETS[0])
     if not m1_curve or not m2_curve:
@@ -465,9 +471,10 @@ def make_F7_physics_ablation():
     return True
 
 
-def _render_F7(results):
+def _render_F7(results, conditions=None, out_name="F7_physics_ablation.pdf"):
     from manifest import S1_CONDITIONS, S1_K_POINTS
-    conditions = list(S1_CONDITIONS.keys())  # baseline first, by construction
+    if conditions is None:
+        conditions = list(S1_CONDITIONS.keys())  # baseline first, by construction
     Ks = sorted(round(k, 3) for k in S1_K_POINTS)
     by_key = {}
     for r in results:
@@ -478,7 +485,8 @@ def _render_F7(results):
     n_cond = len(conditions)
     w = 0.8 / n_cond
     colors = [COLORS["black"], COLORS["blue"], COLORS["bluish_green"],
-             COLORS["vermillion"], COLORS["orange"]]
+             COLORS["vermillion"], COLORS["orange"], COLORS["sky_blue"],
+             COLORS["reddish_purple"], COLORS["yellow"], "0.55", "0.75", "0.35", "0.9"]
     for i, cond in enumerate(conditions):
         means, los, his = [], [], []
         for K in Ks:
@@ -498,8 +506,23 @@ def _render_F7(results):
     ax.set_xticklabels([f"{k:.2f}" for k in Ks])
     ax.set_xlabel("K (rad/um) [sub-/near-/post-cliff]")
     ax.set_ylabel("paired gain MIL-BSGD (dB)")
-    ax.legend(frameon=False, fontsize=5, ncol=2)
-    savefig(fig, os.path.join(OUT_DIR, "F7_physics_ablation.pdf"))
+    ax.legend(frameon=False, fontsize=5, ncol=2 if n_cond <= 6 else 3)
+    savefig(fig, os.path.join(OUT_DIR, out_name))
+
+
+def make_F12_mechanism_factorial():
+    """S1X: 2^3 factorial over the three saturating mechanisms (monomer
+    depletion, dye depletion, tanh index map) plus operating-point-matched
+    and slope-matched linear controls, at the S1 K points, budget 2x."""
+    from manifest import S1X_CONDITIONS
+    path = os.path.join(OUT_DIR, "F12_mechanism_factorial.pdf")
+    results = [r for r in load_all_results() if r["experiment_id"] == "S1X"]
+    if not results:
+        no_data_placeholder(path, "F12 (S1X): mechanism factorial", "needs S1X manifest results.")
+        return False
+    _render_F7(results, conditions=list(S1X_CONDITIONS.keys()),
+               out_name="F12_mechanism_factorial.pdf")
+    return True
 
 
 def _k_averaged_seed_gains(by_key, key_prefix, all_K):
@@ -875,13 +898,52 @@ def make_R3_exposure_profiles():
     return True
 
 
+def make_F11_slant_dependence():
+    """S8: paired gain (MIL - BSGD) vs grating slant angle, one curve per K
+    (2x budget, mean +/- 95% t-interval over seeds). This is the figure that
+    makes the unslanted scoping of the headline results honest: at fixed K the
+    gain is strongly and non-monotonically geometry-dependent."""
+    path = os.path.join(OUT_DIR, "F11_slant_dependence.pdf")
+    results = [r for r in load_all_results() if r["experiment_id"] == "S8"]
+    if not results:
+        no_data_placeholder(path, "F11 (S8): paired gain vs slant angle", "needs S8 manifest results.")
+        return False
+    by = {}
+    for r in results:
+        c = r["config"]
+        by.setdefault((round(c["K_nominal"], 4), float(c["slant_deg"])), {}).setdefault(r["method_id"], []).append(r)
+    Ks = sorted({k for k, _ in by})
+    fig, ax = new_fig(width="single")
+    palette = [COLORS["blue"], COLORS["vermillion"], COLORS["bluish_green"]]
+    for i, K in enumerate(Ks):
+        xs, ms, los, his = [], [], [], []
+        for slant in sorted({sl for k, sl in by if k == K}):
+            arms = by[(K, slant)]
+            gains = [g for _, g in paired_gain(arms.get("MIL", []), arms.get("BSGD", []), key="psnr")]
+            if not gains:
+                continue
+            st = mean_std_median_ci95(gains)
+            xs.append(slant); ms.append(st["mean"]); los.append(st["ci95_lo"]); his.append(st["ci95_hi"])
+        if not xs:
+            continue
+        col = palette[i % len(palette)]
+        ax.errorbar(xs, ms, yerr=[[m - l for m, l in zip(ms, los)], [h - m for m, h in zip(ms, his)]],
+                    color=col, marker="os^"[i % 3], ms=4, lw=1.2, capsize=2, label=f"$K={K:.2f}$ rad/µm")
+    ax.axhline(0.0, color="0.5", lw=0.8, ls=":")
+    ax.set_xlabel(r"grating slant $\phi$ (deg)")
+    ax.set_ylabel("paired gain, MIL $-$ BSGD (dB)")
+    ax.legend(frameon=False, fontsize=7)
+    savefig(fig, path)
+    return True
+
+
 ALL_FIGURES = [
     make_F1_pipeline_schematic,
     make_F2_twin_validation,
     make_F3a_rcwa_validity_envelope, make_F3b_regime_map,
     make_F4_headline_gain_vs_K, make_F4b_baseline_comparison, make_F5_Kstar_vs_Kc_scatter,
     make_F6_cliff_shift, make_F7_physics_ablation, make_F8_sensitivity_band,
-    make_F10_twin_mismatch,
+    make_F10_twin_mismatch, make_F11_slant_dependence, make_F12_mechanism_factorial,
     make_F9a_gradient_ablation, make_F9b_mesh_convergence, make_F9c_wavelength_detuning,
     make_R1_reconstructions, make_R2_2d_reconstructions, make_R3_exposure_profiles,
 ]

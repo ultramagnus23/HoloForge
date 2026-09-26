@@ -147,6 +147,43 @@ def group_by_config(results: list[dict]) -> dict:
     return g
 
 
+# Methods exempt from the M1 completeness rule: no headline number uses the
+# unconstrained oracle, and one otherwise-complete cell is missing one ORU seed.
+M1_COMPLETENESS_EXEMPT = {"ORU"}
+
+
+def split_complete_m1(grouped: dict) -> tuple[dict, list[dict]]:
+    """(grouped without incomplete M1 cells, [description of each dropped cell]).
+
+    M1B finished only part of its grid, so some M1 cells on disk hold a subset
+    of methods or seeds. A cell counts as complete when it has every method
+    that appears anywhere in M1 (except M1_COMPLETENESS_EXEMPT), each with that
+    method's maximum seed count across M1. Headline statistics use complete
+    cells only."""
+    m1 = {k: v for k, v in grouped.items() if k[0] == "M1"}
+    need: dict = {}
+    for by_method in m1.values():
+        for m, rows in by_method.items():
+            if m not in M1_COMPLETENESS_EXEMPT:
+                need[m] = max(need.get(m, 0), len({r["seed"] for r in rows}))
+    kept, dropped = {}, []
+    for key, by_method in grouped.items():
+        if key[0] == "M1" and any(len({r["seed"] for r in by_method.get(m, [])}) < n
+                                  for m, n in need.items()):
+            cfg = next(iter(by_method.values()))[0]["config"]
+            dropped.append(dict(K=cfg["K_nominal"], budget=cfg["contrast_cap"],
+                                have={m: len(r) for m, r in by_method.items()}))
+            continue
+        kept[key] = by_method
+    return kept, sorted(dropped, key=lambda d: (d["budget"], d["K"]))
+
+
+def load_grouped_complete(results_root: str = RESULTS_ROOT) -> dict:
+    """Grouped results with incomplete M1 cells removed -- the entry point
+    every paper-number script should use."""
+    return split_complete_m1(group_by_config(load_all_results(results_root)))[0]
+
+
 # --------------------------------------------------------------- stats
 def bootstrap_ci(values: list[float], n_resamples: int = 10000, alpha: float = 0.05,
                  seed: int = 0) -> dict:
@@ -680,6 +717,45 @@ def s5_noise_robustness_summary(grouped: dict) -> dict:
                noisy=mean_std_median_ci95(noisy))
 
 
+def ablation_by_K_summary(grouped: dict, experiment_id: str, conditions) -> dict:
+    """K-resolved paired gain (MIL-BSGD) per ablation condition.
+
+    Pairs strictly within one (condition, K) config group and reports the
+    across-seed statistics there, so no statistic ever mixes K points (the
+    K-pooled s1_ablation_summary above averages over K, which hides that
+    ablations act differently at different K). Also reports each
+    condition's ratio to the baseline condition at the same K."""
+    rows = [(e, ch) for e, ch in grouped if e == experiment_id]
+    if not rows:
+        return dict(status="no_data")
+    by_cond: dict = {}
+    for e, ch in rows:
+        by_method = grouped[(e, ch)]
+        any_rows = next(iter(by_method.values()), None)
+        if not any_rows:
+            continue
+        cfg = any_rows[0]["config"]
+        cond = cfg.get("ablation_condition")
+        if cond not in conditions:
+            continue
+        gains = [g for _, g in paired_gain(by_method.get("MIL", []),
+                                           by_method.get("BSGD", []), key="psnr")]
+        if gains:
+            stat = mean_std_median_ci95(gains)
+            stat["n"] = len(gains)
+            stat["mil_psnr"] = statistics.fmean(r["psnr"] for r in by_method.get("MIL", []))
+            stat["bsgd_psnr"] = statistics.fmean(r["psnr"] for r in by_method.get("BSGD", []))
+            by_cond.setdefault(cond, {})[f"{cfg['K_nominal']:.4f}"] = stat
+    ratio: dict = {}
+    base = by_cond.get("baseline", {})
+    for cond, byK in by_cond.items():
+        for K, stat in byK.items():
+            b = base.get(K, {}).get("mean")
+            if cond != "baseline" and b and abs(b) > 1e-9:
+                ratio.setdefault(cond, {})[K] = stat["mean"] / b
+    return dict(status="ok", by_condition=by_cond, ratio_to_baseline=ratio)
+
+
 def s3_mismatch_summary(grouped: dict) -> dict:
     """S3: paired gain (MIL-BSGD) when the exposure was designed against
     the NOMINAL twin and then recorded on a MISCALIBRATED one.
@@ -945,9 +1021,68 @@ def sub_cliff_non_monotonicity_status(grouped: dict) -> dict:
 
 
 # --------------------------------------------------------------- top level
+def _paired_gains_by(grouped: dict, exp_id: str, key_fn) -> dict:
+    """{key_fn(config): [per-seed MIL-BSGD gains, ...]} for one experiment."""
+    out: dict = {}
+    for (eid, ch), by_method in grouped.items():
+        if eid != exp_id:
+            continue
+        any_rows = next(iter(by_method.values()), None)
+        if not any_rows:
+            continue
+        pairs = paired_gain(by_method.get("MIL", []), by_method.get("BSGD", []), key="psnr")
+        if pairs:
+            out.setdefault(key_fn(any_rows[0]["config"]), []).extend(g for _, g in pairs)
+    return out
+
+
+def s8_slant_summary(grouped: dict) -> dict:
+    """S8: paired gain (MIL-BSGD) vs slant angle, per K (2x budget). Added
+    2026-09-19: the I2 slant-shear fix showed the gain is strongly
+    geometry-dependent, so the slant dependence is measured, not asserted."""
+    g = _paired_gains_by(grouped, "S8",
+                         lambda c: (round(c["K_nominal"], 4), float(c["slant_deg"])))
+    if not g:
+        return dict(status="no_data")
+    by_K: dict = {}
+    for (K, slant), vals in sorted(g.items()):
+        by_K.setdefault(str(K), {})[str(slant)] = mean_std_median_ci95(vals)
+    return dict(status="ok", by_K=by_K)
+
+
+def nz0_convergence_summary(grouped: dict) -> dict:
+    """NZ0: paired gain vs readout slice count n_z at the frozen geometry,
+    per K and pooled over K (per-seed mean across K, seeds present at every K)."""
+    g = _paired_gains_by(grouped, "NZ0",
+                         lambda c: (round(c["K_nominal"], 4), int(c["n_z"])))
+    if not g:
+        return dict(status="no_data")
+    by_K: dict = {}
+    for (K, nz), vals in sorted(g.items()):
+        by_K.setdefault(str(K), {})[str(nz)] = mean_std_median_ci95(vals)
+    Ks = sorted({k for k, _ in g})
+    pooled = {}
+    for nz in sorted({n for _, n in g}):
+        n_seeds = min(len(g[(K, nz)]) for K in Ks if (K, nz) in g)
+        per_seed = [statistics.fmean(g[(K, nz)][i] for K in Ks) for i in range(n_seeds)
+                    if all((K, nz) in g and len(g[(K, nz)]) > i for K in Ks)]
+        pooled[str(nz)] = mean_std_median_ci95(per_seed)
+    return dict(status="ok", by_K=by_K, pooled=pooled)
+
+
+def _s1_by_K(grouped):
+    from manifest import S1_CONDITIONS
+    return ablation_by_K_summary(grouped, "S1", S1_CONDITIONS)
+
+
+def _s1x_by_K(grouped):
+    from manifest import S1X_CONDITIONS
+    return ablation_by_K_summary(grouped, "S1X", S1X_CONDITIONS)
+
+
 def build_paper_numbers(results_root: str = RESULTS_ROOT) -> dict:
     results = load_all_results(results_root)
-    grouped = group_by_config(results)
+    grouped, m1_dropped = split_complete_m1(group_by_config(results))
 
     per_config = {}
     for (exp_id, config_hash), by_method in grouped.items():
@@ -958,6 +1093,7 @@ def build_paper_numbers(results_root: str = RESULTS_ROOT) -> dict:
     m1_present, m2_present = "M1" in present, "M2" in present
     out = dict(
         n_result_files=len(results),
+        m1_incomplete_cells_excluded=m1_dropped,
         experiments_present=sorted(present),
         per_config=per_config,
         m1_headroom_closure=headroom_closure(grouped, "M1") if m1_present else
@@ -975,6 +1111,10 @@ def build_paper_numbers(results_root: str = RESULTS_ROOT) -> dict:
         s6_joint_mismatch_summary=s6_joint_mismatch_summary(grouped),
         s7_depth_absorption_summary=s7_depth_absorption_summary(grouped),
         sat_surrogate_summary=sat_surrogate_summary(grouped),
+        s8_slant_summary=s8_slant_summary(grouped),
+        nz0_convergence_summary=nz0_convergence_summary(grouped),
+        s1_by_K=_s1_by_K(grouped),
+        s1x_by_K=_s1x_by_K(grouped),
         # M2 carries SAT at the sub-cliff K = 1.31 rad/um, which lies
         # below M1's grid minimum of 1.96 -- i.e. exactly where
         # media-in-the-loop's advantage is largest and the cheap

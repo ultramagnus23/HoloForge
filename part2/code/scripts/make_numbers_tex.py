@@ -91,6 +91,32 @@ def build_macros(paper_numbers: dict) -> str:
     # INCREASED gain (the term was suppressing MIL's advantage over BSGD
     # in the intact model), ~1 means the term isn't doing much for this
     # comparison.
+    # S8: slant-angle dependence of the paired gain (2x budget). Macro names
+    # cannot contain digits, so angles / K / n_z are spelled out.
+    _SLANT = {0.0: "Zero", 2.5: "TwoFive", 5.0: "Five", 7.5: "SevenFive",
+              10.0: "Ten", 15.0: "Fifteen", 20.0: "Twenty"}
+    _KLAB = {1.9635: "KLow", 3.927: "KMid"}
+    s8 = paper_numbers.get("s8_slant_summary", {})
+    for K, klab in _KLAB.items():
+        for sl, slab in _SLANT.items():
+            stat = (s8.get("by_K", {}).get(str(K), {}).get(str(sl), {}) if s8.get("status") == "ok" else {})
+            lines.append(macro(f"SEightGain{klab}Slant{slab}", fmt(stat.get("mean"), ".3f")))
+            lines.append(macro(f"SEightLo{klab}Slant{slab}", fmt(stat.get("ci95_lo"), ".3f")))
+            lines.append(macro(f"SEightHi{klab}Slant{slab}", fmt(stat.get("ci95_hi"), ".3f")))
+
+    # NZ0: n_z convergence at the frozen (unslanted) geometry, pooled over K.
+    _NZ = {32: "ThirtyTwo", 128: "OneTwentyEight", 256: "TwoFiftySix"}
+    nz0 = paper_numbers.get("nz0_convergence_summary", {})
+    for nz, nlab in _NZ.items():
+        stat = (nz0.get("pooled", {}).get(str(nz), {}) if nz0.get("status") == "ok" else {})
+        lines.append(macro(f"NZZeroPooledGain{nlab}", fmt(stat.get("mean"), ".3f")))
+        lines.append(macro(f"NZZeroPooledLo{nlab}", fmt(stat.get("ci95_lo"), ".3f")))
+        lines.append(macro(f"NZZeroPooledHi{nlab}", fmt(stat.get("ci95_hi"), ".3f")))
+    for K, klab in _KLAB.items():
+        for nz, nlab in _NZ.items():
+            stat = (nz0.get("by_K", {}).get(str(K), {}).get(str(nz), {}) if nz0.get("status") == "ok" else {})
+            lines.append(macro(f"NZZeroGain{klab}{nlab}", fmt(stat.get("mean"), ".3f")))
+
     s1 = paper_numbers.get("s1_ablation_summary", {})
     if s1.get("status") == "ok":
         by_cond = s1.get("by_condition", {})
@@ -295,7 +321,7 @@ def build_macros(paper_numbers: dict) -> str:
     # spurious inconsistency for something that isn't a data gap, it's a
     # documented design choice (see manifest.py's build_M1_jobs).
     per_config = paper_numbers.get("per_config", {})
-    ITERATIVE_METHODS = {"BSGD", "MIL", "SAT", "ORC", "ORU"}
+    ITERATIVE_METHODS = {"BSGD", "MIL", "SAT", "ORC"}  # ORU: no headline number uses it
     m1_seed_counts = {v["n_seeds"] for k, methods in per_config.items()
                       if k.startswith("M1/")
                       for m, v in methods.items() if m in ITERATIVE_METHODS}
@@ -551,9 +577,8 @@ def build_baseline_completeness_macros() -> str:
     this is the "goes into a script" the rule requires."""
     lines = ["\n% --- baseline completeness (Sec. 5.2 / F4b) macros ---\n"]
     try:
-        from analysis.aggregate import (load_all_results, group_by_config,
-                                        gain_curve, gain_vs_bsgd_seed_mean)
-        grouped = group_by_config(load_all_results())
+        from analysis.aggregate import (load_grouped_complete, gain_curve, gain_vs_bsgd_seed_mean)
+        grouped = load_grouped_complete()
         for method, macro_prefix in (("GS", "GSGain"), ("LPC", "LPCGain")):
             curve = gain_vs_bsgd_seed_mean(grouped, "M1", 2.0, method=method)
             vals = [v[1] for v in curve]
@@ -580,9 +605,8 @@ def build_wp3_baseline_macros() -> str:
     uses, for the same reason (see figures/make_all.py)."""
     lines = ["\n% --- WP3 baseline (RSGD/GPC, Sec. 5.2) macros ---\n"]
     try:
-        from analysis.aggregate import (load_all_results, group_by_config,
-                                        gain_curve, gain_vs_bsgd_seed_mean)
-        grouped = group_by_config(load_all_results())
+        from analysis.aggregate import (load_grouped_complete, gain_curve, gain_vs_bsgd_seed_mean)
+        grouped = load_grouped_complete()
         rsgd_curve = gain_curve(grouped, "M1", 2.0, method="RSGD")
         rsgd_vals = [v[1] for v in rsgd_curve]
         lines.append(macro("RSGDGainMin", fmt(min(rsgd_vals), ".2f") if rsgd_vals else None))
@@ -617,10 +641,9 @@ def build_wp4_macros() -> str:
     used elsewhere, per WP4's item 2."""
     lines = ["\n% --- WP4 (target ensemble / noise robustness, Sec. 5.x) macros ---\n"]
     try:
-        from analysis.aggregate import (load_all_results, group_by_config,
-                                        s4_target_ensemble_summary,
+        from analysis.aggregate import (load_grouped_complete, s4_target_ensemble_summary,
                                         s5_noise_robustness_summary)
-        grouped = group_by_config(load_all_results())
+        grouped = load_grouped_complete()
         s4 = s4_target_ensemble_summary(grouped)
         if s4["status"] == "ok":
             for kind, label in (("bars", "Bars"), ("spots", "Spots"),
@@ -664,8 +687,8 @@ def build_wp5_macros() -> str:
     parameter) perturbation draws."""
     lines = ["\n% --- WP5 (joint miscalibration Monte Carlo, Sec. 5.x) macros ---\n"]
     try:
-        from analysis.aggregate import load_all_results, group_by_config, s6_joint_mismatch_summary
-        grouped = group_by_config(load_all_results())
+        from analysis.aggregate import load_grouped_complete, s6_joint_mismatch_summary
+        grouped = load_grouped_complete()
         s6 = s6_joint_mismatch_summary(grouped)
         if s6["status"] == "ok":
             lines.append(macro("SSixNDraws", str(s6["n_draws"])))
@@ -699,8 +722,8 @@ def build_wp6_macros() -> str:
     lines = ["\n% --- WP6 (depth-resolved absorption, Sec. 5.x) macros ---\n"]
     od_labels = [(0.0, "ODZero"), (0.1, "ODOneTenth"), (0.3, "ODThreeTenths")]
     try:
-        from analysis.aggregate import load_all_results, group_by_config, s7_depth_absorption_summary
-        grouped = group_by_config(load_all_results())
+        from analysis.aggregate import load_grouped_complete, s7_depth_absorption_summary
+        grouped = load_grouped_complete()
         s7 = s7_depth_absorption_summary(grouped)
         if s7["status"] == "ok":
             for od, label in od_labels:
@@ -716,6 +739,136 @@ def build_wp6_macros() -> str:
     return "".join(lines)
 
 
+_KLAB3 = {1.309: "Sub", 3.927: "Near", 5.236: "Post"}
+_S1X_LAB = {"baseline": "Baseline", "no_monomer_depletion": "NoMonomer",
+            "no_dye_depletion": "NoDye", "no_saturation": "NoSat",
+            "only_tanh": "OnlyTanh", "only_dye": "OnlyDye",
+            "only_monomer": "OnlyMonomer", "linear_recording": "Linear",
+            "linear_slope_matched": "LinearMatched",
+            "no_monomer_depletion_matched": "NoMonomerMatched",
+            "only_dye_matched": "OnlyDyeMatched",
+            "only_tanh_matched": "OnlyTanhMatched"}
+_S1_LAB = {"baseline": "Baseline", "no_saturation": "NoSat", "no_diffusion": "NoDiff",
+           "no_nonlocality": "NoNonloc", "no_dye_depletion": "NoDye"}
+
+
+def _klab(K):
+    for k, lab in _KLAB3.items():
+        if abs(float(K) - k) < 2e-3:
+            return lab
+    return None
+
+
+def build_path7_macros(pn: dict) -> str:
+    """Macros for the 2026-09-26 rewrite (PATH_TO_7): grid-cell counts on
+    complete M1 cells only, K-resolved S1, the S1X mechanism factorial, SAT
+    per K, reduced M2, S3 dn_max points and the held-out twin fit."""
+    L = ["\n% --- PATH_TO_7 rewrite macros (complete M1 cells only) ---\n"]
+    closure = [r for r in pn.get("m1_headroom_closure", []) if r.get("gain_curve")]
+    cells = [(r["budget"], K, g, lo, hi) for r in closure for K, g, lo, hi in r["gain_curve"]]
+    Ks = sorted({c[1] for c in cells})
+    L.append(macro("MOneNK", str(len(Ks)) if Ks else None))
+    L.append(macro("MOneNCells", str(len(cells)) if cells else None))
+    L.append(macro("MOneKMin", fmt(Ks[0]) if Ks else None))
+    L.append(macro("MOneKMax", fmt(Ks[-1]) if Ks else None))
+    L.append(macro("MOneKList", ", ".join(f"{k:.2f}" for k in Ks) if Ks else None))
+    L.append(macro("MOneNPositive", str(sum(1 for c in cells if c[2] > 0)) if cells else None))
+    L.append(macro("MOneNCIAboveZero",
+                   str(sum(1 for c in cells if c[3] is not None and c[3] > 0)) if cells else None))
+    L.append(macro("MOneNCIIncludesZero",
+                   str(sum(1 for c in cells if c[3] is not None and c[3] <= 0 <= c[4])) if cells else None))
+    neg = [c for c in cells if c[2] <= 0]
+    L.append(macro("MOneNNegative", str(len(neg)) if cells else None))
+    if neg:
+        b, K, g, lo, hi = min(neg, key=lambda c: c[2])
+        L += [macro("MOneNegK", fmt(K)), macro("MOneNegBudget", f"{b:.0f}"),
+              macro("MOneNegGain", fmt(g)), macro("MOneNegCILo", fmt(lo)),
+              macro("MOneNegCIHi", fmt(hi, ".3f"))]
+    else:
+        L += [macro(n, None) for n in ("MOneNegK", "MOneNegBudget", "MOneNegGain",
+                                       "MOneNegCILo", "MOneNegCIHi")]
+    for r in closure:
+        lab = BUDGET_LABELS[r["budget"]]
+        best = max(r["gain_curve"], key=lambda c: c[1])
+        top = max(r["gain_curve"], key=lambda c: c[0])
+        L += [macro(f"MaxGain{lab}", fmt(best[1])), macro(f"MaxGainK{lab}", fmt(best[0])),
+              macro(f"GainHighK{lab}", fmt(top[1])),
+              macro(f"GainHighKLo{lab}", fmt(top[2], ".3f")),
+              macro(f"GainHighKHi{lab}", fmt(top[3], ".3f"))]
+    L.append(macro("MOneNExcluded", str(len(pn.get("m1_incomplete_cells_excluded", [])))))
+
+    s1 = pn.get("s1_by_K", {})
+    for cond, clab in _S1_LAB.items():
+        byK = s1.get("by_condition", {}).get(cond, {}) if s1.get("status") == "ok" else {}
+        for K, klab in _KLAB3.items():
+            st = next((v for k, v in byK.items() if _klab(k) == klab), {})
+            L.append(macro(f"SOneG{clab}{klab}", fmt(st.get("mean"))))
+    for K, klab in _KLAB3.items():
+        L.append(macro(f"SOneK{klab}", fmt(K)))
+
+    sx = pn.get("s1x_by_K", {})
+    for cond, clab in _S1X_LAB.items():
+        byK = sx.get("by_condition", {}).get(cond, {}) if sx.get("status") == "ok" else {}
+        for K, klab in _KLAB3.items():
+            st = next((v for k, v in byK.items() if _klab(k) == klab), {})
+            L.append(macro(f"SXG{clab}{klab}", fmt(st.get("mean"))))
+            L.append(macro(f"SXN{clab}{klab}", str(st["n"]) if st.get("n") else None))
+    diffs = []
+    b1 = s1.get("by_condition", {}).get("baseline", {}) if s1.get("status") == "ok" else {}
+    bx = sx.get("by_condition", {}).get("baseline", {}) if sx.get("status") == "ok" else {}
+    for k, v in bx.items():
+        if k in b1:
+            diffs.append(abs(v["mean"] - b1[k]["mean"]))
+    L.append(macro("SXDeviceMaxDiff", fmt(max(diffs), ".3f") if diffs else None))
+
+    sat = pn.get("sat_surrogate_summary", {})
+    fr = {b: v.get("fraction_by_K", {}) for b, v in sat.get("by_budget", {}).items()
+          if v.get("status") == "ok"}
+    allf = [(b, float(K), f) for b, d in fr.items() for K, f in d.items()]
+    low = [f for b, K, f in allf if K < 2.0]
+    second = [f for b, K, f in allf if 2.5 < K < 2.7]
+    if low and second:
+        L += [macro("SATFracLowKMin", fmt(100 * min(low), ".0f")),
+              macro("SATFracLowKMax", fmt(100 * max(low), ".0f")),
+              macro("SATFracSecondKMin", fmt(100 * min(second), ".0f")),
+              macro("SATFracSecondKMax", fmt(100 * max(second), ".0f")),
+              macro("SATNBelowBSGD", str(sum(1 for *_, f in allf if f < 0))),
+              macro("SATNCells", str(len(allf)))]
+    else:
+        L += [macro(n, None) for n in ("SATFracLowKMin", "SATFracLowKMax", "SATFracSecondKMin",
+                                       "SATFracSecondKMax", "SATNBelowBSGD", "SATNCells")]
+
+    dn = pn.get("s3_mismatch_summary", {}).get("by_param", {}).get("dn_max", {}).get("by_pct", {})
+    for pct, lab in (("-50", "MinusFifty"), ("50", "PlusFifty")):
+        L.append(macro(f"SThreeDnMaxAt{lab}", fmt(dn.get(pct, {}).get("mean"))))
+
+    m2 = next((r for r in pn.get("m2_headroom_closure", []) if r.get("budget") == 2.0), {})
+    curve = m2.get("gain_curve") or []
+    for K, klab in _KLAB3.items():
+        c = next((c for c in curve if _klab(c[0]) == klab), None)
+        L.append(macro(f"MTwoRGain{klab}", fmt(c[1]) if c else None))
+        L.append(macro(f"MTwoRLo{klab}", fmt(c[2]) if c else None))
+        L.append(macro(f"MTwoRHi{klab}", fmt(c[3]) if c else None))
+    sat_m2 = pn.get("sat_surrogate_summary_m2", {}).get("by_budget", {}).get("2.0", {})
+    for K, klab in _KLAB3.items():
+        f = next((v for k, v in sat_m2.get("fraction_by_K", {}).items() if _klab(k) == klab), None)
+        L.append(macro(f"MTwoRSATFrac{klab}", fmt(100 * f, ".0f") if f is not None else None))
+
+    ho = _load("results_twin_holdout.json")
+    for var, vlab in (("A_kbleach_fixed", "A"), ("B_kbleach_free", "B")):
+        for train, tlab in (("sim", "Sim"), ("exp", "Exp")):
+            f = (ho or {}).get("fits", {}).get(f"{var}/{train}")
+            L.append(macro(f"Holdout{vlab}{tlab}In", fmt(f["nrmse"]) if f else None))
+            L.append(macro(f"Holdout{vlab}{tlab}Out", fmt(f["heldout_nrmse"]) if f else None))
+            kb = f["params"].get("k_bleach") if f else None
+            L.append(macro(f"Holdout{vlab}{tlab}Kbleach", fmt(kb, ".3g") if kb is not None else None))
+            dm = f["params"].get("dn_max") if f else None
+            L.append(macro(f"Holdout{vlab}{tlab}DnMax", fmt(dm, ".3g") if dm is not None else None))
+            L.append(macro(f"Holdout{vlab}{tlab}AtBound",
+                           (", ".join(f["at_bound"]).replace("_", "\\_") or "none") if f else None))
+    return "".join(L)
+
+
 def main():
     paper_numbers = {}
     if os.path.exists(PAPER_NUMBERS_PATH):
@@ -729,7 +882,8 @@ def main():
           + build_validation_macros() + build_baseline_completeness_macros()
           + build_shrinkage_bound_macros() + build_cost_benefit_macros()
           + build_r1_macros() + build_wp3_baseline_macros() + build_wp4_macros()
-          + build_wp5_macros() + build_wp6_macros())
+          + build_wp5_macros() + build_wp6_macros()
+          + build_path7_macros(paper_numbers))
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     with open(OUT_PATH, "w") as f:
         f.write(tex)

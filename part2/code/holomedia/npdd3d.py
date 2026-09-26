@@ -60,10 +60,16 @@ class NPDDRecorder3D(torch.nn.Module):
         for _ in range(self.n_steps):
             F_loc = self.p.kappa * torch.clamp(I * d, min=0.0) ** self.p.gamma
             poly_rate = self._nonlocal(F_loc * torch.clamp(u, min=0.0))
-            u = u - self.dt * poly_rate
-            N = N + self.dt * poly_rate
+            # B2 conservation fix, ported from holomedia.npdd.NPDDRecorder:
+            # cap the CONSUMED amount at what exists so u >= 0 and u+N is
+            # conserved, instead of clamping u alone after an unconstrained
+            # explicit update (which discards negative overshoot from u
+            # without removing the same amount from N).
+            consumed = torch.minimum(self.dt * poly_rate, u)
+            u = u - consumed
+            N = N + consumed
             d = d * torch.exp(-self.p.k_bleach * I * self.dt)
-            u = torch.clamp(u, min=0.0)
+            u = torch.clamp(u, min=0.0)  # safety net; consumed <= u makes this a no-op
             D_eff = self.p.D0 * torch.exp(-self.p.alpha_D * N)
             u = self._diffuse(u, D_eff)
 

@@ -1,0 +1,115 @@
+{
+ "git_commit": "d5ce60df416c156521881c76f6515e15682db55a",
+ "experiment_id": "S1",
+ "method_id": "BSGD",
+ "seed": 1,
+ "config": {
+  "n_x": 512,
+  "dx": 0.1,
+  "lam_um": 0.405,
+  "n_iters": 800,
+  "converge_tol": 0.0001,
+  "contrast_cap": 2.0,
+  "dose_budget": 1.0,
+  "medium": {
+   "D0": 0.1,
+   "sigma": 0.08,
+   "kappa": 2.0,
+   "gamma": 1.0,
+   "dn_max": 0.0035,
+   "k_bleach": 0.2,
+   "alpha_D": 1.0,
+   "shrinkage": 0.005,
+   "thickness": 30.0,
+   "n0": 1.5,
+   "linearize_index_map": true
+  },
+  "target": {
+   "kind": "bars",
+   "period_px": 48
+  },
+  "K_nominal": 1.308996938995747,
+  "ablation_condition": "no_saturation"
+ },
+ "config_hash": "688c626d8c979dd1",
+ "device": "cuda",
+ "device_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+ "dtype": "torch.float32",
+ "loss_curve": [
+  [
+   0,
+   0.2497929334640503
+  ],
+  [
+   50,
+   0.16708579659461975
+  ],
+  [
+   100,
+   0.16204440593719482
+  ],
+  [
+   150,
+   0.16064007580280304
+  ],
+  [
+   200,
+   0.15999633073806763
+  ],
+  [
+   250,
+   0.15962344408035278
+  ],
+  [
+   300,
+   0.1593811959028244
+  ],
+  [
+   350,
+   0.1592189222574234
+  ],
+  [
+   400,
+   0.1591062992811203
+  ],
+  [
+   450,
+   0.15902146697044373
+  ],
+  [
+   500,
+   0.15895864367485046
+  ],
+  [
+   550,
+   0.15890827775001526
+  ],
+  [
+   600,
+   0.1588696837425232
+  ],
+  [
+   650,
+   0.1588367372751236
+  ],
+  [
+   700,
+   0.15881018340587616
+  ],
+  [
+   750,
+   0.15878814458847046
+  ]
+ ],
+ "iterations_run": 800,
+ "early_stop_reason": "n_iters_exhausted",
+ "wall_s": 86.5421838760376,
+ "peak_mem_mb": 0.98816,
+ "psnr": 7.383039474487305,
+ "psnr_maxnorm_legacy": 7.357682704925537,
+ "diffraction_efficiency": 0.5648848798323727,
+ "contrast": {
+  "max_over_mean": 2.0000019073484054,
+  "p95_over_mean": 2.0000019073484054
+ }
+}

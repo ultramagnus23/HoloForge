@@ -50,3 +50,7 @@ part1/code/results/*.npy
 # under results/S3/ are what the paper reads -- and no .pt file is tracked
 # anywhere else in this repo.
 part2/code/results/S3/_designs/
+
+# Prism submission package: build artifact of part2/code/scripts/make_prism_package.py
+part2/paper/prism_submission/
+part2/paper/prism_submission.zip

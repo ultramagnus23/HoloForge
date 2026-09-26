@@ -97,7 +97,8 @@ def _build_stack(cfg: dict, medium_dict: dict, device, dtype):
                        n_steps=cfg.get("n_steps", 300), params=medium,
                        dtype=dtype).to(device)
     bpm = SlabBPM(cfg["n_x"], cfg["dx"], cfg["lam_um"], medium.thickness,
-                  n_z=cfg.get("n_z", 32), n0=medium.n0, dtype=cdtype).to(device)
+                  n_z=cfg.get("n_z", 128), n0=medium.n0, dtype=cdtype,
+                  slant_deg=cfg.get("slant_deg", 0.0)).to(device)
     return rec, bpm
 
 

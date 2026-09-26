@@ -1,0 +1,116 @@
+{
+ "git_commit": "ba144276e4db56c3a94e51ed05816b89df0561d5",
+ "experiment_id": "M1",
+ "method_id": "BSGD",
+ "seed": 0,
+ "config": {
+  "n_x": 1024,
+  "dx": 0.05,
+  "lam_um": 0.405,
+  "n_iters": 800,
+  "converge_tol": 0.0001,
+  "contrast_cap": 8.0,
+  "dose_budget": 1.0,
+  "medium": {
+   "D0": 0.1,
+   "sigma": 0.08,
+   "kappa": 2.0,
+   "gamma": 1.0,
+   "dn_max": 0.0035,
+   "k_bleach": 0.2,
+   "alpha_D": 1.0,
+   "shrinkage": 0.005,
+   "thickness": 30.0,
+   "n0": 1.5
+  },
+  "target": {
+   "kind": "bars",
+   "period_px": 32
+  },
+  "K_nominal": 3.926991,
+  "arm": "iteration_matched",
+  "n_z": 128,
+  "slant_deg": 0.0
+ },
+ "config_hash": "4caa9ce4bd189edf",
+ "device": "cpu",
+ "device_name": "cpu:AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+ "dtype": "torch.float32",
+ "loss_curve": [
+  [
+   0,
+   0.249957874417305
+  ],
+  [
+   50,
+   0.07455620914697647
+  ],
+  [
+   100,
+   0.05934206396341324
+  ],
+  [
+   150,
+   0.05536819249391556
+  ],
+  [
+   200,
+   0.053405504673719406
+  ],
+  [
+   250,
+   0.0521685853600502
+  ],
+  [
+   300,
+   0.05130024254322052
+  ],
+  [
+   350,
+   0.05097935348749161
+  ],
+  [
+   400,
+   0.050773341208696365
+  ],
+  [
+   450,
+   0.05060204118490219
+  ],
+  [
+   500,
+   0.050462495535612106
+  ],
+  [
+   550,
+   0.050350092351436615
+  ],
+  [
+   600,
+   0.05025945603847504
+  ],
+  [
+   650,
+   0.050186991691589355
+  ],
+  [
+   700,
+   0.05012737959623337
+  ],
+  [
+   750,
+   0.05007751286029816
+  ]
+ ],
+ "iterations_run": 800,
+ "early_stop_reason": "n_iters_exhausted",
+ "wall_s": 34.62073636054993,
+ "peak_mem_mb": null,
+ "psnr": 6.051364898681641,
+ "psnr_maxnorm_legacy": 3.307471752166748,
+ "diffraction_efficiency": 0.5018774217406146,
+ "contrast": {
+  "max_over_mean": 8.000006675720215,
+  "p95_over_mean": 8.000006675720215
+ }
+}

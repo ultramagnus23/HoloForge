@@ -238,13 +238,14 @@ def run_job(job: dict, device, commit: str, dtype: torch.dtype = DTYPE) -> dict:
     n_x, dx = cfg["n_x"], cfg["dx"]
     medium = MediumParams(**cfg["medium"])
     n_steps = cfg.get("n_steps", 300)
-    n_z = cfg.get("n_z", 32)
+    n_z = cfg.get("n_z", 128)
+    slant_deg = cfg.get("slant_deg", 0.0)
     cdtype = torch.complex64 if dtype == torch.float32 else torch.complex128
 
     rec = NPDDRecorder(n_x, dx, t_total=10.0, n_steps=n_steps, params=medium,
                        dtype=dtype).to(device)
     bpm = SlabBPM(n_x, dx, cfg["lam_um"], medium.thickness, n_z=n_z, n0=medium.n0,
-                 dtype=cdtype).to(device)
+                 dtype=cdtype, slant_deg=slant_deg).to(device)
     target = build_target(cfg["target"], n_x, device, dtype=dtype)
 
     t0 = time.time()
@@ -289,20 +290,43 @@ def run_job(job: dict, device, commit: str, dtype: torch.dtype = DTYPE) -> dict:
     )
 
 
-def apply_shard(jobs: list[dict], shard: tuple[int, int] | None) -> list[dict]:
-    """Filter a job list to shard[0]-th of shard[1] shards, by position in
-    the (deterministic) list a builder returns. Safe by construction: each
-    job already writes to its own content-hashed path and a job is "done"
-    iff that file exists, so N processes each given a disjoint index%N
-    slice never write the same path or double-count progress -- this is
-    just a filter, not a new execution mode. Jobs are 1D and small (a few
-    tens of MB of VRAM/RAM even with n_iters=800 unrolled), so this is the
-    intended way to use multiple CPU cores or several small concurrent GPU
-    contexts instead of the strictly-serial single-process default."""
+# Balanced sharding is opt-in (--balanced-shard): the default stays index%N so
+# already-running workers that reload this module keep their assignment.
+SHARD_BALANCED = False
+
+
+def apply_shard(jobs: list[dict], shard: tuple[int, int] | None,
+                balanced: bool | None = None) -> list[dict]:
+    """Filter a job list to shard[0]-th of shard[1] shards. Safe by construction:
+    each job already writes to its own content-hashed path and a job is "done"
+    iff that file exists, so N processes each given a disjoint slice never write
+    the same path or double-count progress -- this is just a filter, not a new
+    execution mode.
+
+    Default: by position, index % N. That is badly unbalanced when a manifest
+    alternates cheap/expensive jobs (BSGD, MIL, BSGD, MIL, ...) and N is even:
+    every MIL lands on the same half of the workers.
+    balanced=True: the k-th job OF EACH METHOD goes to shard (k + crc32(method))
+    % N, so every method's jobs (hence its cost) spread evenly over the shards.
+    Deterministic and independent of which jobs are already done, so a restarted
+    or later-launched worker always sees the same assignment."""
     if shard is None:
         return jobs
     i, n = shard
-    return [j for idx, j in enumerate(jobs) if idx % n == i]
+    if balanced is None:
+        balanced = SHARD_BALANCED
+    if not balanced:
+        return [j for idx, j in enumerate(jobs) if idx % n == i]
+    import zlib
+    seen: dict[str, int] = {}
+    out = []
+    for j in jobs:
+        m = j["method_id"]
+        k = seen.get(m, 0)
+        seen[m] = k + 1
+        if (k + zlib.crc32(m.encode())) % n == i:
+            out.append(j)
+    return out
 
 
 def run_manifest(name: str, max_minutes: float | None, n_x=1024, n_iters=800,
@@ -488,6 +512,8 @@ def main():
     ap.add_argument("--allow-cpu", action="store_true",
                     help="skip the hard GPU assertion (local dev/smoke-testing "
                          "only -- never use for an actual science run)")
+    ap.add_argument("--balanced-shard", action="store_true",
+                    help="balance each method's jobs across shards (see apply_shard)")
     ap.add_argument("--shard", type=str, default=None,
                     help="run only every N-th job, offset i: 'i/N' (e.g. "
                          "'0/8' .. '7/8' for 8 parallel processes). Safe to "
@@ -497,6 +523,8 @@ def main():
                          "independent of how the full run is sharded).")
     args = ap.parse_args()
 
+    global SHARD_BALANCED
+    SHARD_BALANCED = bool(args.balanced_shard)
     shard = None
     if args.shard is not None:
         i_str, n_str = args.shard.split("/")

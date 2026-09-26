@@ -29,7 +29,7 @@ import sys
 HERE = os.path.dirname(__file__)
 sys.path.insert(0, os.path.join(HERE, ".."))
 
-from analysis.aggregate import load_all_results, group_by_config
+from analysis.aggregate import load_grouped_complete
 
 NUMBERS_TEX = os.path.join(HERE, "..", "..", "paper", "numbers.tex")
 MARKER = "% --- wasted-media measurement (Sec. 5.4) macros ---"
@@ -38,7 +38,7 @@ EXTRA_METHODS = ["GS", "LPC", "SAT", "RSGD", "GPC"]
 
 
 def main():
-    grouped = group_by_config(load_all_results())
+    grouped = load_grouped_complete()
     gaps_bsgd, gaps_mil = [], []
     gaps_extra = {m: [] for m in EXTRA_METHODS}
     for (exp_id, config_hash), by_method in grouped.items():

@@ -22,7 +22,7 @@ import torch
 
 from holomedia import NPDDRecorder, MediumParams, SlabBPM
 from methods import media_blind_sgd, media_in_the_loop
-from manifest import DEFAULT_MEDIUM, period_from_K, S1_K_POINTS
+from manifest import DEFAULT_MEDIUM, period_from_K, S1_K_POINTS, FROZEN_N_Z, FROZEN_SLANT_DEG
 from make_r1_reconstructions import build_bars_target, N_X, DX, LAM_UM, N_ITERS, BUDGET, SEED
 
 CKPT_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "results_r1_profiles"))
@@ -75,7 +75,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     medium = MediumParams(**DEFAULT_MEDIUM)
     rec = NPDDRecorder(N_X, DX, t_total=10.0, n_steps=300, params=medium, dtype=torch.float32).to(device)
-    bpm = SlabBPM(N_X, DX, LAM_UM, medium.thickness, n_z=32, n0=medium.n0, dtype=torch.complex64).to(device)
+    bpm = SlabBPM(N_X, DX, LAM_UM, medium.thickness, n_z=FROZEN_N_Z, n0=medium.n0,
+                  dtype=torch.complex64, slant_deg=FROZEN_SLANT_DEG).to(device)
 
     os.makedirs(CKPT_DIR, exist_ok=True)
     for K in S1_K_POINTS:

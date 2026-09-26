@@ -1,0 +1,121 @@
+{
+ "git_commit": "ba144276e4db56c3a94e51ed05816b89df0561d5",
+ "experiment_id": "S1X",
+ "method_id": "MIL",
+ "seed": 2,
+ "config": {
+  "n_x": 1024,
+  "dx": 0.05,
+  "lam_um": 0.405,
+  "n_iters": 800,
+  "converge_tol": 0.0001,
+  "contrast_cap": 2.0,
+  "dose_budget": 1.0,
+  "medium": {
+   "D0": 0.1,
+   "sigma": 0.08,
+   "kappa": 2.0,
+   "gamma": 1.0,
+   "dn_max": 0.0035,
+   "k_bleach": 0.0,
+   "alpha_D": 1.0,
+   "shrinkage": 0.005,
+   "thickness": 30.0,
+   "n0": 1.5,
+   "linearize_index_map": true
+  },
+  "target": {
+   "kind": "bars",
+   "period_px": 96
+  },
+  "K_nominal": 1.308996938995747,
+  "ablation_condition": "only_monomer",
+  "n_z": 128,
+  "slant_deg": 0.0
+ },
+ "config_hash": "e8a40bdbbbd9ab81",
+ "device": "cpu",
+ "device_name": "cpu:AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+ "dtype": "torch.float32",
+ "loss_curve": [
+  [
+   0,
+   0.24976900219917297
+  ],
+  [
+   50,
+   0.07574021071195602
+  ],
+  [
+   100,
+   0.06449895352125168
+  ],
+  [
+   150,
+   0.06221621111035347
+  ],
+  [
+   200,
+   0.06111442297697067
+  ],
+  [
+   250,
+   0.060255441814661026
+  ],
+  [
+   300,
+   0.05916617810726166
+  ],
+  [
+   350,
+   0.057918038219213486
+  ],
+  [
+   400,
+   0.05761345848441124
+  ],
+  [
+   450,
+   0.05746271833777428
+  ],
+  [
+   500,
+   0.05734674260020256
+  ],
+  [
+   550,
+   0.057244881987571716
+  ],
+  [
+   600,
+   0.057153232395648956
+  ],
+  [
+   650,
+   0.057090096175670624
+  ],
+  [
+   700,
+   0.05704003944993019
+  ],
+  [
+   750,
+   0.057001061737537384
+  ],
+  [
+   799,
+   0.05696776136755943
+  ]
+ ],
+ "iterations_run": 799,
+ "early_stop_reason": "n_iters_exhausted",
+ "wall_s": 246.20288586616516,
+ "peak_mem_mb": null,
+ "psnr": 12.443761825561523,
+ "psnr_maxnorm_legacy": 11.587362289428711,
+ "diffraction_efficiency": 0.7847378161853085,
+ "contrast": {
+  "max_over_mean": 2.0000019073484054,
+  "p95_over_mean": 2.0000019073484054
+ }
+}
