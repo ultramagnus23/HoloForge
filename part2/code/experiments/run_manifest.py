@@ -47,7 +47,7 @@ RESULTS_ROOT = os.path.join(HERE, "..", "results")
 # far less than seed noise already does, so it's defensible per the
 # spec's own criterion. This does NOT touch holomedia's library-wide
 # defaults (still float64, unchanged) or any of the already-run legacy
-# experiment scripts (run_prelim.py etc., which pin float64 explicitly or
+# standalone scripts (which pin float64 explicitly or
 # via NPDDRecorder's constructor default) -- only NEW jobs run through
 # this manifest pipeline are affected, so no already-committed result's
 # reproducibility is put at risk by this change.
@@ -484,9 +484,8 @@ def probe(name: str, n_x=1024, n_iters=800, converge_tol=1e-4):
               f"+/-25% and K's cut to the innermost 4 -- see manifest.py's "
               f"PAPER_SEEDS/build_M2_jobs/S2_PERTURBATIONS_PCT/S2_K_POINTS "
               f"comments for the full-grid opt-in):\n"
-              f"  (a) run S1/S2 at a smaller --n-x (mesh convergence data shows "
-              f"PSNR is mesh-independent within 0.04dB across n_x=512/1024/2048 "
-              f"-- results/gpu_reruns/npdd_mesh_sweep/results.json)\n"
+              f"  (a) run S1/S2 at a smaller --n-x (check mesh convergence "
+              f"first at the frozen geometry)\n"
               f"  (b) shard across processes with --shard i/N (embarrassingly "
               f"parallel -- each job writes to its own content-hashed path and "
               f"resume is skip-if-exists, so this is safe by construction)\n"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CPU-only launcher for the PATH_TO_7 follow-up queue (run from part2/code).
+# CPU-only launcher for the S1X, M1C, M2R and S2R queue (run from part2/code).
 # Used when CUDA is unavailable: a MIL job at n_x=1024 measures ~0.65 s/iter on
 # 8 CPU threads here, so the remaining tiers are CPU-feasible.
 # Usage: scripts/launch_cpu_queue.sh 0 1 2 3

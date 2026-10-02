@@ -1,6 +1,6 @@
 """
 Twin refit with k_bleach free, plus a held-out cross-series prediction
-(PATH_TO_7 item 4, the part that does not need paywalled data).
+(the part of the twin validation that does not need paywalled data).
 
 Bruder et al. 2017, Fig. 3 reports two Delta-n1(dose) series for Bayfol HX at
 the same grating (Lambda = 700 nm, K = 8.98 rad/um): the source's own kinetic

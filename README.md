@@ -6,7 +6,7 @@ HoloForge models the full pipeline of a phase-only holographic display (Angular-
 
 > **Part 1 preprint published:** *"Systematic Degradation Analysis in Phase-Only Computational Holography: A Simulation Framework"* — [Optica Open](https://preprints.opticaopen.org/articles/preprint/Systematic_Degradation_Analysis_in_Phase-Only_Computational_Holography_A_Simulation_Framework/32874356?file=66233162). Source and code: [`part1/`](part1/).
 >
-> **Part 2 draft in this repo:** *"Media-in-the-Loop Holography: Computer-Generated Holography Through a Differentiable Model of Volume Photopolymer Recording"* — [`part2/paper/oe_main.tex`](part2/paper/oe_main.tex), code in [`part2/code/`](part2/code/). Real paper-scale, multi-seed GPU results (M1/M2/S1/S2, 1086 result files); no compensation cliff found — media-aware optimization gain stays positive at every tested spatial frequency and dose budget. Formatted for Optica (Optics Express) submission. (A Twin Validation section against digitized literature curves is still pending; see `part2/code/data/literature/README.md`.)
+> **Part 2 (submitted to JOSA A):** *"Media-in-the-loop holography: designing photopolymer exposures through a differentiable recording model"* — manuscript [`part2/paper/manuscript.tex`](part2/paper/manuscript.tex), Supplement 1 [`part2/paper/supplement.tex`](part2/paper/supplement.tex), code and results in [`part2/code/`](part2/code/). A simulation study: designing the exposure through a differentiable photopolymer recording model beats media-blind design in 29 of 30 unslanted grating cells, mostly at low spatial frequency. Every number in the paper is generated from the committed per-job results; [`part2/code/REPRODUCE.md`](part2/code/REPRODUCE.md) gives the commands.
 
 ---
 
@@ -70,21 +70,25 @@ part1/                     # Part 1: phase-only CGH degradation study
     ├── part1_main.tex       # IEEEtran source, published to Optica Open
     └── README.md             # build instructions
 
-part2/                     # Part 2: media-in-the-loop holography
+part2/                     # Part 2: media-in-the-loop holography (JOSA A)
 ├── code/
-│   ├── holomedia/         # differentiable NPDD recording twin + optimizer
-│   ├── experiments/       # M1-M3/S1-S2 manifests, twin validation
+│   ├── holomedia/         # differentiable NPDD recording model + optimizers
+│   ├── experiments/       # tier manifests, runners, twin fits, checks
 │   ├── analysis/          # aggregation → results/summary/paper_numbers.json
-│   ├── figures/           # figure rendering (make_all.py)
+│   ├── figures/           # every paper and supplement figure (make_all.py)
+│   ├── scripts/           # numbers.tex, consistency/length checks, submission package
 │   ├── configs/, data/    # medium parameter files, digitized literature curves
-│   └── results/           # M1/M2/S1/S2 result JSONs (1086 files)
+│   ├── results/           # per-job result JSONs
+│   └── REPRODUCE.md       # how to regenerate everything
 └── paper/
-    ├── oe_main.tex         # current manuscript (Optica universal template)
-    ├── oe_supplement.tex
+    ├── manuscript.tex      # JOSA A manuscript (Optica universal template)
+    ├── supplement.tex      # Supplement 1
+    ├── cover_letter.tex
+    ├── numbers.tex         # generated: every number in the three documents
     ├── refs.bib
-    ├── optica-article.cls, opticajnl.bst, jabbrv*   # vendored template files
-    ├── legacy_template/    # retired OSA-era fallback template, kept for reference
-    └── DRAFT_HISTORY.md    # summary of two retired earlier drafts
+    ├── SUBMISSION_GUIDE.md # Prism upload steps and checklist
+    └── optica-article.cls, styles/, opticajnl.*, legacy-styles/, jabbrv*
+                            # Optica universal and length-check template files
 ```
 
 ## Stack

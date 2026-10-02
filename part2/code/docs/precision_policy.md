@@ -2,14 +2,12 @@
 
 ## Decision
 The production manifest pipeline (`experiments/run_manifest.py`, i.e. every
-Phase 3 E1-E7 job) defaults to **float32** (complex64 fields). This does
-**not** change `holomedia`'s library-wide defaults (still float64) or any
-already-run legacy experiment script (`run_prelim.py`, `run_confirm.py`,
-`gpu_*.py`, `ablation_gradients.py`, `f1_validate_twin.py`,
-`fit_literature_curves.py`, `rcwa_crosscheck.py`, `showcase_3d.py`) --
-those either pin `torch.float64` explicitly or rely on `NPDDRecorder`'s
-own constructor default (unchanged), so their already-committed results
-stay exactly reproducible if re-run.
+tier job) defaults to **float32** (complex64 fields). This does **not**
+change `holomedia`'s library-wide defaults (still float64) or the standalone
+scripts (`fit_literature_curves.py`, `fit_twin_holdout.py`,
+`rcwa_crosscheck.py`, `gradient_check.py`), which pin `torch.float64` or rely
+on `NPDDRecorder`'s own constructor default, so their committed results stay
+exactly reproducible if re-run.
 
 ## Evidence
 Measured (not assumed) on a representative config: `media_in_the_loop`

@@ -7,7 +7,7 @@ revision).
 
 WHAT THIS ADDS
 --------------
-oe_main.tex's Discussion section already states, ANALYTICALLY, that the
+An earlier draft's Discussion stated, ANALYTICALLY, that the
 uniform-through-depth recording assumption is "good only for optical
 density <~ 0.1 over the recorded thickness" -- but that bound was never
 tested empirically: the recording model has always treated dn as uniform
