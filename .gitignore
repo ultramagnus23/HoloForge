@@ -51,6 +51,5 @@ part1/code/results/*.npy
 # anywhere else in this repo.
 part2/code/results/S3/_designs/
 
-# Prism submission package: build artifact of part2/code/scripts/make_prism_package.py
-part2/paper/prism_submission/
-part2/paper/prism_submission.zip
+# JOSA A submission package: build artifact of part2/code/scripts/make_submission_package.py
+part2/submission/

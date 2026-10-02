@@ -1,3 +1,5 @@
 __pycache__/
 *.pt
 .ipynb_checkpoints/
+# Run logs and other local-only artifacts (launch scripts write *.log here).
+_local_archive/

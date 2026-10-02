@@ -21,7 +21,7 @@ Execution-readiness by tier (see each builder's docstring for detail):
     NEITHER has an execution path through run_job()/methods.run_method()
     yet -- both are solver/regime characterizations, not optimizer-method
     comparisons, and need new runner code. V1 overlaps substantially with
-    the existing (already-written) experiments/f1_validate_twin.py; V2
+    a twin-validation script that has since been retired; V2
     needs a genuine 3-way Kogelnik/BPM/RCWA comparison that does not exist
     yet (rcwa_crosscheck.py's E7 grid only compares Kogelnik vs RCWA, not
     BPM). Flagged, not silently faked.
@@ -322,7 +322,7 @@ def build_M2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
 
 # =====================================================================
 # S1: physics-component ablation (NOT the same as the pre-existing
-# experiments/ablation_gradients.py, which ablates GRADIENT COMPUTATION
+# the (retired) gradient-pathway ablation, which ablated GRADIENT COMPUTATION
 # PATHWAYS -- an engineering question. This ablates NPDD MODEL TERMS -- a
 # physics question. See docs/legacy_results_audit.md's flagged naming
 # collision.) Each condition is implemented via existing MediumParams
@@ -379,7 +379,7 @@ def build_S1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
 
 
 # =====================================================================
-# S1X: saturation-mechanism factorial (PATH_TO_7 item 2).
+# S1X: saturation-mechanism factorial.
 # S1's "no_saturation" linearizes only the tanh index map; two further
 # mechanisms also saturate the dose response -- monomer depletion (finite u)
 # and dye bleaching (d -> 0). S1X crosses all three on/off (2^3 cells; the
@@ -657,7 +657,7 @@ def build_M1C_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e
             if abs(j["config"]["K_nominal"] - 3.926991) < 1e-3]
 
 
-# M2R: reduced M2 (budget 2x only, PATH_TO_7 nice-to-have) -- a subset of M2
+# M2R: reduced M2 (budget 2x only) -- a subset of M2
 # with IDENTICAL configs/hashes, so running full M2 later only adds 4x/8x.
 def build_M2R_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4) -> list[dict]:
     return [j for j in build_M2_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
@@ -956,13 +956,13 @@ def build_S5_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
 # V1: NPDD solver validation vs. published data. JOB CONFIGS ONLY --
 # NOT execution-ready through run_job()/methods.run_method() (no
 # optimizer/method-registry concept applies; this characterizes the
-# forward solver directly, matching experiments/f1_validate_twin.py's
+# forward solver directly, matching the retired twin-validation script
 # existing approach). Needs a dedicated validation runner (follow-up).
 # Still blocked, independent of this restructure, on you digitizing the
 # published curves (data/literature/README.md) to compare against.
 # =====================================================================
-V1_K_GRID = [2.0, 6.0, 12.0, 20.0]  # rad/um, matches f1_validate_twin.py
-V1_T_GRID = [1, 2, 4, 6, 8, 10, 14, 18]  # exposure times, matches f1_validate_twin.py
+V1_K_GRID = [2.0, 6.0, 12.0, 20.0]  # rad/um
+V1_T_GRID = [1, 2, 4, 6, 8, 10, 14, 18]  # exposure times
 
 
 def build_V1_jobs(n_x: int = 1024, dx: float = 0.05) -> list[dict]:

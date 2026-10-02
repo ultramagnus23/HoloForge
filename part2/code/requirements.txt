@@ -1,5 +1,7 @@
 torch>=2.0
 numpy
 matplotlib
-scipy  # analysis/aggregate.py (t-distribution CI), experiments/fit_literature_curves.py (least_squares)
-torcwa  # optional: only needed for experiments/rcwa_crosscheck.py
+scipy     # t-distribution intervals (analysis/aggregate.py), least squares (twin fits)
+pyyaml    # medium configuration files (experiments/fit_literature_curves.py)
+pytest    # tests/
+torcwa    # optional: only needed for experiments/rcwa_crosscheck.py

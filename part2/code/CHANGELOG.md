@@ -1,5 +1,33 @@
 # Changelog
 
+## JOSA A submission (2026-10-03)
+- Manuscript retargeted to JOSA A and fitted to 10 pages in the Optica
+  universal template (7 in the two-column journal layout): new title,
+  ~100-word abstract, Conclusion, Optica back matter including the required
+  generative-AI disclosure, merged ablation table, four redrawn figures.
+  Files renamed `oe_main.tex` -> `manuscript.tex`, `oe_supplement.tex` ->
+  `supplement.tex`; new `cover_letter.tex` reads `numbers.tex`.
+- Twin validation corrected: the k_bleach-held fit to the measured Bayfol
+  series is degenerate (a flat line), which the old text described as
+  reproducing the curve's shape. Fig. 4 now shows the k_bleach-free fits and
+  the held-out cross-series predictions; the held fits move to Fig. S5.
+- Supplement rebuilt as Supplement 1 (S-numbered sections, figures, tables)
+  without legacy diagnostics or the previous-draft errata. A new
+  finite-difference gradient check (`experiments/gradient_check.py`)
+  replaces the pre-freeze checkpointed-gradient number.
+- `figures/make_all.py` rewritten to produce exactly the paper's figures,
+  drawn at the template text width (`Fig1`..`Fig4`, `FigS1`..`FigS5`).
+- `scripts/check_consistency.py` no longer misses numbers written with a
+  LaTeX thin space (`2\,dB`) and checks all three documents;
+  `scripts/make_submission_package.py` (replaces `make_prism_package.py`)
+  builds the upload-ready package and refuses to build on any error,
+  undefined reference, `[PENDING]` macro or a manuscript over 10 pages.
+- Removed legacy code and data not used by the paper: the 2D study, the 3D
+  showcase, prelim/confirm/seed-bump runs, the neural-surrogate gradient
+  ablation, GPU mesh/wavelength reruns, pre-freeze NZ runs, the pre-revision
+  `results_archive/`, superseded figures, notebooks and audit docs. All of it
+  remains in git history; no reported number changed.
+
 ## Unreleased
 - **Analysis pinned to 3 seeds (`ANALYSIS_SEEDS`).** An M1 seed bump
   (3 -> 8 seeds) was started and stopped at ~16% (146/900 jobs, 8/45

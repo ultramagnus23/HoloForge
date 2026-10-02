@@ -9,11 +9,23 @@
 % as of this pass, none do (this note is deliberately split across two
 % words so it does not itself trip that scanner).
 
-@article{tripathi2025holoforge,
-  author  = {Tripathi, Chaitanya},
-  title   = {Systematic degradation analysis in phase-only computational holography: a simulation framework},
-  journal = {Optica Open preprint},
-  year    = {2025},
+% Part 1 preprint. DOI verified to resolve (doi.org -> preprints.opticaopen.org
+% article 32874356). Entered as a misc entry so the journal-abbreviation
+% package does not shorten "Optica Open".
+@misc{tripathi2025holoforge,
+  author       = {Tripathi, Chaitanya},
+  title        = {Systematic degradation analysis in phase-only computational holography: a simulation framework},
+  howpublished = {Optica Open (2025), \url{https://doi.org/10.1364/opticaopen.32874356}},
+}
+
+% Code and data archive cited in the Data availability statement. The Zenodo
+% DOI below is the CONCEPT DOI of the repository's archive (verified against
+% the Zenodo API: record 22202762 is the concept record of v1.0.0), so it
+% always resolves to the latest archived release.
+@misc{holoforge2026code,
+  author       = {Tripathi, Chaitanya},
+  title        = {{HoloForge}: media-in-the-loop holography code, experiment manifests and results},
+  howpublished = {Zenodo (2026), \url{https://doi.org/10.5281/zenodo.22202762}},
 }
 
 @article{gerchberg1972practical,
@@ -47,7 +59,7 @@
 
 @article{shi2021towards,
   author  = {Shi, Liang and Li, Beichen and Kim, Changil and Kellnhofer, Petr and Matusik, Wojciech},
-  title   = {Towards real-time photorealistic 3D holography with deep neural networks},
+  title   = {Towards real-time photorealistic {3D} holography with deep neural networks},
   journal = {Nature},
   volume  = {591},
   pages   = {234--239},
@@ -62,11 +74,14 @@
   year      = {2022},
 }
 
+% Title, authors and DOI verified against the ACM Digital Library record and
+% the authors' project page (neural-litho.github.io).
 @inproceedings{zheng2023neural,
-  author    = {Zheng, Cheng and others},
-  title     = {Neural lithography: close the design-to-manufacturing gap in computational optics with a differentiable, complex physical simulator},
-  booktitle = {SIGGRAPH Asia 2023 Conference Proceedings},
+  author    = {Zheng, Cheng and Zhao, Guangyuan and So, Peter T. C.},
+  title     = {Close the design-to-manufacturing gap in computational optics with a `{Real2Sim}' learned two-photon neural lithography simulator},
+  booktitle = {SIGGRAPH Asia 2023 Conference Papers},
   year      = {2023},
+  doi       = {10.1145/3610548.3618251},
 }
 
 @article{kogelnik1969coupled,
@@ -98,7 +113,7 @@
 % grep before assuming safe if reusing this file elsewhere).
 @article{sheridan2012reply,
   author  = {Sheridan, John T. and Gleeson, Michael R. and Close, Ciara E.},
-  title   = {Monomer diffusion rates in photopolymer material: Part {I}. Low spatial frequency holographic gratings: reply},
+  title   = {Monomer diffusion rates in photopolymer material: Part {I}. {L}ow spatial frequency holographic gratings: reply},
   journal = {Journal of the Optical Society of America B},
   volume  = {29},
   number  = {2},

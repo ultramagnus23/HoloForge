@@ -71,7 +71,7 @@ class MediumParams:
     # dict(DEFAULT_MEDIUM, **overrides) ablation-condition machinery can
     # set it exactly like every other physics toggle (sigma=0, D0=0, ...).
     linearize_index_map: bool = False
-    # Mechanism ablation (PATH_TO_7 item 2): hold the free-monomer field at
+    # Mechanism ablation (tier S1X): hold the free-monomer field at
     # its initial value u = 1 (an infinite monomer reservoir), so monomer
     # depletion can no longer saturate N. Polymer production and dye
     # bleaching are unchanged; with u uniform, diffusion of u is a no-op.
@@ -85,11 +85,9 @@ class MediumParams:
 
 def depth_resolved_dn(recorder: "NPDDRecorder", exposure: torch.Tensor,
                       optical_density: float, n_z: int) -> torch.Tensor:
-    """WP6 (Applied Optics revision, depth-resolved absorption): the
-    uniform-through-depth recording assumption oe_main.tex's Discussion
-    section already bounds analytically (Section on depth-resolved
-    absorption) as "good only for OD <~ 0.1 over the recorded
-    thickness" -- this makes that bound an EMPIRICAL one instead, by
+    """Depth-resolved absorption (tier S7): the uniform-through-depth
+    recording assumption is good only for small optical density over the
+    recorded thickness -- this tests that bound EMPIRICALLY, by
     actually attenuating the recording exposure with depth (Beer-Lambert:
     delivered dose falls by 10^{-OD * z/thickness} at depth z) and
     running the SAME NPDD recording physics independently at each of
@@ -316,28 +314,9 @@ class NPDDRecorder(torch.nn.Module):
         instead of retaining every one of n_steps intermediate activations,
         `torch.utils.checkpoint` retains state only every `block` steps and
         recomputes the sub-trajectory during the backward pass. Gradients are
-        analytically identical to `forward()`'s, and this now measures as
-        cosine similarity 1.000000 on real optimization probes -- not the
-        ~0.96-0.98 previously reported here.
-
-        CORRECTION (confirmed peer-review finding I10): the ~0.96-0.98
-        figure previously stated in this docstring was never a real
-        floating-point divergence between the checkpointed and unrolled
-        gradients. It was a bug in experiments/ablation_gradients.py's
-        cosine-similarity helper: its safety epsilon (1e-12), meant to
-        guard against dividing by a zero-norm vector, was NOT negligible
-        relative to the real denominator when comparing these specific
-        gradients (norm ~1e-6, so norm(a)*norm(b) ~1e-12 -- the SAME
-        order as the epsilon meant to be negligible next to it),
-        artificially depressing the reported similarity by a couple of
-        percent even for numerically identical vectors -- reproduced
-        directly: two literally-identical gradient vectors at this norm
-        scale gave a "cosine similarity" of 0.977127 under the old
-        formula. With the epsilon fixed (1e-30, still a zero-division
-        guard, now genuinely negligible), the real answer is that
-        checkpointing changes nothing about the computed gradient at
-        this block size, only memory/wall-clock (see
-        experiments/ablation_gradients.py for the measured numbers).
+        analytically identical to `forward()`'s (tests/test_smoke.py checks
+        the forward values match); only memory and wall-clock change. The
+        paper's runs use the unrolled `forward()`.
         """
         I = exposure.to(self.dtype)
         u = torch.ones_like(I)
@@ -419,9 +398,8 @@ class SaturationOnlyTwin(NPDDRecorder):
     optimization conditioning, not from lack of modeling power, and would
     answer a question nobody asked. So the SAT baseline calibrates `a`
     first (see fit_saturation_only), which is what anyone actually
-    shipping a cheap saturating model would do, and is the same
-    fit-once-offline / amortize-forever protocol the neural surrogate in
-    holomedia/surrogate.py already uses. On the default medium the fit
+    shipping a cheap saturating model would do (fit once offline, amortize
+    over every optimization). On the default medium the fit
     returns a ~ 5.3 at NRMSE ~ 0.06 against the full twin: a genuinely
     good pointwise fit, and a fair opponent.
 
@@ -462,9 +440,7 @@ def _sample_band_limited_exposures(n_samples: int, n_x: int, dtype, seed: int,
                                    dose_budget: float = 1.0):
     """Random nonnegative band-limited exposures at the given mean dose.
 
-    Same generator family as holomedia.surrogate.train_surrogate's, for
-    the same reason: the fit should see the statistics the optimizer
-    actually explores. (A spatially UNIFORM exposure would be useless as
+    The fit should see the statistics the optimizer actually explores. (A spatially UNIFORM exposure would be useless as
     fit data here -- a constant profile drives the full twin to complete
     conversion regardless of its level, so it carries no information
     about the dose response at all.)
@@ -490,9 +466,7 @@ def fit_saturation_only(recorder: NPDDRecorder, n_samples: int = 48,
     Offline one-parameter least squares of the pointwise map against the
     full twin's response on `n_samples` random band-limited exposures.
     Costs n_samples forward passes of the real twin, paid once and
-    amortized over every subsequent optimization -- the same bargain
-    holomedia/surrogate.py's neural surrogate makes, with one parameter
-    instead of a CNN.
+    amortized over every subsequent optimization.
 
     Fitting in log-space keeps `a` positive with no constraint machinery.
 

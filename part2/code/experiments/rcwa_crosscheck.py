@@ -5,7 +5,7 @@ Cross-checks the scalar closed-form Kogelnik prediction (`kogelnik_de`, the
 tier the split-step BPM engine reduces to for pure sinusoidal gratings) against
 a full-vector Rigorous Coupled-Wave Analysis (RCWA) via the `torcwa` package,
 on 3 representative unslanted transmission volume gratings spanning the
-spatial-frequency range used in `f1_validate_twin.py` (K = 2, 6, 12 rad/um).
+spatial-frequency range K = 2-12 rad/um.
 
 Each case is a single-layer sinusoidal-index slab eps(x) = (n0 + dn cos(Kx))^2
 (shrinkage/multilayer effects deliberately excluded here -- this check isolates
@@ -34,7 +34,7 @@ WAVELENGTH_UM = 0.405
 THICKNESS_UM = 30.0
 N0 = 1.5
 THETA_B_DEG = 10.0  # matches kogelnik_de's default theta_B
-CASES = [  # (K rad/um, dn amplitude) -- spans the f1_validate_twin.py K range
+CASES = [  # (K rad/um, dn amplitude)
     dict(K=2.0, dn=2.0e-3, name="low-K"),
     dict(K=6.0, dn=2.0e-3, name="mid-K"),
     dict(K=12.0, dn=1.0e-3, name="high-K"),

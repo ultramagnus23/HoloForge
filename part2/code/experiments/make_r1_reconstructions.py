@@ -27,7 +27,7 @@ now loses at most the currently-in-flight K-point, not the whole run.
 Writes one checkpoint per K to results_r1_checkpoints/K_<value>.json, and
 merges them into results_r1_reconstructions.json (target, BSGD recon, MIL
 recon, PSNR for each, per K) once all are present, for
-figures/make_all.py's make_R1 to render.
+figures/make_all.py's make_fig2_reconstructions to render.
 
 Manifest note: this reuses S1_K_POINTS, DEFAULT_MEDIUM, and budget=2x --
 all already-registered manifest constants from experiments/manifest.py,
@@ -95,7 +95,7 @@ def run_one_K(K: float, rec, bpm, device) -> dict:
           f"MIL PSNR={psnr_mil:.2f}dB ({t_mil:.0f}s)  gain={psnr_mil-psnr_bsgd:.2f}dB", flush=True)
 
     # REMEDIATION (confirmed peer-review finding I4, second part): the
-    # error panel this feeds (figures/make_all.py's make_R1_reconstructions)
+    # error panel this feeds (figures/make_all.py's make_fig2_reconstructions)
     # previously plotted the RAW residual (recon - target), but the psnr
     # labels next to it are psnr_si -- computed from the OPTIMALLY-SCALED
     # residual (alpha*recon - target, alpha = <recon,target>/<recon,recon>),
