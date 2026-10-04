@@ -73,7 +73,7 @@ def run(n_x=1024, n_iters=800, converge_tol=1e-4, seeds=None, device=None,
                 n_skipped += 1
                 continue
             if E is None:
-                E = design_one(job, device, dtype=dtype)  # loads S3's cached .pt
+                E = design_one(job, device, dtype=dtype)
             t0 = time.time()
             scored = evaluate(E, cfg, cond["medium"], device, dtype=dtype)
             atomic_write_json(path, dict(

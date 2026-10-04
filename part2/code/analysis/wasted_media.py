@@ -62,8 +62,6 @@ def main():
         "WastedMediaThreshDB": f"{THRESH_DB:.0f}",
         "WastedMediaBSGDFrac": f"{fail_frac(gaps_bsgd, THRESH_DB) * 100:.0f}",
         "WastedMediaMILFrac": f"{fail_frac(gaps_mil, THRESH_DB) * 100:.0f}",
-        # No digits in LaTeX control-word names -- \Foo1dB parses as \Foo
-        # followed by literal "1dB", not one macro. Spelled out instead.
         "WastedMediaBSGDFracOneDB": f"{fail_frac(gaps_bsgd, 1.0) * 100:.0f}",
         "WastedMediaMILFracOneDB": f"{fail_frac(gaps_mil, 1.0) * 100:.0f}",
         "WastedMediaBSGDFracThreeDB": f"{fail_frac(gaps_bsgd, 3.0) * 100:.0f}",

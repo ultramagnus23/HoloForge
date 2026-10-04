@@ -37,7 +37,7 @@ import numpy as np
 from style import (new_fig, savefig, no_data_placeholder, panel_label, COLORS,
                    METHOD_COLORS, METHOD_LABELS, METHOD_MARKERS, METHOD_LINESTYLES,
                    BUDGET_COLORS, BUDGET_LINESTYLES, BUDGET_MARKERS,
-                   SINGLE_COL_IN, DOUBLE_COL_IN, K_LABEL, GAIN_LABEL)
+                   K_LABEL, GAIN_LABEL)
 from analysis.aggregate import (load_all_results as _load_all_results_raw,
                                 group_by_config, split_complete_m1,
                                 headroom_closure, gain_curve, BUDGETS,
@@ -48,10 +48,7 @@ import run_manifest as rm
 HERE = os.path.dirname(__file__)
 OUT_DIR = os.path.join(HERE, "paper")
 
-# Grid spacing of every 1D job (Table 1: n_x = 1024, dx = 0.05 um).
 DX_UM = 0.05
-# Window shown in the profile figures: 9.6 um, i.e. 2, 6 and 8 periods at
-# K = 1.31, 3.93 and 5.24 rad/um -- the full 51.2 um window is unreadable.
 CROP_PX = 192
 K_TICKS = [2, 3, 4, 5, 7, 10, 15]
 
@@ -92,7 +89,6 @@ def _ci_err(means, los, his):
     return [[m - lo for m, lo in zip(means, los)], [hi - m for m, hi in zip(means, his)]]
 
 
-# --------------------------------------------------------------------- main text
 def make_fig1_paired_gain():
     """(a) Paired gain vs K for the three contrast budgets, 95% t-intervals
     over seeds, heuristic K_c(B_c) as dashed lines. (b) Every non-oracle
@@ -201,7 +197,7 @@ def _s3_param_curves(results):
                             c.get("K_nominal"), r["method_id"]), []).append(r)
     all_K = sorted({r["config"]["K_nominal"] for r in results})
     params = sorted({k[0] for k in buckets})
-    nominal_param = next(k[0] for k in buckets if k[1] == 0)  # pct 0 is stored once
+    nominal_param = next(k[0] for k in buckets if k[1] == 0)
     curves = {}
     for p in params:
         pts = []
@@ -331,7 +327,6 @@ def make_fig4_twin_validation():
     return True
 
 
-# --------------------------------------------------------------------- supplement
 def make_figS1_exposure_profiles():
     """Exposure E(x) and recorded index Delta n(x), BSGD vs MIL, same K,
     budget, seed and crop window as Fig. 2."""
@@ -370,7 +365,6 @@ ABLATION_LABELS = {
     "no_diffusion": r"no diffusion ($D_0=0$)", "no_dye_depletion": "no dye depletion",
     "no_saturation": r"no saturation ($\tanh$ linearized)",
 }
-# Factorial conditions in the order and wording of the supplement table.
 FACTORIAL_ORDER = [
     "baseline", "no_monomer_depletion", "no_monomer_depletion_matched", "no_dye_depletion",
     "no_saturation", "only_tanh", "only_tanh_matched", "only_dye", "only_dye_matched",
@@ -479,7 +473,7 @@ def make_figS4_rcwa_envelope():
     return True
 
 
-HELD_KBLEACH_PANELS = [  # file, panel title, x-axis label, log-x
+HELD_KBLEACH_PANELS = [
     ("bruder2017_growth_dn_K8.98_sim.csv", "Bayfol HX, source kinetic model",
      r"exposure dose (mJ/cm$^2$)", True),
     ("bruder2017_growth_dn_K8.98_exp.csv", "Bayfol HX, measured",

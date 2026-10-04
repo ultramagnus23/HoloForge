@@ -94,15 +94,6 @@ def run_one_K(K: float, rec, bpm, device) -> dict:
     print(f"K={K:.3f}  BSGD PSNR={psnr_bsgd:.2f}dB ({t_bsgd:.0f}s)  "
           f"MIL PSNR={psnr_mil:.2f}dB ({t_mil:.0f}s)  gain={psnr_mil-psnr_bsgd:.2f}dB", flush=True)
 
-    # REMEDIATION (confirmed peer-review finding I4, second part): the
-    # error panel this feeds (figures/make_all.py's make_fig2_reconstructions)
-    # previously plotted the RAW residual (recon - target), but the psnr
-    # labels next to it are psnr_si -- computed from the OPTIMALLY-SCALED
-    # residual (alpha*recon - target, alpha = <recon,target>/<recon,recon>),
-    # not the raw one. Saving the alpha-scaled reconstructions here (instead
-    # of changing the plotting code) means every consumer of this JSON --
-    # both the profile overlay and the error panel -- shows what psnr_si
-    # actually scored, with no separate scaling logic to keep in sync.
     def _si_scaled(recon):
         alpha = (recon * target).sum() / ((recon * recon).sum() + 1e-12)
         return alpha * recon
@@ -128,23 +119,18 @@ def main():
 
     os.makedirs(CKPT_DIR, exist_ok=True)
 
-    for K in S1_K_POINTS:  # sub/near/post-cliff, matches M2's shared points
+    for K in S1_K_POINTS:
         path = ckpt_path(K)
         if os.path.exists(path):
             print(f"K={K:.3f}: checkpoint already exists, skipping ({path})", flush=True)
             continue
         result = run_one_K(K, rec, bpm, device)
-        # write to a temp file then rename -- atomic, so a kill mid-write
-        # never leaves a corrupt/partial checkpoint that looks done
         tmp_path = path + ".tmp"
         with open(tmp_path, "w") as f:
             json.dump(result, f)
         os.replace(tmp_path, path)
         print(f"K={K:.3f}: checkpoint written ({path})", flush=True)
 
-    # merge whatever checkpoints exist now (lets a partial run still be
-    # inspected, but the completeness check below still fails loud if
-    # any K point never finished)
     results = []
     for K in S1_K_POINTS:
         path = ckpt_path(K)
@@ -152,9 +138,6 @@ def main():
             with open(path) as f:
                 results.append(json.load(f))
 
-    # zero-row / silent-success check (ground rule): fail loud if nothing
-    # came out, and specifically report which K points are still missing
-    # rather than silently writing a partial/hollow JSON as if complete
     missing = [K for K in S1_K_POINTS if not os.path.exists(ckpt_path(K))]
     if missing:
         raise RuntimeError(f"make_r1_reconstructions incomplete: {len(missing)} of "

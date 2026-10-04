@@ -17,9 +17,6 @@ from skimage.metrics import structural_similarity as _ssim_skimage
 from skimage.metrics import peak_signal_noise_ratio as _psnr_skimage
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Basic metrics
-# ─────────────────────────────────────────────────────────────────────────────
 
 def mse(ref: np.ndarray, deg: np.ndarray) -> float:
     """Mean Squared Error."""
@@ -45,9 +42,6 @@ def ssim(ref: np.ndarray, deg: np.ndarray) -> float:
     return float(_ssim_skimage(ref, deg, data_range=1.0))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Perceptual proxy (no torch/tensorflow needed)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _gradient_magnitude(img: np.ndarray) -> np.ndarray:
     """Compute gradient magnitude via finite differences (Sobel-like)."""
@@ -72,7 +66,6 @@ def lpips_gradient_proxy(ref: np.ndarray, deg: np.ndarray) -> float:
     return float(np.mean((gm_ref - gm_deg) ** 2))
 
 
-# Backward-compatible alias (old name).
 lpips_proxy = lpips_gradient_proxy
 
 
@@ -93,30 +86,24 @@ def lpips_real(ref: np.ndarray, deg: np.ndarray) -> float:
     try:
         import torch
         import lpips as lpips_lib
-        # Lazy-load model (cached after first call)
         if not hasattr(lpips_real, '_fn'):
             lpips_real._fn = lpips_lib.LPIPS(net='alex', verbose=False)
 
         def _to_tensor(arr):
-            # (H,W) float32 [0,1] → (1,3,H,W) tensor in [-1,1]
             t = torch.from_numpy(np.ascontiguousarray(arr, dtype=np.float32)).unsqueeze(0).unsqueeze(0)
-            t = t.repeat(1, 3, 1, 1)    # grayscale → 3-channel
-            return t * 2 - 1            # [0,1] → [-1,1]
+            t = t.repeat(1, 3, 1, 1)
+            return t * 2 - 1
 
         with torch.no_grad():
             score = lpips_real._fn(_to_tensor(ref), _to_tensor(deg))
         return float(score.item())
     except ImportError:
-        # Graceful fallback to gradient proxy with a warning
         import warnings
         warnings.warn("lpips not installed — falling back to gradient proxy. "
                       "Run: pip install lpips torch torchvision")
         return lpips_gradient_proxy(ref, deg)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Bundle — compute all at once
-# ─────────────────────────────────────────────────────────────────────────────
 
 def all_metrics(ref: np.ndarray, deg: np.ndarray) -> dict:
     """

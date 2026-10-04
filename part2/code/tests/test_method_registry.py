@@ -44,21 +44,20 @@ def _setup(n_x=128, sigma=0.08, D0=0.1):
 
 
 def test_linear_precomp_reduces_to_target_when_H_is_one():
-    # sigma=0, D0=0 => Ghat(K)=1, D0*K^2/F0=0 => H(K)=1 for all K => boost=1
     rec, bpm = _setup(sigma=0.0, D0=0.0)
     x = torch.arange(rec.n_x)
-    target = ((x // 16) % 2).double() + 0.1  # >0 everywhere, avoids clip-to-0 confound
+    target = ((x // 16) % 2).double() + 0.1
 
     dose_budget = 1.0
     E, recon = linear_precomp(target, rec, bpm, dose_budget=dose_budget, contrast_cap=None)
-    expected = target * (dose_budget / target.mean())  # pure dose rescaling, no reshaping
+    expected = target * (dose_budget / target.mean())
     max_diff = (E - expected).abs().max().item()
     assert max_diff < 1e-8, f"H==1 should leave target unmodified (up to dose rescale): diff={max_diff}"
     print("linear_precomp H==1 reduces to target OK, max diff =", max_diff)
 
 
 def test_linear_precomp_satisfies_constraints_exactly():
-    rec, bpm = _setup(sigma=0.08, D0=0.1)  # realistic H(K), nontrivial boost
+    rec, bpm = _setup(sigma=0.08, D0=0.1)
     x = torch.arange(rec.n_x)
     target = ((x // 8) % 2).double()
 
@@ -85,14 +84,12 @@ def test_history_last_iteration_is_accurate_stop_point():
     target = ((x // 8) % 2).double()
     n_iters, log_every = 60, 5
 
-    # no early stop possible -> last entry must be exactly n_iters-1
     _, _, hist_full = media_in_the_loop(target, rec, bpm, n_iters=n_iters, seed=0,
                                         log_every=log_every, verbose=False,
                                         converge_tol=None)
     assert hist_full[-1][0] == n_iters - 1, \
         f"full run should end at iter {n_iters-1}, got {hist_full[-1][0]}"
 
-    # deliberately loose tol -> must stop well before n_iters-1
     _, _, hist_early = media_in_the_loop(target, rec, bpm, n_iters=n_iters, seed=0,
                                          log_every=log_every, verbose=False,
                                          converge_tol=0.5, patience=3)
@@ -173,16 +170,12 @@ def test_loss_and_metric_are_the_same_objective():
     b = torch.rand(256).abs() + 0.1
     a = (b + 0.1 * torch.rand(256)).abs()
 
-    # psnr_si == -10 log10(si_mse), exactly
     assert abs(psnr_si(a, b) - float(-10.0 * torch.log10(si_mse(a, b) + 1e-12))) < 1e-9
 
-    # scale invariance: the whole point -- brightness is a readout gain,
-    # not a property of the design, so it must not change the score.
     for s in (0.01, 0.5, 3.0, 100.0):
         assert abs(psnr_si(a * s, b) - psnr_si(a, b)) < 1e-4, \
             f"psnr_si changed under rescaling by {s}"
 
-    # better reconstruction => strictly better score (monotone, sane)
     worse = (b + 0.5 * torch.rand(256)).abs()
     assert psnr_si(a, b) > psnr_si(worse, b)
     print("objective/metric alignment OK: psnr_si == -10log10(si_mse), scale-invariant")
@@ -190,7 +183,6 @@ def test_loss_and_metric_are_the_same_objective():
 
 
 
-# ============================================================ SAT surrogate
 def test_saturation_only_twin_matches_npdd_in_zero_transport_limit():
     """SaturationOnlyTwin is not an arbitrary sigmoid: it is the exact
     closed-form solution of the NPDD system once every transport term is
@@ -227,7 +219,7 @@ def test_uncalibrated_surrogate_is_saturated_at_working_dose():
     from holomedia.npdd import fit_saturation_only
     p = MediumParams()
     rec = NPDDRecorder(256, 0.2, params=p)
-    uncal = SaturationOnlyTwin(256, 0.2, params=p)          # a = kappa*t = 20
+    uncal = SaturationOnlyTwin(256, 0.2, params=p)
     a_eff, nrmse = fit_saturation_only(rec, n_samples=16)
     cal = SaturationOnlyTwin(256, 0.2, params=p, a_eff=a_eff)
 

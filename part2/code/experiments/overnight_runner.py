@@ -40,10 +40,10 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from manifest import BUILDERS
 import run_manifest as _rm
-from run_manifest import result_path, RESULTS_ROOT, apply_shard
+from run_manifest import result_path, apply_shard
 
 HERE = os.path.dirname(__file__)
-ALLOW_CPU = False  # set by --allow-cpu; forwarded to every run_manifest chunk
+ALLOW_CPU = False
 
 
 def jobs_remaining(manifest_name: str, n_x: int, n_iters: int, converge_tol: float,
@@ -113,7 +113,7 @@ def run_one_manifest(manifest: str, deadline: float, chunk_minutes: float,
                       f"GPU drop. Stopping so it doesn't spin all night for nothing.",
                       flush=True)
                 sys.exit(1)
-            time.sleep(15)  # let the device settle before retrying
+            time.sleep(15)
 
     n_done, n_total = jobs_remaining(manifest, n_x, n_iters, converge_tol, shard)
     print(f"[overnight] {manifest} at budget cutoff: {n_done}/{n_total} done.", flush=True)
@@ -180,7 +180,7 @@ def main():
                          args.max_consecutive_crashes, args.n_x,
                          args.n_iters, args.converge_tol, shard)
 
-    print(f"\n[overnight] session done. Status:", flush=True)
+    print("\n[overnight] session done. Status:", flush=True)
     for m in manifests:
         n_done, n_total = jobs_remaining(m, args.n_x, args.n_iters, args.converge_tol, shard)
         print(f"  {m}: {n_done}/{n_total}", flush=True)

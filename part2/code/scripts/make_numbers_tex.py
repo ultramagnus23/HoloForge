@@ -59,7 +59,6 @@ def build_macros(paper_numbers: dict) -> str:
             "\n"]
 
     closure = paper_numbers.get("m1_headroom_closure", [])
-    seed_counts = set()
     for row in closure:
         label = BUDGET_LABELS.get(row.get("budget"))
         if label is None:
@@ -73,7 +72,6 @@ def build_macros(paper_numbers: dict) -> str:
             continue
         lines.append(macro(f"MeasuredContrast{label}", fmt(row.get("measured_contrast_C"))))
         lines.append(macro(f"KcPred{label}", fmt(row.get("predicted_Kc_from_measured_C"))))
-        # Data present but no crossing is a result ("none"), not missing data.
         lines.append(macro(f"Kstar{label}Interp", fmt(row.get("observed_Kstar_interp")) or "none"))
         lines.append(macro(f"Kstar{label}CI", fmt(row.get("observed_Kstar_ci")) or "none"))
         curve = row.get("gain_curve", [])
@@ -82,10 +80,6 @@ def build_macros(paper_numbers: dict) -> str:
         min_gain = min((g for _, g, _, _ in curve), default=None)
         lines.append(macro(f"MinGain{label}", fmt(min_gain)))
 
-    # Worst-case (minimum) gain across ALL budgets/K -- supports the "gain
-    # never goes negative anywhere" claim with one concrete number, since
-    # the per-budget MinGain{label} macros above already cover each budget
-    # individually.
     if closure:
         eightx = next((r for r in closure if r.get("budget") == 8.0), None)
         if eightx and eightx.get("gain_curve"):
@@ -94,13 +88,6 @@ def build_macros(paper_numbers: dict) -> str:
                                fmt(min(g for r in closure if r.get("gain_curve")
                                       for _, g, _, _ in r["gain_curve"]))))
 
-    # S1: physics-component ablation. Ratio of each ablation's K-averaged
-    # gain to the baseline condition's -- >1 means removing that term
-    # INCREASED gain (the term was suppressing MIL's advantage over BSGD
-    # in the intact model), ~1 means the term isn't doing much for this
-    # comparison.
-    # S8: slant-angle dependence of the paired gain (2x budget). Macro names
-    # cannot contain digits, so angles / K / n_z are spelled out.
     _SLANT = {0.0: "Zero", 2.5: "TwoFive", 5.0: "Five", 7.5: "SevenFive",
               10.0: "Ten", 15.0: "Fifteen", 20.0: "Twenty"}
     _KLAB = {1.9635: "KLow", 3.927: "KMid"}
@@ -112,7 +99,6 @@ def build_macros(paper_numbers: dict) -> str:
             lines.append(macro(f"SEightLo{klab}Slant{slab}", fmt(stat.get("ci95_lo"), ".3f")))
             lines.append(macro(f"SEightHi{klab}Slant{slab}", fmt(stat.get("ci95_hi"), ".3f")))
 
-    # NZ0: n_z convergence at the frozen (unslanted) geometry, pooled over K.
     _NZ = {32: "ThirtyTwo", 128: "OneTwentyEight", 256: "TwoFiftySix"}
     nz0 = paper_numbers.get("nz0_convergence_summary", {})
     for nz, nlab in _NZ.items():
@@ -141,10 +127,6 @@ def build_macros(paper_numbers: dict) -> str:
                     "SOneNoDiffusionRatio", "SOneNoNonlocalityRatio", "SOneNoDyeDepletionRatio"):
             lines.append(macro(name, None))
 
-    # S2: NPDD parameter sensitivity. Overall min/max K-averaged gain
-    # across all tested +/-50% D0/sigma/kappa perturbations, vs. the
-    # unperturbed baseline -- supports "the result is not sensitive to
-    # getting these parameters individually wrong."
     s2 = paper_numbers.get("s2_sensitivity_summary", {})
     if s2.get("status") == "ok":
         lines.append(macro("STwoBaselineGain", fmt(s2.get("baseline", {}).get("mean"))))
@@ -154,17 +136,6 @@ def build_macros(paper_numbers: dict) -> str:
         for name in ("STwoBaselineGain", "STwoGainMin", "STwoGainMax"):
             lines.append(macro(name, None))
 
-    # S3: twin-MISCALIBRATION robustness. These are the macros the paper's
-    # robustness sentence is written against -- NOT S2's, which cannot
-    # support such a sentence (S2 keeps the perturbation common to both
-    # arms, where the paired design makes it cancel by construction).
-    #
-    # SThreeWorstWithinFifty is the number that matters: the lowest
-    # K-averaged paired gain over EVERY parameter at every perturbation
-    # inside +/-50%. If it is positive, the claim holds over the whole
-    # stated range. SThreeDnMaxFlipPct records where the one parameter
-    # that does eventually fail crosses zero, so the paper states a
-    # located boundary instead of an unbounded claim.
     s3 = paper_numbers.get("s3_mismatch_summary", {})
     if s3.get("status") == "ok":
         by_param = s3.get("by_param", {})
@@ -195,40 +166,18 @@ def build_macros(paper_numbers: dict) -> str:
         lines.append(macro("SThreeDnMaxWorstGain", fmt(dn.get("worst_mean_gain"))))
         by_pct = dn.get("by_pct", {})
         lines.append(macro("SThreeDnMaxAtHundred", fmt(by_pct.get("100", {}).get("mean"))))
-        # REMEDIATION (B2 cascading effect): this used to hard-code the
-        # lookup key "-63" (and a matching "SixtyThree" macro name) to the
-        # dn_max literature-disagreement grid's most-negative tested
-        # percentage. That grid is now derived dynamically from the real
-        # fit (experiments/manifest.py's _dn_max_disagreement_factor), so a
-        # hardcoded "-63" lookup would silently go PENDING the moment the
-        # fit -- and therefore the grid's actual endpoints -- changed, which
-        # is exactly what happened once the B2 conservation/accuracy fixes
-        # changed the fitted dn_max values. Finds the most-negative tested
-        # percentage directly from the real data instead, and reports its
-        # own value in the macro name via a fixed, letters-only name
-        # (SThreeDnMaxAtMostNegative) plus a companion macro carrying the
-        # actual percentage, so the prose can state which percentage this is
-        # without hand-typing it.
         most_negative_pct = min((int(p) for p in by_pct if int(p) < 0), default=None)
         lines.append(macro("SThreeDnMaxMostNegativePct",
                            str(most_negative_pct) if most_negative_pct is not None else None))
         lines.append(macro("SThreeDnMaxAtMostNegative",
                            fmt(by_pct.get(str(most_negative_pct), {}).get("mean"))
                            if most_negative_pct is not None else None))
-        # Companion pair for the most-POSITIVE tested percentage (same
-        # dynamic-grid reasoning as most_negative_pct above): the wider,
-        # corrected grid now extends well past the old sign-flip point
-        # (170%), and gain there is NOT monotonically worsening -- it
-        # partially recovers at the most extreme positive perturbation
-        # tested, a real finding worth reporting rather than only
-        # reporting the single worst point.
         most_positive_pct = max((int(p) for p in by_pct if int(p) > 0), default=None)
         lines.append(macro("SThreeDnMaxMostPositivePct",
                            str(most_positive_pct) if most_positive_pct is not None else None))
         lines.append(macro("SThreeDnMaxAtMostPositive",
                            fmt(by_pct.get(str(most_positive_pct), {}).get("mean"))
                            if most_positive_pct is not None else None))
-        # Whether ANY parameter flips sign inside the +/-50% claim range.
         flips_within = [v.get("sign_flip_pct") for v in by_param.values()
                         if v.get("sign_flip_pct") is not None
                         and abs(v["sign_flip_pct"]) <= 50]
@@ -243,10 +192,6 @@ def build_macros(paper_numbers: dict) -> str:
                      "SThreeDnMaxAtMostPositive", "SThreeAnyFlipWithinFifty"):
             lines.append(macro(name, None))
 
-    # SAT: how much of media-in-the-loop's advantage the cheap
-    # saturation-only surrogate recovers, per budget, plus the surrogate's
-    # own calibration quality (a SAT number is not interpretable without
-    # knowing how well a purely pointwise model could fit the twin at all).
     sat = paper_numbers.get("sat_surrogate_summary", {})
     if sat.get("status") == "ok":
         bb = sat.get("by_budget", {})
@@ -268,8 +213,6 @@ def build_macros(paper_numbers: dict) -> str:
                      "SATFracOfMILEightX", "SATFitNRMSE", "SATFitAEff"):
             lines.append(macro(name, None))
 
-    # SAT at the sub-cliff K the M1 grid cannot reach (see
-    # sat_surrogate_summary_m2's note in analysis/aggregate.py).
     satm2 = paper_numbers.get("sat_surrogate_summary_m2", {})
     if satm2.get("status") == "ok":
         v = satm2.get("by_budget", {}).get("2.0", {})
@@ -281,9 +224,6 @@ def build_macros(paper_numbers: dict) -> str:
         frac = v.get("fraction_of_mil") if ok else None
         lines.append(macro("SATSubCliffFracOfMIL",
                            fmt(100.0 * frac, ".0f") if frac is not None else None))
-        # Per-K structure: the pooled fraction averages away the fact that
-        # the surrogate is strong at low K and weak at high K, which is
-        # the practically useful part of the result.
         by_K = {}
         for bud, vv in satm2.get("by_budget", {}).items():
             if vv.get("status") != "ok":
@@ -321,32 +261,17 @@ def build_macros(paper_numbers: dict) -> str:
                      "SATPostCliffFracMin", "SATPostCliffFracMax"):
             lines.append(macro(name, None))
 
-    # Seed count: consistent across all logged M1 ITERATIVE-method rows (the
-    # methods MeanGain/gain-curve claims are actually about), or PENDING if
-    # absent/inconsistent. GS/LPC are closed-form and deliberately run at a
-    # single seed (no optimizer trajectory to vary) -- excluding them from
-    # this check is honest, not a fudge: including them would report a
-    # spurious inconsistency for something that isn't a data gap, it's a
-    # documented design choice (see manifest.py's build_M1_jobs).
     per_config = paper_numbers.get("per_config", {})
-    ITERATIVE_METHODS = {"BSGD", "MIL", "SAT", "ORC"}  # ORU: no headline number uses it
+    ITERATIVE_METHODS = {"BSGD", "MIL", "SAT", "ORC"}
     m1_seed_counts = {v["n_seeds"] for k, methods in per_config.items()
                       if k.startswith("M1/")
                       for m, v in methods.items() if m in ITERATIVE_METHODS}
-    #
-    # M1 is no longer a balanced design: a seedbump re-ran seeds 3-7 on a
-    # minority of configurations, so a single "N seeds" is not a true
-    # statement. Rather than pick one number and be wrong about the rest,
-    # emit the range (SeedCountDesc renders "3" when uniform and "3--8"
-    # when not, so the macro stays correct if the grid is ever balanced
-    # again) plus the modal count and how many cells carry extra seeds.
     if m1_seed_counts:
         lo, hi = min(m1_seed_counts), max(m1_seed_counts)
         lines.append(macro("SeedCountMin", str(lo)))
         lines.append(macro("SeedCountMax", str(hi)))
         lines.append(macro("SeedCountDesc",
                            str(lo) if lo == hi else f"{lo}--{hi}"))
-        # Modal count = what most cells actually have.
         counts = [v["n_seeds"] for k, methods in per_config.items()
                   if k.startswith("M1/")
                   for m, v in methods.items() if m in ITERATIVE_METHODS]
@@ -358,8 +283,6 @@ def build_macros(paper_numbers: dict) -> str:
                                for m, v in methods.items()
                                if m in ITERATIVE_METHODS)})
         lines.append(macro("SeedCountNExtraConfigs", str(n_extra)))
-        # Kept for any remaining call site: the modal value when uniform,
-        # PENDING otherwise, so nothing silently asserts uniformity.
         lines.append(macro("SeedCount", str(lo) if lo == hi else None))
     else:
         for name in ("SeedCountMin", "SeedCountMax", "SeedCountDesc",
@@ -392,22 +315,10 @@ def build_supplement_macros() -> str:
     rcwa3 = _load("results_rcwa.json")
     lines.append(macro("RCWAMaxDevThreeCase",
                        fmt(rcwa3.get("max_abs_deviation"), ".3f") if rcwa3 else None))
-    # NOTE: macro names must be letters-only -- LaTeX control words stop
-    # at the first non-letter character, so a name like "RCWAE7MaxDev"
-    # silently splits into the control sequence \RCWAE followed by literal
-    # text "7MaxDev" (and collides with any other macro sharing that same
-    # \RCWAE prefix). Caught by an actual pdflatex compile ("Missing
-    # \begin{document}" / "Missing number, treated as zero" cascading
-    # errors with no clear cause) -- this environment cannot catch this
-    # class of bug just by reading the .tex output, only by compiling it.
     rcwa_e7 = _load("results_rcwa_e7.json")
     lines.append(macro("RCWAVGridMaxDev",
                        fmt(rcwa_e7.get("max_abs_deviation"), ".2f") if rcwa_e7 else None))
     lines.append(macro("RCWAVGridNCases", str(rcwa_e7["n_cases"]) if rcwa_e7 else None))
-    # WP9 (RCWA promotion): per-geometry breakdown, backing the Discussion's
-    # "unslanted stays close, slanted degrades sharply" claim with real
-    # numbers instead of leaving only the single worst-case deviation
-    # (RCWAVGridMaxDev) to carry the whole comparison.
     if rcwa_e7:
         from collections import defaultdict
         import statistics as _stats
@@ -439,8 +350,6 @@ def build_validation_macros() -> str:
 
     lines.append(macro("NLiteratureSources", str(len(fits))))
 
-    # One macro pair per fit, keyed by a letters-only slug derived from the
-    # source filename (same macro-name constraint noted above for RCWA).
     for fit in fits:
         stem = fit["file"].replace(".csv", "")
         slug = "".join(ch for ch in stem.title().replace("_", "") if ch.isalpha())
@@ -454,11 +363,6 @@ def build_validation_macros() -> str:
         n_good = sum(1 for f in fits if f["fit_quality"] == "GOOD")
         lines.append(macro("NGoodFits", str(n_good)))
 
-        # In-regime-only (K within this paper's own tested M1/S1/S2 grid,
-        # 1.96-15.71 rad/um) worst/best -- the Gate-A/A.5 finding that
-        # K=24.94 (Hsieh) sits outside that range and must not count as
-        # in-regime model-structure evidence. Threshold matches the
-        # K_GRID bounds already used elsewhere (see Results section).
         in_regime = [f for f in fits if 1.96 <= f["K"] <= 15.71]
         if in_regime:
             worst_ir = max(in_regime, key=lambda f: f["nrmse"])
@@ -471,9 +375,6 @@ def build_validation_macros() -> str:
             lines.append(macro("NRMSEBestInRegime", None))
             lines.append(macro("NInRegimeSources", "0"))
 
-        # dn_max disagreement between the two Bayfol series (same paper,
-        # same K, two exposure intensities) -- named directly in Section 6
-        # rather than smoothed over. Only computed when both exist.
         bayfol = [f for f in fits if "bruder2017" in f.get("file", "")
                  and f.get("second_param") == "dn_max"]
         if len(bayfol) == 2:
@@ -505,16 +406,12 @@ def build_shrinkage_bound_macros() -> str:
     lines = ["\n% --- shrinkage-induced shift bound (Discussion) macros ---\n"]
     try:
         from holomedia import MediumParams
-        p = MediumParams()  # DEFAULT_MEDIUM-equivalent: shrinkage, thickness
-        slant_deg = 20.0  # SlabBPM.forward's own default -- see holomedia/diffraction.py
+        p = MediumParams()
+        slant_deg = 20.0
         tan_phi = math.tan(math.radians(slant_deg))
         shift_um = p.shrinkage * tan_phi * p.thickness
         shift_nm = shift_um * 1000.0
-        K_LO, K_HI = 1.96, 15.71  # this paper's own tested K grid (Results section)
-        # fraction of a grating period = shift / period; period = 2*pi/K, so
-        # LOW K -> long period -> SMALL fraction, HIGH K -> short period ->
-        # LARGE fraction. (Named frac_lo/frac_hi by which K they're AT, not
-        # by which is numerically larger -- checked this isn't swapped.)
+        K_LO, K_HI = 1.96, 15.71
         frac_lo = shift_um / (2 * math.pi / K_LO) * 100.0
         frac_hi = shift_um / (2 * math.pi / K_HI) * 100.0
         lines.append(macro("ShrinkagePct", fmt(p.shrinkage * 100, ".1f")))
@@ -609,9 +506,6 @@ def build_wp3_baseline_macros() -> str:
         gpc_vals = [v[1] for v in gpc_curve]
         lines.append(macro("GPCGainMin", fmt(min(gpc_vals), ".2f") if gpc_vals else None))
         lines.append(macro("GPCGainMax", fmt(max(gpc_vals), ".2f") if gpc_vals else None))
-        # Degeneracy check: max abs(GPC-LPC) paired gain at this budget,
-        # to back the "frequently near-identical to LPC" claim with a
-        # real computed number rather than the smoke-test anecdote.
         lpc_curve = gain_vs_bsgd_seed_mean(grouped, "M1", 2.0, method="LPC")
         lpc_by_K = {k: v for k, v, *_ in lpc_curve}
         gpc_by_K = {k: v for k, v, *_ in gpc_curve}
@@ -855,7 +749,7 @@ def build_path7_macros(pn: dict) -> str:
             L.append(macro(f"Holdout{vlab}{tlab}In", fmt(f["nrmse"]) if f else None))
             L.append(macro(f"Holdout{vlab}{tlab}Out", fmt(f["heldout_nrmse"]) if f else None))
             kb = f["params"].get("k_bleach") if f else None
-            if f and kb is None:  # variant A holds k_bleach at the base value
+            if f and kb is None:
                 kb = ho["base_params"]["k_bleach"]
             L.append(macro(f"Holdout{vlab}{tlab}Kbleach", fmt(kb, ".3g") if kb is not None else None))
             dm = f["params"].get("dn_max") if f else None

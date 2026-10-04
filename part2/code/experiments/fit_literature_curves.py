@@ -67,18 +67,6 @@ LITERATURE_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "literatu
 CONFIGS_DIR = os.path.join(os.path.dirname(__file__), "..", "configs", "media")
 CSV_SCHEMA_COLUMNS = ["x", "y", "source_doi", "figure_id", "digitized_by", "date"]
 
-# Map a filename prefix (the part before the first "_") to the medium config
-# it should be fit against, instead of the generic PVA/acrylamide-calibrated
-# MediumParams() default. This matters: dn_max is held fixed during fitting
-# (only kappa/D0 are free, per the master prompt's "kappa, plus at most one
-# more"), and dn_max differs by a real physical factor between media
-# families -- fitting a Bayfol HX curve (high-Dn material) against the
-# generic default's dn_max=3.5e-3 caps the model well below the curve's own
-# peak (~0.016) no matter what kappa/D0 are chosen, which looks like a
-# fitting failure but is actually a medium-family mismatch. Discovered by
-# fitting bruder2017's real digitized curve against the generic default and
-# getting a flat, saturated-from-the-start model curve (NRMSE ~0.9) -- see
-# git log for that finding before this mapping was added.
 FILENAME_PREFIX_TO_CONFIG = {
     "bruder2017": "bayfol_hx_405nm.yaml",
     "hsieh2022": "pq_pmma_405nm.yaml",
@@ -107,13 +95,7 @@ def base_params_for_file(filename: str) -> MediumParams:
         return MediumParams()
     return load_medium_config(yaml_name)
 
-N_X, DX = 512, 0.02  # fit-time grid: 10.24um window. DX tightened from the
-# original 0.1 (checked: 0.1 gives only ~2.5 samples/period at
-# hsieh2022's K=24.94 rad/um, below what a spectral method needs for an
-# accurate amplitude -- 0.02 gives ~12.6). Cost-free: NPDDRecorder's
-# per-step cost scales with N_X (unchanged), not DX; N_X=512 at DX=0.02
-# still covers >>1 non-local kernel width (sigma) for every medium config
-# in configs/media/, so periodicity/boundary effects stay negligible.
+N_X, DX = 512, 0.02
 WAVELENGTH_UM = 0.405
 
 
@@ -148,7 +130,6 @@ def infer_curve_type_and_K(filename: str) -> tuple[str, float | None]:
     return "unknown", K
 
 
-# --------------------------------------------------------------- forward models
 def simulate_growth_de(t_values, K, kappa, D0, base_params: MediumParams,
                        thickness_um: float, wavelength_um: float = WAVELENGTH_UM):
     """DE at spatial frequency K vs a list of exposure times t_values,
@@ -157,7 +138,7 @@ def simulate_growth_de(t_values, K, kappa, D0, base_params: MediumParams,
     x = torch.arange(N_X) * DX
     des = []
     for t_total in t_values:
-        n_steps = max(20, int(20 * t_total))  # scale steps with duration, cheap but stable
+        n_steps = max(20, int(20 * t_total))
         rec = NPDDRecorder(N_X, DX, t_total=float(t_total), n_steps=n_steps, params=p)
         exposure = 1.0 + 0.9 * torch.cos(K * x)
         dn = rec(exposure)
@@ -179,25 +160,6 @@ def simulate_growth_dn(dose_values, K, kappa, D0, base_params: MediumParams):
     x = torch.arange(N_X) * DX
     dns = []
     for dose in dose_values:
-        # REMEDIATION (confirmed peer-review finding B2): the old flat cap
-        # of 500 steps was not a stability requirement (NPDDRecorder's own
-        # conservation bug -- separately fixed in holomedia/npdd.py's
-        # reaction step -- made it LOOK stable by silently discarding mass
-        # rather than erroring), it was just under-resolved for large
-        # kappa*dose products. Reproduced directly on this pipeline's own
-        # fitted values (K=8.98, kappa=16.34, dose=80): 500 steps gave
-        # |dn1|=0.000028, while the value actually converges (flat from
-        # 8000 steps on, matching 32000 and 128000 to 6 significant
-        # figures) to |dn1|=0.000072 -- a 61% underestimate at the old
-        # step count, not merely imprecise. Step count now scales with the
-        # reaction rate*duration product (kappa*dose, the quantity that
-        # actually sets how many e-foldings of the fast initial transient
-        # need resolving), floored at the old 500 (fine for gentle low-
-        # kappa*dose cases, unchanged cost there) and capped at 4000 to
-        # bound worst-case per-call cost during the bounded-random-start
-        # search over kappa in/up to 1e3 (measured ~0.8s/call at the cap
-        # on this hardware) -- 4000 steps reproduces the converged value
-        # above to within simulation noise, not just closer than 500.
         n_steps = int(min(max(500, 5 * kappa * max(dose, 1e-3)), 4000))
         rec = NPDDRecorder(N_X, DX, t_total=float(dose), n_steps=n_steps, params=p)
         exposure = 1.0 + 0.9 * torch.cos(K * x)
@@ -226,17 +188,6 @@ def simulate_angular_de(dtheta_deg_values, K, kappa, D0, base_params: MediumPara
     return np.array(des)
 
 
-# --------------------------------------------------------------- fitting
-# Second free parameter per curve, alongside kappa (always free). Default is
-# D0 (monomer diffusivity), matching the master prompt's "kappa, plus at
-# most one more." growth_dn curves use dn_max instead -- diagnostic work
-# (see docs/parameter_provenance.md and the Gate-A report) showed the
-# original {kappa, D0} choice was fitting the wrong knob: a 3-parameter
-# diagnostic fit isolated dn_max, not D0, as what actually explained the
-# residual on both real growth_dn sources (NRMSE dropped from 0.68-0.87 to
-# 0.10-0.35 when dn_max replaced D0, at D0 held at its cited value). D0
-# stays the default for "growth"/"angular" curve types since no real data
-# has exercised that choice yet -- don't generalize past what was checked.
 SECOND_PARAM_BY_CURVE_TYPE = {
     "growth": "D0",
     "growth_dn": "dn_max",
@@ -245,11 +196,6 @@ SECOND_PARAM_BY_CURVE_TYPE = {
 
 PARAM_BOUNDS = {
     "kappa": (1e-3, 1e3),
-    # Widened past the generic docstring range (D0: 1e-3-1e0) -- checked:
-    # configs/media/pq_pmma_405nm.yaml's real cited D0=1.24e-6 sits below
-    # it, and an unwidened bound threw "Initial guess is outside of
-    # provided bounds" on exactly that curve. Bounds must contain every
-    # real config's own starting point, not just the generic default's.
     "D0": (1e-8, 1e2),
     "dn_max": (1e-4, 0.3),
 }
@@ -299,10 +245,6 @@ def fit_curve(curve_type: str, K: float, xs: list, ys: list,
 
     base_second = getattr(base_params, second_param)
     rng = np.random.default_rng(seed)
-    # First start is always the literature-cited value (matches the old
-    # single-start behavior); the rest are log-uniform over the full
-    # bounded range, so a fit that only works from the cited value isn't
-    # silently reported as if it were reachable from anywhere reasonable.
     starts = [np.log([base_params.kappa, base_second])]
     for _ in range(n_starts - 1):
         starts.append(rng.uniform(log_bounds[0], log_bounds[1]))
@@ -330,7 +272,6 @@ def fit_curve(curve_type: str, K: float, xs: list, ys: list,
 
     return dict(curve_type=curve_type, K=K, second_param=second_param,
                kappa_fit=best["kappa_fit"], second_param_fit=best["second_fit"],
-               # kept for backward-compat with code/macros keyed on D0_fit
                D0_fit=(best["second_fit"] if second_param == "D0" else base_params.D0),
                rmse=best["rmse"], nrmse=best["nrmse"],
                x=xs, y_data=ys, y_model=best["model_y"], residuals=(np.array(best["model_y"]) - ys_arr).tolist(),
@@ -363,19 +304,6 @@ def main():
         fit.update(source_doi=data["source_doi"], figure_id=data["figure_id"],
                   digitized_by=data["digitized_by"], date=data["date"],
                   file=os.path.basename(path))
-        # NRMSE (RMSE / data range), not raw RMSE, drives the quality bucket --
-        # raw RMSE is not comparable across curve types on very different
-        # scales (DE is O(1), Delta-n1 is O(0.01)); a fixed RMSE threshold
-        # would call a garbage Delta-n1 fit "GOOD" just because the numbers
-        # are small.
-        # Thresholds set to the Gate-A/B decision-tree values (NRMSE <0.3 =
-        # good/straightforward validation, 0.3-0.5 = moderate/mechanism-
-        # validity standard, >0.5 = poor), not the earlier 0.05/0.15 --
-        # those were calibrated like a numerical self-consistency check,
-        # not a realistic bar for fitting messy digitized literature data.
-        # Keeping one threshold scheme (here, in figure labels, and in the
-        # paper's prose) avoids a figure saying "POOR" next to a number the
-        # text calls "good."
         quality = ("GOOD" if fit["nrmse"] < 0.3 else
                   "MODERATE" if fit["nrmse"] < 0.5 else "POOR")
         fit["fit_quality"] = quality

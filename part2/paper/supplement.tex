@@ -1,8 +1,3 @@
-% supplement.tex -- Supplement 1 to manuscript.tex (JOSA A).
-% Follows Optica's supplemental-document conventions: title "<article title>:
-% supplemental document", no author block (Optica adds a cover sheet), and
-% figures, tables, equations and sections numbered S1, S2, ... Every number is
-% a numbers.tex macro; figures come from part2/code/figures/make_all.py.
 
 \documentclass{optica-article}
 \journal{opticajournal}
@@ -33,7 +28,6 @@ result to the files and scripts that produce it. Section, figure and table
 numbers without an ``S'' refer to the main article.
 \end{abstract*}
 
-% ----------------------------------------------------------------------
 \section{Heuristic small-signal transfer function and $K_c$}
 \label{sec:s1}
 \textbf{Derivation.} Take $I(x)=I_{\text{mean}}(1+m\cos Kx)$ with $m\ll1$,
@@ -81,7 +75,6 @@ MIL, same $K$, budget $B_c=2$, seed and $9.6\,\mu$m section as Fig.~2.}
 \label{fig:s1}
 \end{figure}
 
-% ----------------------------------------------------------------------
 \section{Mechanism ablations}
 \label{sec:s2}
 \textbf{One mechanism at a time.} The conditions are $\sigma\to0$ (no
@@ -157,7 +150,6 @@ $K$, $B_c=2$, 95\% $t$-intervals over seeds.}
 \label{fig:s3}
 \end{figure}
 
-% ----------------------------------------------------------------------
 \section{Readout slice count and grating slant}
 \label{sec:s3}
 Table~\ref{tab:s2} gives the paired gain for $n_z=32$, 128 and 256 (one seed,
@@ -201,7 +193,6 @@ $K=3.93$ & \SEightGainKMidSlantZero & \SEightGainKMidSlantTwoFive & \SEightGainK
 \end{tabular}
 \end{table}
 
-% ----------------------------------------------------------------------
 \section{One-parameter miscalibration}
 \label{sec:s4}
 Both exposures are designed on the nominal twin and recorded, unchanged, on a
@@ -223,7 +214,6 @@ scale $\Delta n_{\max}$ of its linear model, so its exposure is the same at
 every perturbation; the change in paired gain reflects how MIL's design and both
 recordings respond to the error.
 
-% ----------------------------------------------------------------------
 \section{RCWA check of the closed-form readout}
 \label{sec:s5}
 Kogelnik first-order efficiency~\cite{kogelnik1969coupled} was compared with
@@ -247,7 +237,6 @@ the \RCWAVGridNCases-case grid, one series per geometry.}
 \label{fig:s4}
 \end{figure}
 
-% ----------------------------------------------------------------------
 \section{Compute-matched control}
 \label{sec:s6}
 BSGD receives $\lceil 800\times\ComputeMatchRatio\rceil$ iterations and MIL
@@ -272,7 +261,6 @@ SAT as \% of MIL & \MTwoRSATFracSub & \MTwoRSATFracNear & \MTwoRSATFracPost \\
 \end{tabular}
 \end{table}
 
-% ----------------------------------------------------------------------
 \section{Calibrating the twin for a new medium}
 \label{sec:s7}
 From the fits of Section~5 and Section~\ref{sec:s9}: (i) $\kappa$ and
@@ -286,7 +274,6 @@ $k_{\text{bleach}}$ are coupled, so $k_{\text{bleach}}$ should be fitted (as in
 Section~5) or the source intensity recovered; holding it at an assumed value
 can make the fit degenerate (Section~\ref{sec:s9}).
 
-% ----------------------------------------------------------------------
 \section{Target content and readout noise}
 \label{sec:s8}
 At $K=3.93$\,rad/\textmu m, three target families (bars, sparse random spots,
@@ -314,7 +301,6 @@ random binary & \SFourGainRandomBinaryTwoX{} [\SFourBootCILoRandomBinaryTwoX, \S
 \end{tabular}
 \end{table}
 
-% ----------------------------------------------------------------------
 \section{Twin fits with the dye-bleaching rate held}
 \label{sec:s9}
 Figure~\ref{fig:s5} shows the fits with only $\kappa$ and $\Delta n_{\max}$ free
@@ -340,7 +326,6 @@ curve~\cite{hsieh2022pqpmma}, outside the tested $K$ range.}
 \label{fig:s5}
 \end{figure}
 
-% ----------------------------------------------------------------------
 \section{Implementation checks}
 \label{sec:s10}
 \textbf{Non-local kernel.} The kernel $G_\sigma$ is applied to the production
@@ -364,7 +349,6 @@ exposure is kept below the contrast cap so the projection is smooth there).
 the git commit of the code that produced it and the device; the seed enters only
 through the optimizer initialization.
 
-% ----------------------------------------------------------------------
 \section{Provenance of reported results}
 \label{sec:s11}
 Every number in the main article and this supplement is a macro in

@@ -22,18 +22,10 @@ import sys
 
 TRIGGER_WORDS = ["seed", "seeds", "dB", "rad/"]
 
-# \command or \command{...} (non-greedy, single level of braces -- adequate
-# for the simple \MacroName or \MacroName{arg} invocations this checks for;
-# nested-brace macro args are rare enough in practice that a stricter
-# balanced-brace parser isn't worth the complexity here)
 MACRO_INVOCATION_RE = re.compile(r"\\[A-Za-z]+(\{[^{}]*\})?")
 COMMENT_RE = re.compile(r"(?<!\\)%.*$", re.MULTILINE)
-# LaTeX spacing commands that sit between a number and its unit ("2\,dB").
-# They must become plain spaces BEFORE the adjacency check, or every number
-# written with a thin space slips through.
 SPACING_RE = re.compile(r"\\[,;:! ]|~")
 
-# number adjacent (within a few non-word chars) to a trigger word, either order
 NUMBER_NEAR_TRIGGER_RE = re.compile(
     r"(\d+(?:\.\d+)?)\s{0,3}(" + "|".join(re.escape(w) for w in TRIGGER_WORDS) + r")"
     r"|(" + "|".join(re.escape(w) for w in TRIGGER_WORDS) + r")\s{0,3}[-=:]?\s{0,3}(\d+(?:\.\d+)?)",

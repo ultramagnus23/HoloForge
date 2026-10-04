@@ -11,7 +11,7 @@ import torch
 torch.set_default_dtype(torch.float64)
 
 from manifest import (build_M1_jobs, build_M2_jobs, build_S1_jobs, build_S2_jobs,
-                      config_hash, PAPER_SEEDS, S1_K_POINTS,
+                      PAPER_SEEDS, S1_K_POINTS,
                       S2_PERTURBATIONS_PCT, S2_PERTURBATIONS_PCT_FULL,
                       S2_K_POINTS, S2_K_POINTS_FULL, _cliff_K_grid)
 import run_manifest as rm
@@ -40,19 +40,14 @@ def test_manifest_end_to_end_and_resume():
     tmp = tempfile.mkdtemp(prefix="manifest_test_")
     try:
         rm.set_results_root(tmp)
-        # match run_manifest's own internal job construction exactly (it
-        # does not currently accept a seeds override, only n_x/n_iters/
-        # converge_tol) so this test's expectation can't silently drift
-        # from what the runner actually builds.
         jobs = build_S1_jobs(n_x=64, n_iters=3, converge_tol=1e-4)
-        assert len(jobs) == 3 * 5 * 2 * 3  # 3 K points x 5 ablation conditions x 2 methods x 3 default seeds
+        assert len(jobs) == 3 * 5 * 2 * 3
 
         rm.run_manifest("S1", max_minutes=None, n_x=64, n_iters=3, converge_tol=1e-4)
 
         n_files = sum(len(files) for _, _, files in os.walk(tmp))
         assert n_files == len(jobs), f"expected {len(jobs)} result files, found {n_files}"
 
-        # resume: rerun should do nothing (all already done)
         import io, contextlib
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
@@ -95,7 +90,6 @@ def test_run_manifest_returns_completion_status():
     tmp = tempfile.mkdtemp(prefix="manifest_status_test_")
     try:
         rm.set_results_root(tmp)
-        # S1 default job count: 3 K points x 5 ablation conditions x 2 methods x 3 default seeds = 90
         cut_short = rm.run_manifest("S1", max_minutes=0, n_x=32, n_iters=3)
         assert cut_short == dict(complete=False, n_run=0, n_done_already=0, n_done=0,
                                  n_total=90, n_remaining=90, last_attempted_job_id=None), cut_short
@@ -169,13 +163,11 @@ def test_deterministic_rerun_matches():
 def test_job_id_and_seed_job_rng():
     job = dict(experiment_id="M1", config_hash="abc123", method_id="MIL", seed=2)
     assert rm.job_id(job) == "M1_abc123_MIL_seed2"
-    # seeding must be deterministic given the same job identity
     rm.seed_job_rng(job)
     a = torch.rand(3).tolist()
     rm.seed_job_rng(job)
     b = torch.rand(3).tolist()
     assert a == b
-    # and different for a different job identity
     rm.seed_job_rng(dict(job, seed=3))
     c = torch.rand(3).tolist()
     assert a != c
@@ -214,7 +206,7 @@ def test_stall_detection_raises_after_two_stuck_chunks():
             assert False, "expected ManifestStallError"
         except rm.ManifestStallError as e:
             assert "M1" in str(e) and "M1_abc_MIL_seed0" in str(e)
-            assert len(calls) == 3  # 1st call sets baseline, 2nd+3rd are the 2 stuck chunks
+            assert len(calls) == 3
             print("stall detection OK, raised after", len(calls), "chunks:", e)
     finally:
         rm.run_manifest = orig
@@ -227,10 +219,6 @@ def test_probe_exit_code_reflects_gate1():
     from a shell) must also reflect Gate 1 correctly: 0 under budget, 2
     over. Exercised via subprocess against the real CLI entrypoint."""
     import subprocess
-    # --allow-cpu: this test's purpose is the Gate-1 exit code, not the
-    # hard GPU assertion (which is exercised separately and correctly
-    # rejects a no-GPU CLI call by design -- this dev/CI environment has
-    # no GPU at all).
     env_ok = subprocess.run(
         [sys.executable, "-m", "experiments.run_manifest", "--manifest", "S1",
          "--probe", "--n-x", "32", "--n-iters", "3", "--allow-cpu"],
@@ -255,7 +243,7 @@ def test_cliff_K_grid_points_are_distinct_and_exactly_realizable():
     its true realized K.
     """
     import math
-    from manifest import period_from_K, K_from_period_exact
+    from manifest import period_from_K
     dx = 51.2 / 1024
     grid = _cliff_K_grid(dx)
 

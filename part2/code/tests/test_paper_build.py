@@ -40,10 +40,8 @@ def test_check_consistency_catches_hardcoded_numbers():
     assert len(v) >= 3, v
     good = r"We ran \SeedCount seeds and a mean gain of \MeanGainTwoX dB was observed."
     assert find_violations(good) == []
-    # A LaTeX thin space between number and unit must not hide the number.
     thin = r"a gain of 1.45\,dB at a spacing of 12~rad/\textmu m"
     assert len(find_violations(thin)) == 2, find_violations(thin)
-    # Stated design parameters are allowed when marked with \param{...}.
     assert find_violations(r"at \param{3}\,dB and \MeanGainTwoX\,dB") == []
     print("check_consistency catches/passes correctly:", v)
 

@@ -1,20 +1,9 @@
-% manuscript.tex -- JOSA A research article, media-in-the-loop holography.
-%
-% Every quantitative result is a macro from numbers.tex, which
-% part2/code/scripts/make_numbers_tex.py (plus analysis/de_confirmation.py and
-% analysis/wasted_media.py) generates from the committed per-job result files;
-% part2/code/scripts/check_consistency.py fails the build if a number appears
-% next to "dB", "seed" or "rad/" outside a macro. Figures come from
-% part2/code/figures/make_all.py. Template: Optica universal manuscript
-% template (optica-article.cls).
 
 \documentclass{optica-article}
 \journal{opticajournal}
 \articletype{Research Article}
 \usepackage{amsmath}
 \input{numbers}
-% Let figures and tables share pages with text instead of collecting on
-% half-empty float pages.
 \renewcommand{\topfraction}{0.9}
 \renewcommand{\bottomfraction}{0.8}
 \renewcommand{\textfraction}{0.07}
@@ -49,7 +38,6 @@ linear-recording control shows that the gain requires a nonlinear dose
 response, and it largely vanishes for fringes slanted by $10^\circ$ or more.
 \end{abstract*}
 
-% ======================================================================
 \section{Introduction}
 Phase-only computer-generated holography (CGH) computes a modulation pattern
 whose diffracted field approximates a target. When the modulator departs from
@@ -101,7 +89,6 @@ per-job result files. This is the second part of a two-part study; Part~1
 characterized phase-only CGH degradation with idealized
 modulators~\cite{tripathi2025holoforge}.
 
-% ======================================================================
 \section{Model}
 \label{sec:model}
 Table~\ref{tab:mediumparams} lists every constant; the released code is the
@@ -231,7 +218,6 @@ Grid & $n_x=1024$, $\mathrm{d}x=0.05\,\mu$m & $51.2\,\mu$m periodic window; $n_z
 \end{tabularx}
 \end{table}
 
-% ======================================================================
 \section{Methods compared and benchmark}
 \label{sec:method}
 All methods share the exposure parameterization, the projection onto
@@ -268,7 +254,6 @@ unless a bootstrap~\cite{efron1993bootstrap} is stated. All simulations ran on
 one laptop (NVIDIA RTX 3050 GPU; the factorial, compute-matched and
 parameter-sensitivity jobs on its CPU).
 
-% ======================================================================
 \section{Results}
 \label{sec:results}
 
@@ -513,7 +498,6 @@ Gaussian detector noise at \SFiveNoiseStdPct\% of the peak changes the bar
 gain from \SFiveNoiselessGain{} to \SFiveNoisyGain\,dB (Supplement 1,
 Section S8).
 
-% ======================================================================
 \section{Twin validation against published data}
 \label{sec:twin-validation}
 We fit the twin to the first-harmonic index modulation $\Delta n_1$ versus
@@ -565,7 +549,6 @@ from multi-$K$ growth-curve families, which we did not have. The headline
 claims therefore rest on the paired design and the miscalibration tests, not on
 absolute agreement with a real medium.
 
-% ======================================================================
 \section{Discussion and limitations}
 \label{sec:discussion}
 \textbf{Scope.} All results are simulation outputs of one model family for
@@ -605,7 +588,6 @@ condition, $D_0$ and $\sigma$ from several spatial frequencies, and a fitted
 dye-bleaching rate (Supplement 1, Section S7); a several-fold underestimate of
 $\Delta n_{\max}$ is the error most likely to reverse the benefit.
 
-% ======================================================================
 \section{Conclusion}
 \label{sec:conclusion}
 In simulation, designing the exposure of a write-once volume photopolymer

@@ -33,24 +33,12 @@ import numpy as np
 import torch
 from holomedia import NPDDRecorder, MediumParams, SlabBPM
 
-from manifest import BUILDERS, build_all_jobs, PAPER_SEEDS
+from manifest import BUILDERS, build_all_jobs
 from methods import run_method
 
 HERE = os.path.dirname(__file__)
 RESULTS_ROOT = os.path.join(HERE, "..", "results")
 
-# Precision policy (spec Sec. 1.1): float32 by default for the production
-# manifest pipeline, justified by evidence, not assumed. Measured on a
-# representative config (media_in_the_loop, n_x=256, n_iters=100): float32
-# vs float64 PSNR difference was 7.5e-7 dB, ~5000x smaller than the
-# seed-to-seed std (3.8e-3 dB, 3 seeds) -- float32 changes the answer by
-# far less than seed noise already does, so it's defensible per the
-# spec's own criterion. This does NOT touch holomedia's library-wide
-# defaults (still float64, unchanged) or any of the already-run legacy
-# standalone scripts (which pin float64 explicitly or
-# via NPDDRecorder's constructor default) -- only NEW jobs run through
-# this manifest pipeline are affected, so no already-committed result's
-# reproducibility is put at risk by this change.
 DTYPE = torch.float32
 CDTYPE = torch.complex64
 
@@ -61,7 +49,6 @@ def set_results_root(path: str) -> None:
     global RESULTS_ROOT
     RESULTS_ROOT = path
 
-# 40 T4-hour Gate-1 threshold, per master prompt Phase 1.4.
 GATE1_HOURS = 40.0
 
 
@@ -121,11 +108,6 @@ def build_target(spec: dict, n_x: int, device, dtype: torch.dtype = DTYPE) -> to
     if kind == "bars":
         period_px = spec["period_px"]
         x = torch.arange(n_x, device=device)
-        # was `.double()` unconditionally -- silently forced float64
-        # regardless of what dtype the recorder/bpm for this job actually
-        # used, while the "spots" branch below defaulted to whatever
-        # torch's ambient global dtype happened to be. Both branches now
-        # honor the job's own dtype explicitly and consistently.
         return ((x // (period_px // 2)) % 2).to(dtype)
     elif kind == "spots":
         g = torch.zeros(n_x, device=device, dtype=dtype)
@@ -139,12 +121,6 @@ def build_target(spec: dict, n_x: int, device, dtype: torch.dtype = DTYPE) -> to
             g[max(0, c - w):min(n_x, c + w)] = amp
         return g
     elif kind == "random_binary":
-        # WP4 (target-ensemble robustness, S4): an uncorrelated random
-        # binary pattern, unlike "bars" (periodic, single spatial
-        # frequency) and "spots" (sparse, localized) -- deliberately the
-        # target family with the MOST high-frequency content per pixel,
-        # to stress-test whether the headline gain is an artifact of the
-        # periodic-bars target specifically.
         gen = torch.Generator(device="cpu")
         gen.manual_seed(spec.get("seed", 13))
         p = spec.get("p_on", 0.5)
@@ -158,12 +134,6 @@ def build_target(spec: dict, n_x: int, device, dtype: torch.dtype = DTYPE) -> to
 
 
 def result_path(experiment_id: str, method_id: str, config_hash: str, seed: int) -> str:
-    # method_id MUST be part of the path: config_hash is computed from
-    # `config` alone (not method_id), so two jobs that differ only in
-    # method (e.g. M2 vs M4 on the identical target/medium/seed) share a
-    # config_hash. Without method_id in the path they'd collide on the
-    # same file -- caught by the manifest smoke test (M4 jobs silently
-    # skipped as "already done" when only M2 had actually run).
     return os.path.join(RESULTS_ROOT, experiment_id, config_hash, f"{method_id}_seed{seed}.json")
 
 
@@ -187,9 +157,9 @@ def atomic_write_json(path: str, data: dict) -> None:
     final_tmp = path + ".tmp"
     shutil.copyfile(local_tmp, final_tmp)
     os.remove(local_tmp)
-    os.replace(final_tmp, path)  # atomic on POSIX and Windows (same filesystem)
+    os.replace(final_tmp, path)
     with open(path) as f:
-        json.load(f)  # verify-readable; raises on truncated/corrupt output
+        json.load(f)
 
 
 def clean_partial_files(results_root: str) -> int:
@@ -264,7 +234,6 @@ def run_job(job: dict, device, commit: str, dtype: torch.dtype = DTYPE) -> dict:
     peak_mem_mb = (torch.cuda.max_memory_allocated(device) / 1e6
                   if device.type == "cuda" else None)
 
-    # downsample loss curve to <=200 points (Phase 1.2 schema requirement)
     hist = result.pop("loss_history")
     if len(hist) > 200:
         stride = len(hist) // 200 + 1
@@ -278,20 +247,13 @@ def run_job(job: dict, device, commit: str, dtype: torch.dtype = DTYPE) -> dict:
         loss_curve=hist, iterations_run=result["iterations_run"],
         early_stop_reason=result["early_stop_reason"], wall_s=wall_s,
         peak_mem_mb=peak_mem_mb, psnr=result["psnr"],
-        # carried through so a post-fix result set can be compared directly
-        # against the pre-fix archive under the OLD metric as well as the
-        # new one -- see the objective-alignment note in holomedia/optimize.py
         psnr_maxnorm_legacy=result["psnr_maxnorm_legacy"],
         diffraction_efficiency=result["diffraction_efficiency"],
         contrast=result["contrast"],
-        # method-specific provenance (currently only SAT's surrogate
-        # calibration); absent for every other method rather than null.
         **({"sat_fit": result["sat_fit"]} if "sat_fit" in result else {}),
     )
 
 
-# Balanced sharding is opt-in (--balanced-shard): the default stays index%N so
-# already-running workers that reload this module keep their assignment.
 SHARD_BALANCED = False
 
 
@@ -366,10 +328,6 @@ def run_manifest(name: str, max_minutes: float | None, n_x=1024, n_iters=800,
             continue
         atomic_write_json(path, result)
         n_run += 1
-        # Heartbeat (spec Sec. 1.3): timestamp, job ID, duration, peak VRAM
-        # -- one line per completed job, so a Colab session's scrollback
-        # alone is enough to tell when/how long each job took without
-        # needing to open the result JSONs.
         vram = f"{result['peak_mem_mb']:.0f}MB" if result["peak_mem_mb"] is not None else "n/a"
         print(f"  [heartbeat] {time.strftime('%Y-%m-%d %H:%M:%S')} "
               f"job={last_attempted_job_id} duration={result['wall_s']:.1f}s "
@@ -401,7 +359,7 @@ def run_manifest_until_complete(name: str, chunk_minutes: float = 60,
     can't be unit tested) so the stall-detection logic itself has a
     regression test. The Colab notebook's auto-resume cell calls this
     directly per manifest."""
-    clean_partial_files(RESULTS_ROOT)  # spec Sec. 1.5: on startup, before any work
+    clean_partial_files(RESULTS_ROOT)
     last_n_done = None
     stall_count = 0
     while True:
@@ -530,21 +488,12 @@ def main():
         shard = (int(i_str), int(n_str))
         assert 0 <= shard[0] < shard[1], f"--shard {args.shard!r}: need 0 <= i < N"
 
-    # spec Sec. 1.6: deterministic algorithms where feasible. Verified
-    # (tests/test_manifest_runner.py::test_deterministic_rerun_matches)
-    # this holds for every op the current pipeline actually uses (FFT,
-    # elementwise, Adam) on CPU. Not yet verified on CUDA specifically --
-    # some cuBLAS/cuDNN ops lack deterministic kernels and would raise
-    # RuntimeError under strict mode; warn_only=True degrades to a
-    # warning instead of a hard failure if that happens on a real GPU run,
-    # so a first Colab run surfaces the problem via a printed warning
-    # rather than crashing the whole manifest.
     torch.use_deterministic_algorithms(True, warn_only=True)
 
     if args.results_dir:
         set_results_root(args.results_dir)
 
-    n_cleaned = clean_partial_files(RESULTS_ROOT)  # spec Sec. 1.5
+    n_cleaned = clean_partial_files(RESULTS_ROOT)
     if n_cleaned:
         print(f"[run_manifest] cleaned {n_cleaned} leftover .tmp file(s) from a "
              f"previously-interrupted write.")
@@ -558,10 +507,6 @@ def main():
     if args.probe:
         grand_total = probe(args.manifest, n_x=args.n_x, n_iters=args.n_iters,
                            converge_tol=args.converge_tol)
-        # Exit code distinguishes Gate-1 pass/fail so calling scripts (the
-        # Colab one-click cell) can act on it without parsing printed text.
-        # 0 = under budget, 2 = over budget (needs your reduction decision),
-        # matching the master prompt's "do not decide unilaterally."
         sys.exit(2 if grand_total > GATE1_HOURS else 0)
     else:
         run_manifest(args.manifest, args.max_minutes, n_x=args.n_x,

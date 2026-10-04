@@ -33,8 +33,8 @@ torch.set_default_dtype(torch.float64)
 WAVELENGTH_UM = 0.405
 THICKNESS_UM = 30.0
 N0 = 1.5
-THETA_B_DEG = 10.0  # matches kogelnik_de's default theta_B
-CASES = [  # (K rad/um, dn amplitude)
+THETA_B_DEG = 10.0
+CASES = [
     dict(K=2.0, dn=2.0e-3, name="low-K"),
     dict(K=6.0, dn=2.0e-3, name="mid-K"),
     dict(K=12.0, dn=1.0e-3, name="high-K"),
@@ -62,8 +62,8 @@ def rcwa_de(K_um, dn, theta_B_deg, n_x=128, order=15):
     symmetric two-wave Bragg-matched order is m=+1, per the standard
     unslanted transmission grating two-wave-coupling geometry.
     """
-    period = 2 * math.pi / K_um  # um
-    Ly = period / 8.0            # dummy small period along invariant axis
+    period = 2 * math.pi / K_um
+    Ly = period / 8.0
     lamb0 = torch.tensor(WAVELENGTH_UM, dtype=geo_dtype, device=device)
     sin_air = min(max(N0 * math.sin(math.radians(theta_B_deg)), -1.0), 1.0)
     theta_air = math.asin(sin_air)
@@ -77,7 +77,7 @@ def rcwa_de(K_um, dn, theta_B_deg, n_x=128, order=15):
     x = torch.linspace(0, period, n_x, dtype=geo_dtype, device=device)
     n_profile = N0 + dn * torch.cos(K_um * x)
     eps_x = (n_profile ** 2).to(geo_dtype)
-    eps_grid = eps_x.unsqueeze(1).repeat(1, 4)  # broadcast over dummy y
+    eps_grid = eps_x.unsqueeze(1).repeat(1, 4)
     sim.add_layer(thickness=THICKNESS_UM, eps=eps_grid.to(torch.complex64 if geo_dtype == torch.float32 else torch.complex128))
     sim.solve_global_smatrix()
 
@@ -130,7 +130,7 @@ def rcwa_de_general(K_um, dn, theta_B_deg, polarization="ss", slant_deg=0.0,
     tan_phi = math.tan(math.radians(slant_deg))
     for iz in range(n_z_layers):
         z = (iz + 0.5) * dz
-        shift = tan_phi * z  # same convention as diffraction.py SlabBPM
+        shift = tan_phi * z
         n_profile = N0 + dn * torch.cos(K_um * (x - shift))
         eps_x = (n_profile ** 2).to(geo_dtype)
         eps_grid = eps_x.unsqueeze(1).repeat(1, 4)
@@ -145,19 +145,8 @@ def rcwa_de_general(K_um, dn, theta_B_deg, polarization="ss", slant_deg=0.0,
     return float((torch.abs(t0) ** 2).real), float((torch.abs(t1) ** 2).real)
 
 
-# ------------------------------------------------------------ E7 validity envelope
-# 5 K values spanning E1's cliff/collapse region (2-12 rad/um brackets the
-# existing 7-point + dense-insert grid up to 6.5 rad/um).
 E7_K_VALUES = [2.0, 4.0, 6.0, 8.0, 12.0]
 
-# Delta-n levels: NOT an "observed max from E1-E4" (Phase 3 hasn't run yet,
-# so there is nothing to observe) -- these are E4's own configured dn_max
-# sweep values (manifest.py build_E4_jobs), which upper-bound what any
-# E1-E4 run COULD record, since NPDDRecorder's saturating tanh response
-# never exceeds its configured dn_max. Using the exact configured values
-# keeps this traceable to a committed source rather than an invented
-# number; re-run against ACTUAL recorded dn once Phase 3 completes if the
-# realized values differ meaningfully from these ceilings.
 E7_DN_VALUES = [1.0e-3, 3.5e-3, 6.0e-3]
 
 E7_GEOMETRIES = [
@@ -165,7 +154,7 @@ E7_GEOMETRIES = [
     dict(name="unslanted_normal", slant_deg=0.0, incidence="normal"),
     dict(name="slanted20_bragg", slant_deg=20.0, incidence="bragg"),
 ]
-E7_POLARIZATIONS = ["ss", "pp"]  # TE, TM
+E7_POLARIZATIONS = ["ss", "pp"]
 
 
 def run_e7_grid():
@@ -192,19 +181,6 @@ def run_e7_grid():
         theta_B_rad = math.radians(tB)
         for dn in E7_DN_VALUES:
             for geom in E7_GEOMETRIES:
-                # Kogelnik prediction must use the SAME incidence condition
-                # RCWA is actually run at, or the "deviation" measures a
-                # geometry mismatch rather than the scalar-vs-vector error
-                # it's supposed to isolate. "normal" incidence is off-Bragg
-                # by construction (theta_internal=0 vs Bragg's theta_B), so
-                # its Kogelnik reference uses kogelnik_de's own angular-
-                # detuning term (dtheta = 0 - theta_B) rather than the
-                # on-Bragg peak value. Slant has no Kogelnik-formula analog
-                # here (this is the UNSLANTED closed form) -- for slanted
-                # geometries the on-Bragg comparison is deliberately kept
-                # as the reference, since testing slanted-RCWA against
-                # unslanted-Kogelnik IS the point (quantifies how much
-                # slant itself costs the scalar unslanted approximation).
                 if geom["incidence"] == "normal":
                     dtheta = torch.tensor(0.0 - theta_B_rad)
                     eta_kog = float(kogelnik_de(torch.tensor(dn), THICKNESS_UM, WAVELENGTH_UM,

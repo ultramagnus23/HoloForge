@@ -41,52 +41,16 @@ import json
 import math
 import os
 
-# PVA/AA-like defaults, matching holomedia.npdd.MediumParams() exactly --
-# duplicated here (not imported) so a manifest's config is self-contained
-# JSON with no import-time dependency on holomedia's current field
-# defaults silently drifting the meaning of an already-generated manifest.
 DEFAULT_MEDIUM = dict(D0=0.1, sigma=0.08, kappa=2.0, gamma=1.0, dn_max=3.5e-3,
                       k_bleach=0.2, alpha_D=1.0, shrinkage=0.005,
                       thickness=30.0, n0=1.5)
 
-# GS/LPC (media_blind_gs, linear_precomp) are closed-form, no optimization
-# loop -- see experiments/methods.py for the full registry and why these
-# short codes replaced the earlier M1-M5b naming (collision with these
-# new experiment-tier names).
-# SAT (sat_sgd) is the saturation-only surrogate control added for S1's
-# unanswered follow-up question ("if saturation is the dominant mechanism,
-# why pay for the full PDE?"). It is in ALL_METHODS -- i.e. it runs on M1's
-# FULL 15-point K x 3-budget grid, not just M2's 3 points -- because it is
-# cheap: its forward is a handful of elementwise ops with no n_steps unroll,
-# so the whole SAT arm costs a small fraction of a single MIL budget column.
-# RSGD (regularized_media_blind_sgd) and GPC (gamma_precomp) are WP3's two
-# new baselines (regularized-media-blind and gamma-precompensated-linear),
-# added to ALL_METHODS the same way SAT was: RSGD costs the same class as
-# BSGD (~80s/job at production settings, measured), GPC is closed-form and
-# shares SAT's calibration cache (one ~28s fit total for the whole grid,
-# then <1s/job) -- both affordable on the full 15x3 grid, not just a subset.
 ALL_METHODS = ["GS", "BSGD", "RSGD", "LPC", "GPC", "MIL", "SAT", "ORC", "ORU"]
 
-# 5 -> 3 seeds (compute-budget reduction, see the run-cost audit that
-# prompted this change): analysis/aggregate.py's CI already uses a
-# t-distribution, which handles n=3 correctly -- this just means M1/M2
-# report n=3 with correspondingly wider intervals, honestly, not n=5.
 PAPER_SEEDS = [0, 1, 2]
 
-# sub/near/post-cliff K's (moved up from the S1 section below so
-# build_M2_jobs can use them as its default K subset -- Python evaluates
-# default-argument expressions at function-definition time, so this has
-# to be defined before build_M2_jobs, not just before S1's build_S1_jobs).
 S1_K_POINTS = [1.308996938995747, 3.9269908169872414, 5.235987755982988]
 
-# Measured (not assumed) on CPU at n_x=1024: MIL (media_in_the_loop, full
-# NPDD forward per iteration) costs ~21.7x more wall-clock per iteration
-# than BSGD (media_blind_sgd, a single linear multiply + BPM readout) --
-# see the commit introducing M2 for the measurement script. PROVISIONAL:
-# re-measure on the actual GPU before relying on this for real M2 runs:
-# relative FFT-vs-elementwise cost can differ meaningfully between CPU and
-# GPU (and between GPU models), so this default should be treated as a
-# starting point, not a settled constant.
 COMPUTE_MATCH_RATIO = 21.7
 
 
@@ -95,13 +59,6 @@ def config_hash(config: dict) -> str:
     return hashlib.sha256(canon.encode()).hexdigest()[:16]
 
 
-# FROZEN GEOMETRY (2026-09-19 revision). Every job records the readout slice
-# count and slant explicitly, so (a) provenance is in the result JSON and (b)
-# config_hash differs from every pre-revision result (whose configs lacked
-# these keys), making it impossible for the resume logic to mistake a stale,
-# pre-fix result for a finished job. n_z=128 per the NZ0 convergence study;
-# slant 0 = unslanted transmission grating, the geometry where the model is
-# validated against RCWA (see the slant-dependence study, S8).
 FROZEN_N_Z = 128
 FROZEN_SLANT_DEG = 0.0
 
@@ -140,7 +97,7 @@ def period_from_K(K: float, dx: float) -> int:
     period_px and the realized K is exactly 2*pi/(period_px*dx).
     """
     p = round(2.0 * math.pi / (K * dx))
-    p = 2 * round(p / 2)          # nearest even
+    p = 2 * round(p / 2)
     return max(4, p)
 
 
@@ -150,21 +107,6 @@ def K_from_period_exact(period_px: int, dx: float) -> float:
     return 2.0 * math.pi / (period_px * dx)
 
 
-# The 14-point K grid from the original cliff/budget design (7 historical
-# period-px values union a dense insert across the collapse region) --
-# unchanged science, just the experiment_id it feeds is renamed below.
-# The cliff grid is defined by EVEN pixel periods, not by requested K.
-#
-# Only K = 2*pi/(p*dx) for even p is actually renderable (see
-# period_from_K), so specifying the grid in K and rounding afterwards
-# silently produced duplicate targets and a K axis off by up to 7.6%.
-# Defining it in p makes every grid point exactly realizable, distinct by
-# construction, and the reported K exact.
-#
-# Coverage at dx = 0.05 um: p=64..8 spans K = 1.96..15.71 rad/um, dense
-# through the collapse region, with p=18 (6.98) and p=16 (7.85) bracketing
-# the 8x-budget analytic prediction Kc ~ 7.3 and p=20 (6.28) / p=18 (6.98)
-# bracketing the 4x prediction Kc ~ 6.6.
 _CLIFF_PERIODS_PX = [64, 48, 36, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 8]
 
 
@@ -172,14 +114,6 @@ def _cliff_K_grid(dx: float) -> list[float]:
     return sorted(round(K_from_period_exact(p, dx), 6) for p in _CLIFF_PERIODS_PX)
 
 
-# =====================================================================
-# M1/M2: main cliff x budget comparison, two arms (per your instruction:
-# "matched on scenes, seeds, optimizer, iteration budget, and separately
-# on compute"). M3 is NOT a third manifest -- it's the derived statistic
-# (shift in cliff location between the M1/M2 arms, with seed uncertainty),
-# computed by analysis/aggregate.py from M1+M2's data. See the PR/commit
-# message for the explicit interpretation call this rests on.
-# =====================================================================
 def build_M1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
                   seeds=None, methods=None,
                   rsgd_tv_weight: dict[float, float] | None = None,
@@ -208,18 +142,12 @@ def build_M1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
         if os.path.exists(_tv_path):
             with open(_tv_path) as _f:
                 _loaded = json.load(_f)
-            # JSON keys are strings; budgets are floats everywhere else
-            # in this file (2.0, 4.0, 8.0) -- convert back on load so a
-            # dict.get(budget) lookup with a float budget actually hits.
             rsgd_tv_weight = {float(k): v for k, v in _loaded["best_per_budget"].items()}
     seeds = seeds if seeds is not None else PAPER_SEEDS
     methods = methods if methods is not None else ALL_METHODS
-    dx = 51.2 / n_x  # fixed physical window, matches gpu_npdd_mesh_convergence_sweep.py convention
+    dx = 51.2 / n_x
     all_K = _cliff_K_grid(dx)
     if periods_px is not None:
-        # subset of the SAME grid (identical configs => identical hashes to the
-        # full M1), used to run the grid in two priority passes so a hard
-        # compute cutoff still leaves a coarse grid that spans the whole range.
         keep = {round(K_from_period_exact(p, dx), 6) for p in periods_px}
         all_K = [K for K in all_K if round(K, 6) in keep]
     budgets = [2.0, 4.0, 8.0]
@@ -240,7 +168,7 @@ def build_M1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
                     base_config["tv_weight"] = (
                         (rsgd_tv_weight or {}).get(budget, 0.0))
                 if method_id in ("GS", "LPC", "GPC"):
-                    for_seeds = [0]  # closed-form, no seed dependence worth repeating
+                    for_seeds = [0]
                 else:
                     for_seeds = seeds
                 for seed in for_seeds:
@@ -248,8 +176,7 @@ def build_M1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
     return jobs
 
 
-# M1 in two priority passes (same configs/hashes as the full M1 above).
-M1A_PERIODS_PX = [64, 36, 30, 26, 22, 18, 14, 8]          # coarse, spans the range
+M1A_PERIODS_PX = [64, 36, 30, 26, 22, 18, 14, 8]
 M1B_PERIODS_PX = [p for p in _CLIFF_PERIODS_PX if p not in M1A_PERIODS_PX]
 
 
@@ -314,45 +241,17 @@ def build_M2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
             for seed in seeds:
                 jobs.append(_job("M2", "MIL", seed, mil_config))
                 jobs.append(_job("M2", "BSGD", seed, bsgd_config))
-                # Same config (hence same pairing group) as MIL -- see the
-                # coverage note in this function's docstring.
                 jobs.append(_job("M2", "SAT", seed, mil_config))
     return jobs
 
 
-# =====================================================================
-# S1: physics-component ablation (NOT the same as the pre-existing
-# the (retired) gradient-pathway ablation, which ablated GRADIENT COMPUTATION
-# PATHWAYS -- an engineering question. This ablates NPDD MODEL TERMS -- a
-# physics question. See docs/legacy_results_audit.md's flagged naming
-# collision.) Each condition is implemented via existing MediumParams
-# fields alone (no new holomedia code): setting a parameter to its
-# limiting value approximates removing that physical mechanism.
-# =====================================================================
-# S1_K_POINTS moved up to the top-of-file constants section (needed there
-# as build_M2_jobs's default K subset).
 S1_BUDGET = 2.0
 
 S1_CONDITIONS = {
     "baseline": {},
-    "no_nonlocality": dict(sigma=0.0),  # Ghat(K) = exp(-0.5 K^2 sigma^2) -> 1: no blur
-    "no_diffusion": dict(D0=0.0),  # D_eff = D0 exp(-alpha_D N) -> 0: no transport
-    "no_dye_depletion": dict(k_bleach=0.0),  # d(t) stays 1: no sensitivity falloff
-    # REMEDIATION (confirmed peer-review finding, B1): scaling dn_max does
-    # NOT approximate removing saturation. dn_max never enters the u/N/d
-    # PDEs -- only the final dn=dn_max*tanh(1.5N) conversion -- so N (and
-    # tanh(1.5N)'s own saturation, since realistic N already sits near 1)
-    # is BIT-FOR-BIT IDENTICAL regardless of dn_max: verified directly,
-    # max|N(dn_max) - N(100*dn_max)| = 0.0 on a realistic exposure. The
-    # old "no_saturation_approx" condition below (kept as a comment, not
-    # deleted, so the mistake stays visible) therefore tested a 100x
-    # LARGER but EQUALLY saturated recording, not an unsaturating one.
-    #   "no_saturation_approx": dict(dn_max=DEFAULT_MEDIUM["dn_max"] * 100),
-    # The real ablation instead replaces the INDEX MAP with its exact
-    # small-signal linear limit (tanh(x) ~= x, so dn = dn_max*1.5*N
-    # instead of dn_max*tanh(1.5*N)), holding every PDE dynamic (u, N, d,
-    # and every medium parameter including dn_max itself) identical --
-    # holomedia.npdd.NPDDRecorder's new linearize_index_map flag.
+    "no_nonlocality": dict(sigma=0.0),
+    "no_diffusion": dict(D0=0.0),
+    "no_dye_depletion": dict(k_bleach=0.0),
     "no_saturation": dict(linearize_index_map=True),
 }
 
@@ -378,41 +277,18 @@ def build_S1_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
 
 
 
-# =====================================================================
-# S1X: saturation-mechanism factorial.
-# S1's "no_saturation" linearizes only the tanh index map; two further
-# mechanisms also saturate the dose response -- monomer depletion (finite u)
-# and dye bleaching (d -> 0). S1X crosses all three on/off (2^3 cells; the
-# three S1 already covers are re-run here on the same device for a
-# like-for-like reference), plus one slope-matched linear control in which
-# the recording is exactly the media-blind baseline's own assumed model
-# (dn = dn_max * E) up to the non-local blur and shrinkage.
-#   M = monomer depletion (off: fixed_monomer=True)
-#   D = dye depletion     (off: k_bleach=0)
-#   T = tanh index map    (off: linearize_index_map=True)
-# Job order is seed-major so an interrupted run still covers every cell.
-# =====================================================================
 S1X_CONDITIONS = {
-    "baseline": {},                                                   # M D T
-    "no_monomer_depletion": dict(fixed_monomer=True),                 #   D T
-    "no_dye_depletion": dict(k_bleach=0.0),                           # M   T
-    "no_saturation": dict(linearize_index_map=True),                  # M D
-    "only_tanh": dict(fixed_monomer=True, k_bleach=0.0),              #     T
-    "only_dye": dict(fixed_monomer=True, linearize_index_map=True),   #   D
-    "only_monomer": dict(k_bleach=0.0, linearize_index_map=True),     # M
+    "baseline": {},
+    "no_monomer_depletion": dict(fixed_monomer=True),
+    "no_dye_depletion": dict(k_bleach=0.0),
+    "no_saturation": dict(linearize_index_map=True),
+    "only_tanh": dict(fixed_monomer=True, k_bleach=0.0),
+    "only_dye": dict(fixed_monomer=True, linearize_index_map=True),
+    "only_monomer": dict(k_bleach=0.0, linearize_index_map=True),
     "linear_recording": dict(fixed_monomer=True, k_bleach=0.0,
-                             linearize_index_map=True),               # none
-    # kappa = 1/(1.5 T_exp) with T_exp = 10 s makes dn = dn_max * (G*E),
-    # i.e. media-blind SGD's own model up to blur and shrinkage.
+                             linearize_index_map=True),
     "linear_slope_matched": dict(fixed_monomer=True, k_bleach=0.0,
                                  linearize_index_map=True, kappa=1.0 / 15.0),
-    # Operating-point-matched variants. Removing monomer depletion at fixed
-    # kappa moves the medium far past its baseline operating point (at
-    # uniform unit dose the baseline cures to N ~= 1, but with u held at 1,
-    # N = kappa*(1-exp(-k_bleach*T))/k_bleach = 8.65, or kappa*T = 20 with
-    # no bleaching). These rescale kappa so N(E=1) = 1, matching the
-    # baseline's cured level, so the comparison isolates the mechanism
-    # rather than the dose scale.
     "no_monomer_depletion_matched": dict(fixed_monomer=True,
                                          kappa=0.2 / (1.0 - math.exp(-2.0))),
     "only_dye_matched": dict(fixed_monomer=True, linearize_index_map=True,
@@ -440,38 +316,7 @@ def build_S1X_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e
                     jobs.append(_job("S1X", method_id, seed, config))
     return jobs
 
-# =====================================================================
-# NZ: slice-count (n_z) convergence of the headline paired gain.
-# Peer-review item B4 -- CONFIRMED at reduced scale (see commit 68f0afd):
-# every M1/M2/S* result uses SlabBPM's default n_z=32, and paired gain
-# (MIL - BSGD) moved from 0.059 dB at n_z=32 to 0.019 dB at n_z=256 on a
-# CPU-feasible check, i.e. the pipeline default is NOT converged. This
-# manifest is the real GPU version of that check, and it decides whether
-# the paper's central claim (positive paired gain, no cliff) survives at a
-# converged slice count before any full M1/M2 rerun is spent on it.
-#
-# Design choices:
-#   * Only BSGD and MIL: the headline statistic is their paired gain, and
-#     both arms are evaluated on a twin built with the SAME n_z, so a
-#     change in gain is a change in the physics-resolution, not a
-#     design/eval mismatch. (Whether a design optimized at n_z=32 still
-#     scores at n_z=256 is a different question, deliberately not asked.)
-#   * n_x=512 (dx=0.1 um, same fixed 51.2 um window): the check is about
-#     n_z, not mesh density (mesh convergence is a separate supplement
-#     result). NZ_K_POINTS' periods (32/16/12 px) are exactly renderable.
-#     n_z=32 is re-run HERE at n_x=512 as the control, rather than
-#     compared against M1's n_x=1024 numbers.
-#   * Budget 2.0 (= S1_BUDGET, M1's first budget): one budget keeps the
-#     total under ~one overnight session; extend only if the effect at 2x
-#     is not conclusive.
-#   * n_z is added to config only for THIS manifest, so every existing
-#     experiment's config_hash (which omits n_z) is unchanged and no
-#     committed M1/M2/S* result is invalidated or clobbered.
-#   * Job order is seed-major then n_z: after the first seed finishes
-#     every (K, n_z) cell already has one paired point, so an interrupted
-#     run still yields the full n_z trend, just with wider CIs.
-# =====================================================================
-NZ_VALUES = [32, 256, 128, 64]   # control first, then the extreme, then fill-in
+NZ_VALUES = [32, 256, 128, 64]
 NZ_K_POINTS = [1.963495, 3.926991, 5.235988]
 NZ_BUDGET = 2.0
 
@@ -498,14 +343,6 @@ def build_NZ_jobs(n_x: int = 512, n_iters: int = 800, converge_tol: float = 1e-4
     return jobs
 
 
-# NZ_1024: follow-up to NZ, run at M1's own resolution. NZ (n_x=512) showed
-# the paired gain is positive at every n_z and converged by n_z~128, but its
-# gains were ~20-40x smaller than M1's at the same K and budget (e.g. K=1.96,
-# 2x: 0.05 dB vs M1's 1.08 dB) -- dx=0.1 um is coarser than the 0.08 um
-# nonlocality length, so n_x=512 is not in M1's regime and its n_z shift
-# cannot be transferred to M1's headline. This reruns the two K points with
-# M1's largest gains at n_x=1024, n_z in {32 (M1's setting), 128 (converged
-# at 512)}. n_z=256 is skipped: 128 vs 256 agreed to ~5% at n_x=512.
 NZ1024_K_POINTS = [1.963495, 3.926991]
 NZ1024_N_Z = [32, 128]
 
@@ -517,9 +354,6 @@ def build_NZ1024_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float =
                          K_points=NZ1024_K_POINTS, experiment_id="NZ_1024")
 
 
-# NZ0: the n_z convergence study at the FROZEN geometry (slant 0, n_x=1024),
-# the study that justifies FROZEN_N_Z. Replaces the slant-20 NZ/NZ_1024
-# studies, which were run at a geometry the paper no longer reports.
 NZ0_K_POINTS = [1.963495, 3.926991, 5.235988]
 NZ0_N_Z = [32, 128, 256]
 
@@ -532,16 +366,6 @@ def build_NZ0_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e
                          experiment_id="NZ0")
 
 
-# =====================================================================
-# S8: slant-angle dependence of the paired gain. Added 2026-09-19 after the
-# I2 (real slant shear) fix showed the M1 headline gain is strongly
-# geometry-dependent at fixed K: one-cell probe (K=1.96, 2x budget, seed 0,
-# n_x=1024, n_z=32) gave 1.02 dB at 0 deg, 2.20 at 5, 0.11 at 10, 0.06 at 20
-# -- NON-monotone. The main results are reported at the frozen unslanted
-# geometry (where the model is validated against RCWA); S8 is what makes that
-# scoping honest, by quantifying how much of the gain survives in slanted
-# geometries rather than leaving it as an unmeasured caveat.
-# =====================================================================
 S8_SLANTS_DEG = [0.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0]
 S8_K_POINTS = [1.963495, 3.926991]
 S8_BUDGET = 2.0
@@ -566,57 +390,13 @@ def build_S8_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
     return jobs
 
 
-# =====================================================================
-# S2: parameter sensitivity applied to cliff location specifically.
-# Perturbs each of the 3 key NPDD parameters (D0, sigma, kappa) by
-# +/-10/25/50%, across a K range spanning the collapse region (so K* can
-# be re-estimated per perturbation and an uncertainty band on cliff
-# position assembled by analysis/aggregate.py). Scoped to ONE budget
-# (2x) to keep job count bounded for a "supporting" tier -- extend to
-# all 3 budgets if compute allows.
-# =====================================================================
 S2_PARAMS = ["D0", "sigma", "kappa"]
 
-# Reduced from the original 7-point +/-10/25/50% grid (S2_PERTURBATIONS_PCT_FULL
-# below): drop +/-25%, keep the ends (+/-10%, +/-50%) and baseline. This
-# still yields two distinct, interpretable claims (a "small" and a "large"
-# perturbation regime) rather than collapsing to one point estimate, at
-# ~1.8x the job count of a +/-25%-only cut. See docs/s2_sensitivity_notes.md
-# for the two write-up caveats this tier needs regardless of which grid is
-# used (one-at-a-time perturbation with no interaction terms; perturbation
-# magnitudes need justifying against the literature spread once V1's
-# digitized curves exist, not asserted). Full 7-point grid still available
-# via perturbations_pct=S2_PERTURBATIONS_PCT_FULL.
 S2_PERTURBATIONS_PCT_FULL = [-50, -25, -10, 0, 10, 25, 50]
 S2_PERTURBATIONS_PCT = [-50, -10, 0, 10, 50]
 S2_BUDGET = 2.0
-# Collapse-region K's from the M1 grid -- where a shift in K* is actually
-# observable; the same rationale as M1's "dense insert" for this range.
-# Trimmed to the innermost 4 (dropping the two outermost on each side) as
-# part of the same compute-budget cut -- full 8-point grid kept below for
-# explicit opt-in.
-#
-# REMEDIATION (confirmed peer-review finding I5): the previous nominal
-# values [3.5, 4.25, 4.6, 5.0, 5.24, 5.6, 6.0, 6.5] do NOT all round to
-# distinct even pixel periods at this grid's dx=51.2/1024 (period_from_K
-# rounds to the nearest EVEN period, same convention M1's own K grid
-# uses -- see period_from_K's docstring for why "nearest even" matters).
-# Verified directly against the real committed S2 result files:
-# K_nominal=5.0 and K_nominal=5.24 both realize period_px=24, and their
-# saved BSGD_seed0.json results are bit-for-bit identical (same target,
-# same psnr to the last decimal) -- two of S2_K_POINTS's four "distinct"
-# points were the same target. The FULL 8-point grid has the same
-# problem twice over (5.0/5.24 -> period 24; 6.0/6.5 -> period 20), so
-# only 6 of 8 were ever distinct.
-#
-# Fixed by specifying this grid directly in exactly-representable EVEN
-# periods (matching M1's own _CLIFF_PERIODS_PX convention) instead of
-# nominal K values that get silently rounded and collapsed. The 8 periods
-# below are a contiguous slice of M1's own _CLIFF_PERIODS_PX list, so
-# every S2_K_POINTS_FULL value is also a real, already-tested M1 grid
-# point -- directly comparable, not merely close to one.
 S2_PERIODS_FULL_PX = [36, 32, 30, 28, 26, 24, 22, 20]
-S2_PERIODS_PX = [28, 26, 24, 22]  # innermost 4, same compute-budget cut as before
+S2_PERIODS_PX = [28, 26, 24, 22]
 S2_K_POINTS_FULL = [round(K_from_period_exact(p, 51.2 / 1024), 6) for p in S2_PERIODS_FULL_PX]
 S2_K_POINTS = [round(K_from_period_exact(p, 51.2 / 1024), 6) for p in S2_PERIODS_PX]
 
@@ -632,7 +412,7 @@ def build_S2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
         base_value = DEFAULT_MEDIUM[param]
         for pct in perturbations_pct:
             if pct == 0 and param != S2_PARAMS[0]:
-                continue  # baseline (0%) is param-independent; only emit it once
+                continue
             value = base_value * (1.0 + pct / 100.0)
             medium = dict(DEFAULT_MEDIUM, **{param: value})
             for K in K_points:
@@ -648,25 +428,16 @@ def build_S2_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
     return jobs
 
 
-# M1C: the single M1B cell K = 3.927 rad/um (period 32 px) at all three
-# budgets -- IDENTICAL hashes to M1B, so it only completes what M1B started.
-# It is the near-cliff point S1/S3/S4/S5 share, and S4/S5 reuse M1's data
-# there as their "bars"/noiseless reference, so it is filled first.
 def build_M1C_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4) -> list[dict]:
     return [j for j in build_M1B_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
             if abs(j["config"]["K_nominal"] - 3.926991) < 1e-3]
 
 
-# M2R: reduced M2 (budget 2x only) -- a subset of M2
-# with IDENTICAL configs/hashes, so running full M2 later only adds 4x/8x.
 def build_M2R_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4) -> list[dict]:
     return [j for j in build_M2_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol)
             if j["config"]["contrast_cap"] == 2.0]
 
 
-# S2R: reduced S2 (ONE of S2's K points, the p=24 px period) -- a subset of the
-# full S2 with IDENTICAL configs/hashes, so running full S2 afterwards only adds
-# the remaining K points. Used when the compute budget cannot cover all four.
 S2R_K_POINTS = [round(K_from_period_exact(24, 51.2 / 1024), 6)]
 
 
@@ -674,69 +445,10 @@ def build_S2R_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e
     return build_S2_jobs(n_x=n_x, n_iters=n_iters, converge_tol=converge_tol, K_points=S2R_K_POINTS)
 
 
-# =====================================================================
-# S3: twin-MISCALIBRATION robustness. Distinct from S2, and this
-# distinction is the whole point of the tier existing.
-#
-# S2 perturbs the medium and then optimizes AND evaluates both arms on the
-# perturbed medium. That measures how the paired gain varies across media
-# -- it does NOT measure mismatch, because the perturbation stays common
-# to both arms, which is exactly the condition under which Sec. A's own
-# paired-comparison argument says a systematic twin error cancels. So S2
-# cannot support a sentence of the form "MIL survives getting a parameter
-# wrong": under S2 nothing is ever wrong, it is merely different.
-#
-# S3 makes the error real by breaking the arms apart in time:
-#   design time -- optimize E* ONCE against the twin at theta_nominal.
-#   record time -- evaluate that SAME, already-fixed E* on a twin at
-#                  theta' != theta_nominal.
-# No re-optimization at theta'. The exposure never gets to know it was
-# designed for the wrong medium, which is precisely the situation a
-# practitioner is in with a write-once medium and an imperfectly
-# calibrated twin.
-#
-# BSGD is the control arm and needs no special handling: it is media-blind
-# by construction (it optimizes against dn = c*E and its objective is
-# scale-invariant), so its exposure is already theta-independent -- the
-# "designed at theta_nominal" and "designed at theta'" exposures are the
-# same tensor. Evaluating it at theta' is therefore the honest paired
-# baseline at every perturbation.
-#
-# Emitted results carry the EVALUATION medium in config["medium"] (so a
-# result is self-describing about the medium it was scored on) plus
-# design_medium="nominal" and the mismatch_param/mismatch_pct labels. Both
-# arms share those fields, so analysis/aggregate.py's existing pairing
-# key groups MIL and BSGD together at each theta' with no special-casing.
-#
-# Runner: experiments/run_s3_mismatch.py (NOT run_manifest.py -- a job
-# here is "one design + many evaluations", which is not run_job()'s
-# one-config-one-result shape). See that script's docstring.
-# =====================================================================
 S3_PARAMS = ["D0", "sigma", "kappa", "dn_max"]
 
-# +/-50% is the range the paper's robustness claim is stated over, with
-# +/-10/25% filling in the interior so a degradation can be LOCATED rather
-# than just bracketed.
 S3_PERTURBATIONS_PCT = [-50, -25, -10, 0, 10, 25, 50]
 
-# dn_max gets a wider grid than the other three, for an empirical reason
-# specific to this parameter: our own literature fit (Sec. 6,
-# results_literature_fit.json) found two Bayfol dn_max values that
-# disagree by a real, measured factor -- far outside the +/-50% band.
-# Testing dn_max only to +/-50% would be testing a range we already know
-# from our own data is too narrow, so the grid is extended to bracket
-# that measured disagreement exactly.
-#
-# REMEDIATION (B2 cascading effect): this factor was previously
-# HARD-CODED at 2.7 (the ratio from an earlier, non-conservative
-# literature fit -- see holomedia/npdd.py's forward()/_step() conservation
-# fix and experiments/fit_literature_curves.py's step-count fix, both
-# confirmed peer-review findings). The corrected fit finds the two
-# series disagree by a real, substantially LARGER factor. Loaded
-# dynamically from the actual fit output below instead of hand-typed
-# again, so a future refit cannot silently leave this stale a second
-# time -- falls back to the old 2.7 only if the fit file does not exist
-# yet (e.g. a fresh checkout before Section 6's fit has been run once).
 def _dn_max_disagreement_factor(default: float = 2.7) -> float:
     path = os.path.join(os.path.dirname(__file__), "..", "results_literature_fit.json")
     if not os.path.exists(path):
@@ -758,7 +470,6 @@ S3_PERTURBATIONS_PCT_DN_MAX = sorted(set(
     [_dn_max_lo_pct, -50, -25, -10, 0, 10, 25, 50, 100, _dn_max_hi_pct]))
 
 S3_BUDGET = 2.0
-# Same three sub/near/post-cliff K's as S1/M2, for direct comparability.
 S3_K_POINTS = S1_K_POINTS
 
 
@@ -779,36 +490,16 @@ def build_S3_conditions(n_x: int = 1024) -> list[dict]:
     for param in S3_PARAMS:
         for pct in s3_perturbations_for(param):
             if pct == 0 and param != S3_PARAMS[0]:
-                continue  # nominal is param-independent; emit it once
+                continue
             value = DEFAULT_MEDIUM[param] * (1.0 + pct / 100.0)
             conds.append(dict(mismatch_param=param, mismatch_pct=pct,
                               medium=dict(DEFAULT_MEDIUM, **{param: value})))
     return conds
 
 
-# =====================================================================
-# S6: JOINT twin-miscalibration Monte Carlo (WP5, Applied Optics
-# revision). S3 perturbs exactly ONE NPDD parameter at a time -- a real
-# calibration error is never that clean; every parameter is uncertain
-# simultaneously. S6 asks whether the design/evaluate split S3 already
-# established (optimize once at theta_nominal, evaluate the SAME fixed
-# exposure at theta_prime) survives when all four parameters (D0, sigma,
-# kappa, dn_max) are wrong AT ONCE, drawn independently per Monte Carlo
-# trial rather than one at a time.
-#
-# Deliberately reuses S3's cached designs (results/S3/_designs/*.pt) --
-# the SAME exposures S3 already paid to optimize -- rather than
-# re-optimizing anything: a joint miscalibration draw is exactly as valid
-# an evaluation of an S3 design as a single-parameter one is (both are
-# "some theta_prime the design didn't know about"), so re-running the
-# expensive design stage here would be pure waste. Cost is therefore
-# forward passes only (run_s6_joint_mismatch.py), same as S3's own
-# evaluation stage.
 S6_PARAMS = S3_PARAMS
 S6_N_DRAWS = 30
-S6_PCT_RANGE = 25.0  # each param drawn independently, Uniform(-25%, +25%)
-                     # -- same magnitude S2/S3 already test one-at-a-time,
-                     # not a new number invented for this tier.
+S6_PCT_RANGE = 25.0
 
 
 def build_S6_joint_conditions(n_draws: int = S6_N_DRAWS, pct_range: float = S6_PCT_RANGE,
@@ -876,26 +567,9 @@ def s3_result_config(design_config: dict, cond: dict) -> dict:
                 design_medium="nominal", arm="mismatch_eval")
 
 
-# =====================================================================
-# S4: target-ensemble robustness (WP4, Applied Optics revision item 1).
-# M1's headline grid measures the BSGD-vs-MIL gain on exactly ONE target
-# family (periodic bars) at every K -- seeds vary the OPTIMIZER's random
-# init, not the SCENE. S4 asks the orthogonal question: does the gain
-# hold across genuinely different target content at fixed K/budget, or
-# is it an artifact of bars specifically?
-#
-# Scoped deliberately small (MIL costs ~1300s/job at production settings,
-# measured -- see the WP3 probe data): ONE representative K
-# (S1_K_POINTS's near-cliff point, where the media-blind/media-aware gap
-# is clearest and best-characterized already) x both budget extremes
-# (2x, 8x -- skipping 4x to hold the grid down) x the two NEW target
-# kinds this needs (run_manifest.build_target already implements "bars"
-# and "spots"; "random_binary" is added alongside this builder). "bars"
-# at this exact (K, budget) already exists in M1's committed data and is
-# reused directly by analysis rather than rerun.
-S4_K_POINT = S1_K_POINTS[1]  # near-cliff
+S4_K_POINT = S1_K_POINTS[1]
 S4_BUDGETS = [2.0, 8.0]
-S4_TARGET_KINDS = ["spots", "random_binary"]  # "bars" reused from M1
+S4_TARGET_KINDS = ["spots", "random_binary"]
 
 
 def build_S4_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
@@ -918,20 +592,9 @@ def build_S4_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
     return jobs
 
 
-# =====================================================================
-# S5: readout-noise robustness (WP4, Applied Optics revision item 3).
-# Every prior tier evaluates PSNR against a noiseless BPM readout -- a
-# real simplification (a physical sensor is never noiseless). S5 checks
-# whether the headline gain survives a defined, disclosed detector-noise
-# model (methods.run_method's noise_std parameter: relative additive
-# Gaussian noise on the reconstructed intensity, applied identically to
-# every method after evaluation -- see its docstring). Scoped to the
-# same single representative K/budget as S4 (near-cliff, 2x) since this
-# is a robustness CHECK, not a new sweep: the noiseless (noise_std=0)
-# arm at this exact config already exists in M1 and is reused directly.
-S5_K_POINT = S1_K_POINTS[1]  # near-cliff, same point S4 uses
+S5_K_POINT = S1_K_POINTS[1]
 S5_BUDGET = 2.0
-S5_NOISE_STD = 0.05  # 5% of reconstruction peak -- a real, disclosed round number
+S5_NOISE_STD = 0.05
 
 
 def build_S5_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-4,
@@ -952,17 +615,8 @@ def build_S5_jobs(n_x: int = 1024, n_iters: int = 800, converge_tol: float = 1e-
     return jobs
 
 
-# =====================================================================
-# V1: NPDD solver validation vs. published data. JOB CONFIGS ONLY --
-# NOT execution-ready through run_job()/methods.run_method() (no
-# optimizer/method-registry concept applies; this characterizes the
-# forward solver directly, matching the retired twin-validation script
-# existing approach). Needs a dedicated validation runner (follow-up).
-# Still blocked, independent of this restructure, on you digitizing the
-# published curves (data/literature/README.md) to compare against.
-# =====================================================================
-V1_K_GRID = [2.0, 6.0, 12.0, 20.0]  # rad/um
-V1_T_GRID = [1, 2, 4, 6, 8, 10, 14, 18]  # exposure times
+V1_K_GRID = [2.0, 6.0, 12.0, 20.0]
+V1_T_GRID = [1, 2, 4, 6, 8, 10, 14, 18]
 
 
 def build_V1_jobs(n_x: int = 1024, dx: float = 0.05) -> list[dict]:
@@ -981,17 +635,8 @@ def build_V1_jobs(n_x: int = 1024, dx: float = 0.05) -> list[dict]:
     return jobs
 
 
-# =====================================================================
-# V2: Kogelnik / BPM / RCWA regime map. JOB CONFIGS ONLY -- NOT
-# execution-ready: needs a genuine 3-way comparison (Kogelnik closed-form
-# vs. SlabBPM split-step vs. RCWA) that does not exist yet.
-# rcwa_crosscheck.py's E7 grid only compares Kogelnik vs. RCWA (2-way);
-# adding BPM is real new code (follow-up), not a config change. Job
-# configs mirror E7's grid (same K/dn/geometry values) for continuity
-# with data already collected under that grid.
-# =====================================================================
-V2_K_GRID = [2.0, 4.0, 6.0, 8.0, 12.0]  # matches results_rcwa_e7.json's grid
-V2_DN_GRID = [1.0e-3, 3.5e-3, 6.0e-3]  # matches E4's dn_max sweep values
+V2_K_GRID = [2.0, 4.0, 6.0, 8.0, 12.0]
+V2_DN_GRID = [1.0e-3, 3.5e-3, 6.0e-3]
 V2_GEOMETRIES = ["unslanted_bragg", "unslanted_normal", "slanted20_bragg"]
 
 
@@ -1006,12 +651,6 @@ def build_V2_jobs(n_x: int = 1024, dx: float = 0.05) -> list[dict]:
     return jobs
 
 
-# V3 (RCWA cross-check) is NOT a run_job()-shaped manifest -- see
-# experiments/rcwa_crosscheck.py's own docstring. Real data already
-# exists: results_rcwa.json (3-case) + results_rcwa_e7.json (90-case
-# grid, formerly labeled "E7" -- same data, relabeled V3 in prose/docs
-# going forward, file names unchanged since raw results are append-only
-# and renaming a committed file isn't a "new run").
 def build_V3_jobs() -> list[dict]:
     """No manifest jobs -- returns []. V3's real execution path is
     `python experiments/rcwa_crosscheck.py` (3-case) and
@@ -1041,17 +680,7 @@ BUILDERS = {
     "S4": build_S4_jobs, "S5": build_S5_jobs,
     "NZ": build_NZ_jobs, "NZ_1024": build_NZ1024_jobs, "NZ0": build_NZ0_jobs, "S8": build_S8_jobs,
 }
-# S3 deliberately excluded, same reason V1-V3 are: it's a design/eval
-# split (build_S3_designs + build_S3_conditions), not a flat per-job
-# list, and runs via its own script (experiments/run_s3_mismatch.py).
 
-# V1/V2/V3 deliberately NOT in BUILDERS: BUILDERS feeds run_manifest.py's
-# --manifest CLI choices and probe(), which both assume the
-# run_job()/methods.run_method() execution path. Listing V1/V2 there
-# would let --manifest V1 "succeed" by running 0 jobs silently -- worse
-# than a clear NotImplementedError. See VALIDATION_BUILDERS below for the
-# config-only builders, used directly (not through run_manifest.py) until
-# their runners exist.
 VALIDATION_BUILDERS = {"V1": build_V1_jobs, "V2": build_V2_jobs, "V3": build_V3_jobs}
 
 

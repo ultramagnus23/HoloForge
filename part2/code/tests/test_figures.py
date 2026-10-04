@@ -19,8 +19,6 @@ import make_all as fig_mod
 import run_manifest as rm
 from manifest import _job, DEFAULT_MEDIUM
 
-# Figures whose data come from the per-job results tree (redirectable with
-# rm.set_results_root) versus from committed top-level JSON files.
 RESULTS_TREE_FIGS = [fig_mod.make_fig1_paired_gain, fig_mod.make_fig3_slant_mismatch,
                      fig_mod.make_figS2_ablation, fig_mod.make_figS3_factorial]
 JSON_FIGS = [fig_mod.make_fig2_reconstructions, fig_mod.make_fig4_twin_validation,

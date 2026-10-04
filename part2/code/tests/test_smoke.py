@@ -2,7 +2,7 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import torch
-from holomedia import (NPDDRecorder, MediumParams, SlabBPM, kogelnik_de,
+from holomedia import (NPDDRecorder, SlabBPM, kogelnik_de,
                        media_in_the_loop, media_blind_gs, psnr,
                        media_in_the_loop_batched)
 
@@ -10,7 +10,6 @@ torch.set_default_dtype(torch.float64)
 
 
 def test_kogelnik_peak():
-    # DE should reach ~1 when nu = pi/2 -> dn*T = lam*cos(th)/2
     import math
     lam, th = 0.405, math.radians(10)
     dn = torch.tensor(lam * math.cos(th) / (2 * 30.0))

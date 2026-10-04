@@ -59,7 +59,6 @@ def main():
     if MARKER in existing:
         pre, _, _post = existing.partition(MARKER)
         rest = existing.split("\n")
-        # find and drop old block lines (marker + len(macros) lines), keep the rest
         idx = rest.index(MARKER)
         rest = rest[:idx] + rest[idx + 1 + len(macros):]
         existing = "\n".join(rest).rstrip("\n") + "\n\n" + block

@@ -19,9 +19,6 @@ Available scenes
 import numpy as np
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Helpers
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _blank(size: int) -> np.ndarray:
     return np.zeros((size, size), dtype=np.float32)
@@ -34,9 +31,6 @@ def _normalise(arr: np.ndarray) -> np.ndarray:
     return ((arr - mn) / (mx - mn)).astype(np.float32)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Scenes
-# ─────────────────────────────────────────────────────────────────────────────
 
 def point_sources(size: int = 512, n_points: int = 5, seed: int = 7) -> np.ndarray:
     """Random bright point sources — good for testing PSF and speckle."""
@@ -68,7 +62,7 @@ def resolution_chart(size: int = 512) -> np.ndarray:
     increasing spatial frequencies across the image.
     """
     img = _blank(size)
-    freqs = [4, 8, 16, 32, 64]           # bar widths in pixels
+    freqs = [4, 8, 16, 32, 64]
     y_offset = size // 10
     bar_height = size // (len(freqs) + 1)
 
@@ -128,8 +122,6 @@ def natural_photo(size: int = 512) -> np.ndarray:
                          preserve_range=True).astype(np.float32)
         return _normalise(img)
     except Exception:
-        # Fallback: deterministic band-limited noise texture if skimage.data
-        # is unavailable, so the scene suite never hard-fails.
         rng = np.random.default_rng(0)
         noise = rng.standard_normal((size, size)).astype(np.float32)
         spec = np.fft.fftshift(np.fft.fft2(noise))
@@ -151,13 +143,12 @@ def letters(size: int = 512) -> np.ndarray:
         img_pil = PILImage.new("L", (size, size), 0)
         draw = ImageDraw.Draw(img_pil)
         font_size = size // 5
-        # Try a bold sans-serif across platforms (Windows, Linux, macOS).
         font = None
         for font_path in (
-            "arialbd.ttf", "Arial Bold.ttf", "arial.ttf",          # Windows
+            "arialbd.ttf", "Arial Bold.ttf", "arial.ttf",
             "C:/Windows/Fonts/arialbd.ttf", "C:/Windows/Fonts/segoeuib.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Linux
-            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",     # macOS
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
         ):
             try:
                 font = ImageFont.truetype(font_path, font_size)
@@ -174,7 +165,6 @@ def letters(size: int = 512) -> np.ndarray:
         draw.text((x, y), text, fill=255, font=font)
         return np.array(img_pil).astype(np.float32) / 255.0
     except Exception:
-        # Fallback: simple rectangle
         img = _blank(size)
         m = size // 4
         img[m:3*m, m:3*m] = 1.0
@@ -202,7 +192,6 @@ def multi_depth_scene(
         resolution_chart(size),
         letters(size),
     ]
-    # Trim or pad to n_planes
     while len(layers) < n_planes:
         layers.append(gaussian_spots(size, n_spots=2, sigma=6, seed=len(layers)))
     return layers[:n_planes]

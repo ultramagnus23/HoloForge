@@ -41,7 +41,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-# Project modules
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
 from core.waveoptics  import gerchberg_saxton, reconstruct
@@ -58,19 +57,15 @@ from core.scenes   import (
     multi_depth_scene,
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Config
-# ─────────────────────────────────────────────────────────────────────────────
 
 RESULTS_DIR  = os.path.join(os.path.dirname(__file__), "results")
-SIZE         = 256          # working resolution (256×256)
-WAVELENGTH   = 532e-9       # green laser [m]
-DX           = 8e-6         # SLM pixel pitch [m]
-Z            = 0.15         # reconstruction distance [m] = 150 mm
-GS_ITER      = 50           # Gerchberg-Saxton iterations (research-grade)
+SIZE         = 256
+WAVELENGTH   = 532e-9
+DX           = 8e-6
+Z            = 0.15
+GS_ITER      = 50
 
-# Degradation parameter grids (shared by individual + aggregate analyses)
-RES_LEVELS   = [SIZE // 2, SIZE // 4, SIZE // 8, SIZE // 16]   # 128,64,32,16
+RES_LEVELS   = [SIZE // 2, SIZE // 4, SIZE // 8, SIZE // 16]
 BIT_LEVELS   = [8, 4, 2, 1]
 BW_FRACTIONS = [0.75, 0.5, 0.25, 0.1]
 SPECKLE_SIGMAS = [0.0, 0.1, 0.3, 0.6, 1.0, np.pi]
@@ -79,9 +74,6 @@ SEEDS        = [42, 7, 123, 999, 17]
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Helpers
-# ─────────────────────────────────────────────────────────────────────────────
 
 def save_comparison(images, filename, title, metrics_rows=None):
     """Save a side-by-side comparison figure. images = list of (label, array)."""
@@ -125,9 +117,6 @@ def reconstruct_phase(phase):
     return reconstruct(phase, wavelength=WAVELENGTH, dx=DX, z=Z)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Per-axis degradation (single source of truth used by every analysis)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def degrade_axis(axis, phase, ref_recon):
     """
@@ -159,9 +148,6 @@ def degrade_axis(axis, phase, ref_recon):
     return out
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Reference hologram
-# ─────────────────────────────────────────────────────────────────────────────
 
 def build_reference():
     print("Building reference hologram …")
@@ -174,9 +160,6 @@ def build_reference():
     return target, phase, ref_recon
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  GS convergence (Task 6)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def plot_gs_convergence():
     print("\n── GS Convergence ──")
@@ -205,9 +188,6 @@ def plot_gs_convergence():
     np.save(os.path.join(RESULTS_DIR, "gs_convergence.npy"), np.array(hist))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Sweep 1 — Resolution
-# ─────────────────────────────────────────────────────────────────────────────
 
 def sweep_resolution(phase, ref_recon, all_rows):
     print("\n── Sweep 1: Resolution (complex-domain phase downsampling) ──")
@@ -222,9 +202,6 @@ def sweep_resolution(phase, ref_recon, all_rows):
                     "Sweep 1 — Spatial Resolution Degradation", metric_rows)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Sweep 2 — Phase quantisation
-# ─────────────────────────────────────────────────────────────────────────────
 
 def sweep_phase_bits(phase, ref_recon, all_rows):
     print("\n── Sweep 2: Phase Quantisation ──")
@@ -238,9 +215,6 @@ def sweep_phase_bits(phase, ref_recon, all_rows):
                     "Sweep 2 — Phase Quantisation", metric_rows)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Sweep 3 — Colour channels (EXCLUDED from Part 1)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def sweep_color(phase, ref_recon, all_rows):
     """
@@ -270,9 +244,6 @@ def sweep_color(phase, ref_recon, all_rows):
     print(f"  {note.splitlines()[0]}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Sweep 4 — Viewing angle (bandwidth)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def sweep_viewing_angle(phase, ref_recon, all_rows):
     print("\n── Sweep 4: Viewing Angle (Bandwidth) ──")
@@ -285,9 +256,6 @@ def sweep_viewing_angle(phase, ref_recon, all_rows):
                     "Sweep 4 — Viewing Angle (Bandwidth) Reduction", metric_rows)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Sweep 5 — Depth planes (coherent complex-field superposition)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def sweep_depth_planes(all_rows):
     print("\n── Sweep 5: Depth Planes (coherent field superposition) ──")
@@ -300,7 +268,6 @@ def sweep_depth_planes(all_rows):
         layers = multi_depth_scene(SIZE, n_planes=n_planes)
         z_list = depth_planes_to_z_list(n_planes, z_near=0.08, z_far=0.25)
 
-        # Coherent superposition: sum complex fields, then extract phase.
         combined_field = np.zeros((SIZE, SIZE), dtype=np.complex64)
         for layer, z_layer in zip(layers, z_list):
             layer_phase = gerchberg_saxton(
@@ -325,9 +292,6 @@ def sweep_depth_planes(all_rows):
                     metric_rows)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Sweep 6 — Coherent speckle (physical, pre-reconstruction phase noise)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def sweep_speckle(phase, ref_recon, all_rows):
     print("\n── Sweep 6: Coherent Speckle (pre-reconstruction phase noise) ──")
@@ -346,9 +310,6 @@ def sweep_speckle(phase, ref_recon, all_rows):
                     "Sweep 6 — Coherent Speckle (SLM phase noise)", metric_rows)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Multi-scene validation (Task 7)
-# ─────────────────────────────────────────────────────────────────────────────
 
 SCENE_SUITE = {
     "gaussian_spots":   lambda s: gaussian_spots(s, n_spots=4, sigma=s * 0.025, seed=42),
@@ -383,7 +344,7 @@ def _summarise(records, key_fields, value_fields):
 
 def run_multi_scene_validation():
     print("\n══ Multi-Scene Validation (4 scenes) ══")
-    records = []  # per (sweep, parameter, scene)
+    records = []
 
     for scene_name, scene_fn in SCENE_SUITE.items():
         print(f"\n  Scene: {scene_name}")
@@ -401,7 +362,6 @@ def run_multi_scene_validation():
                 print(f"    [{axis:13s} {label:8s}] "
                       f"PSNR={m['psnr']:5.1f} SSIM={m['ssim']:.3f} LPIPS={m['lpips']:.4f}")
 
-    # Per-scene CSV
     path = os.path.join(RESULTS_DIR, "multi_scene_metrics.csv")
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["sweep", "parameter", "scene",
@@ -410,7 +370,6 @@ def run_multi_scene_validation():
         w.writerows(records)
     print(f"\n  CSV saved → {path}")
 
-    # Summary CSV (mean ± std across scenes)
     summary = _summarise(records, ["sweep", "parameter"],
                          ["psnr", "ssim", "lpips"])
     spath = os.path.join(RESULTS_DIR, "multi_scene_summary.csv")
@@ -455,9 +414,6 @@ def _plot_multi_scene_summary(summary):
     print(f"  Figure saved → {path}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Viewing-angle diagnostic: retained spectral energy vs reconstruction SSIM
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _retained_energy(phase, frac):
     """Fraction of hologram (|FFT|^2) energy kept by a circular mask of
@@ -480,8 +436,8 @@ def plot_viewing_angle_energy():
     print("\n── Viewing-Angle Diagnostic: retained energy vs SSIM ──")
     fracs = [1.0, 0.75, 0.5, 0.25, 0.1]
     ssim_fracs = [0.75, 0.5, 0.25, 0.1]
-    energy = {}   # scene -> list over fracs
-    ssim_v = {}   # scene -> list over ssim_fracs
+    energy = {}
+    ssim_v = {}
 
     for name, scene_fn in SCENE_SUITE.items():
         target = scene_fn(SIZE).astype(np.float32)
@@ -495,7 +451,6 @@ def plot_viewing_angle_energy():
     mean_energy = np.mean([energy[n] for n in SCENE_SUITE], axis=0)
     mean_ssim = np.mean([ssim_v[n] for n in SCENE_SUITE], axis=0)
 
-    # CSV
     cpath = os.path.join(RESULTS_DIR, "viewing_energy.csv")
     with open(cpath, "w", newline="") as f:
         w = csv.writer(f)
@@ -508,7 +463,6 @@ def plot_viewing_angle_energy():
                    + [f"{v:.4f}" for v in mean_ssim])
     print(f"  CSV saved → {cpath}")
 
-    # Figure: retained energy (log, left) vs mean SSIM (linear, right)
     xe = [f * 100 for f in fracs]
     xs = [f * 100 for f in ssim_fracs]
     fig, ax1 = plt.subplots(figsize=(6.4, 4.2))
@@ -543,14 +497,11 @@ def plot_viewing_angle_energy():
     print(f"  Figure saved → {path}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Seed sensitivity (Task 8)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_seed_sensitivity():
     print("\n══ Seed Sensitivity (5 GS seeds) ══")
     target = gaussian_spots(SIZE, n_spots=4, sigma=SIZE * 0.025, seed=42)
-    records = []  # per (sweep, parameter, seed)
+    records = []
 
     for seed in SEEDS:
         phase = gerchberg_saxton(target, n_iter=GS_ITER,
@@ -583,7 +534,6 @@ def run_seed_sensitivity():
             w.writerow({k: row[k] for k in w.fieldnames})
     print(f"  Summary CSV saved → {spath}")
 
-    # Print a table to stdout
     print("\n  Seed-sensitivity summary (mean ± std across 5 seeds):")
     print(f"  {'sweep':13s} {'param':9s} {'PSNR (dB)':16s} {'SSIM':14s} {'LPIPS':14s}")
     for row in sorted(summary, key=lambda r: (r["sweep"], r["parameter"])):
@@ -594,14 +544,8 @@ def run_seed_sensitivity():
     return records, summary
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Metric-divergence summary plot
-# ─────────────────────────────────────────────────────────────────────────────
 
 def plot_metrics_summary(all_rows):
-    # Only the four reported degradation axes (D1-D4). The depth-plane sweep is a
-    # coherent-superposition demonstration, not a reported Part 1 axis, so it is
-    # excluded from this summary figure (see paper scope statement).
     reported = ["resolution", "phase_bits", "viewing_angle", "speckle"]
     sweeps = {}
     for row in all_rows:
@@ -638,9 +582,6 @@ def plot_metrics_summary(all_rows):
     print(f"\n  Metrics plot saved → {path}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  CSV export
-# ─────────────────────────────────────────────────────────────────────────────
 
 def export_csv(all_rows):
     path = os.path.join(RESULTS_DIR, "metrics_summary.csv")
@@ -653,9 +594,6 @@ def export_csv(all_rows):
     print(f"  CSV  saved → {path}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Main
-# ─────────────────────────────────────────────────────────────────────────────
 
 def main():
     t_start = time.time()
@@ -667,13 +605,11 @@ def main():
     np.save(os.path.join(RESULTS_DIR, "reference_phase.npy"), phase)
     np.save(os.path.join(RESULTS_DIR, "reference_recon.npy"), ref_recon)
 
-    # GS convergence diagnostic first
     plot_gs_convergence()
 
-    # Single-scene degradation sweeps
     sweep_resolution(phase, ref_recon, all_rows)
     sweep_phase_bits(phase, ref_recon, all_rows)
-    sweep_color(phase, ref_recon, all_rows)          # EXCLUDED stub
+    sweep_color(phase, ref_recon, all_rows)
     sweep_viewing_angle(phase, ref_recon, all_rows)
     sweep_depth_planes(all_rows)
     sweep_speckle(phase, ref_recon, all_rows)
@@ -681,7 +617,6 @@ def main():
     plot_metrics_summary(all_rows)
     export_csv(all_rows)
 
-    # Generalisation + statistical rigour
     run_multi_scene_validation()
     plot_viewing_angle_energy()
     run_seed_sensitivity()

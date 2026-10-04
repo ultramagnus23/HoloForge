@@ -30,7 +30,7 @@ and Table 1 of the paper for literature sources.
 
 from __future__ import annotations
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as Fnn
@@ -64,18 +64,7 @@ class MediumParams:
     shrinkage: float = 0.005
     thickness: float = 30.0
     n0: float = 1.5
-    # REMEDIATION (confirmed peer-review finding B1): a real "remove
-    # saturation" ablation, not a dn_max rescale -- see NPDDRecorder's
-    # _index_map docstring. A medium-level (not recorder-constructor-level)
-    # field so experiments/manifest.py's existing
-    # dict(DEFAULT_MEDIUM, **overrides) ablation-condition machinery can
-    # set it exactly like every other physics toggle (sigma=0, D0=0, ...).
     linearize_index_map: bool = False
-    # Mechanism ablation (tier S1X): hold the free-monomer field at
-    # its initial value u = 1 (an infinite monomer reservoir), so monomer
-    # depletion can no longer saturate N. Polymer production and dye
-    # bleaching are unchanged; with u uniform, diffusion of u is a no-op.
-    # Off by default -- every existing result is bit-for-bit unaffected.
     fixed_monomer: bool = False
 
     def to_tensor_dict(self, device, dtype=torch.float64):
@@ -114,9 +103,9 @@ def depth_resolved_dn(recorder: "NPDDRecorder", exposure: torch.Tensor,
     if optical_density < 0:
         raise ValueError(f"optical_density must be >= 0, got {optical_density}")
     z_frac = (torch.arange(n_z, device=exposure.device, dtype=recorder.dtype) + 0.5) / n_z
-    atten = 10.0 ** (-optical_density * z_frac)  # (n_z,), 1.0 at z_frac=0 by construction
-    I_stack = exposure.unsqueeze(0) * atten.unsqueeze(1)  # (n_z, n_x)
-    dn_stack = recorder(I_stack)  # batched forward, (n_z, n_x)
+    atten = 10.0 ** (-optical_density * z_frac)
+    I_stack = exposure.unsqueeze(0) * atten.unsqueeze(1)
+    dn_stack = recorder(I_stack)
     return dn_stack
 
 
@@ -142,16 +131,13 @@ class NPDDRecorder(torch.nn.Module):
         self.p = params or MediumParams()
         self.dtype = dtype
 
-        # Fourier-space wavenumbers for spectral operators
         k = 2.0 * math.pi * torch.fft.fftfreq(n_x, d=dx)
         self.register_buffer("k2", (k ** 2).to(dtype))
 
-        # Non-local Gaussian kernel in Fourier space: exp(-k^2 sigma^2 / 2)
         self.register_buffer(
             "G_hat", torch.exp(-0.5 * (k ** 2) * (self.p.sigma ** 2)).to(dtype)
         )
 
-    # ---------------------------------------------------------------- helpers
     def _nonlocal(self, u: torch.Tensor) -> torch.Tensor:
         """Gaussian non-local response applied via FFT (periodic BCs)."""
         return torch.fft.ifft(torch.fft.fft(u) * self.G_hat).real
@@ -214,7 +200,6 @@ class NPDDRecorder(torch.nn.Module):
         decay = torch.exp(-D_bar * self.k2 * self.dt)
         return torch.fft.ifft(torch.fft.fft(u) * decay).real
 
-    # ---------------------------------------------------------------- forward
     def forward(self, exposure: torch.Tensor, return_history: bool = False):
         """Simulate recording.
 
@@ -230,36 +215,9 @@ class NPDDRecorder(torch.nn.Module):
         hist = []
 
         for _ in range(self.n_steps):
-            # explicit reaction half-step
-            # Non-local chain growth: polymer initiated at x' deposits at x,
-            # so the Gaussian kernel acts on the FULL production term F*u,
-            # not on u alone (Sheridan NPDD; see paper Eq. 2).
             F_loc = self.p.kappa * torch.clamp(I * d, min=0.0) ** self.p.gamma
             poly_rate = self._nonlocal(F_loc * torch.clamp(u, min=0.0))
-            # REMEDIATION (confirmed peer-review finding B2): dt*poly_rate is
-            # an EXPLICIT-Euler estimate of how much monomer this step
-            # consumes; at large dt*F_loc products (e.g. large literature-fit
-            # kappa at large dose, dt~0.16, F_loc~30) it can exceed the
-            # monomer actually available, driving u negative. The old code
-            # updated u and N by the SAME dt*poly_rate (exactly conservative
-            # by construction: d(u+N)/dt=0 pointwise) and only THEN clamped u
-            # to >=0 -- discarding the negative excess from u without ever
-            # removing the corresponding (physically impossible) amount from
-            # N, so N silently absorbed monomer that was never there.
-            # Reproduced directly on this codebase's real literature-fit
-            # inputs (K=8.98, kappa=16.34, dose=80, the n_steps=500 the
-            # pipeline actually used): mean(u+N) came out to 2.63 instead of
-            # the periodic-BC conservation law's required 1.0, and even
-            # 32,000 steps only reached ~1.019, not exact -- confirming this
-            # is a genuine conservation bug, not merely under-resolution.
-            # Fix: cap the CONSUMED amount at what actually exists (`u`)
-            # before applying it to both fields, so u >= 0 and u+N is
-            # conserved to floating-point precision at ANY step size --
-            # this is the standard positivity-preserving fix for an explicit
-            # reaction step, not a finer-timestep workaround.
             if self.p.fixed_monomer:
-                # infinite reservoir: production draws on a monomer supply
-                # that never depletes, so u stays at 1 and is not updated
                 N = N + self.dt * poly_rate
                 d = d * torch.exp(-self.p.k_bleach * I * self.dt)
                 if return_history:
@@ -269,9 +227,8 @@ class NPDDRecorder(torch.nn.Module):
             u = u - consumed
             N = N + consumed
             d = d * torch.exp(-self.p.k_bleach * I * self.dt)
-            u = torch.clamp(u, min=0.0)  # safety net; consumed<=u makes this a no-op now
+            u = torch.clamp(u, min=0.0)
 
-            # implicit diffusion step (network-slowed diffusivity)
             D_eff = self.p.D0 * torch.exp(-self.p.alpha_D * N)
             u = self._diffuse(u, D_eff)
 
@@ -281,11 +238,7 @@ class NPDDRecorder(torch.nn.Module):
         dn = self._index_map(N)
         return (dn, hist) if return_history else dn
 
-    # -------------------------------------------------- checkpointed forward
     def _step(self, u, N, d, I):
-        # Same B2 conservation fix as forward() -- cap consumed monomer at
-        # what exists, applied identically to u and N, rather than clamping
-        # u alone after an unconstrained explicit update.
         F_loc = self.p.kappa * torch.clamp(I * d, min=0.0) ** self.p.gamma
         poly_rate = self._nonlocal(F_loc * torch.clamp(u, min=0.0))
         if self.p.fixed_monomer:
@@ -330,7 +283,6 @@ class NPDDRecorder(torch.nn.Module):
             u, N, d = self._block(u, N, d, I, rem)
         return self._index_map(N)
 
-    # ------------------------------------------------------- analytic helpers
     def small_signal_mtf(self, K: torch.Tensor, I_mean: float = 1.0):
         """Linearized NPDD transfer function H(K) (paper Eq. 9).
 
@@ -420,8 +372,6 @@ class SaturationOnlyTwin(NPDDRecorder):
                  dtype=torch.float64, a_eff: float | None = None):
         super().__init__(n_x, dx, t_total=t_total, n_steps=n_steps,
                          params=params, dtype=dtype)
-        # None => the exact zero-transport limit. See the class docstring
-        # for why the SAT baseline does not use that default.
         self.a_eff = (self.p.kappa * self.t_total) if a_eff is None else float(a_eff)
 
     def forward(self, exposure: torch.Tensor, return_history: bool = False):

@@ -19,7 +19,6 @@ import math
 import torch
 
 
-# ------------------------------------------------------------------ Kogelnik
 def kogelnik_de(dn: torch.Tensor, thickness_um: float, wavelength_um: float,
                 n0: float = 1.5, theta_B: float | None = None,
                 dtheta: torch.Tensor | None = None):
@@ -35,14 +34,12 @@ def kogelnik_de(dn: torch.Tensor, thickness_um: float, wavelength_um: float,
     nu = math.pi * dn * thickness_um / (lam * math.cos(theta_B))
     if dtheta is None:
         return torch.sin(nu) ** 2
-    # angular selectivity around Bragg (grating vector K from Bragg condition)
     K = 4.0 * math.pi * n0 * math.sin(theta_B) / lam
     xi = dtheta * K * thickness_um / 2.0
     s = torch.sqrt(nu ** 2 + xi ** 2)
     return (torch.sin(s) ** 2) * (nu ** 2) / (nu ** 2 + xi ** 2 + 1e-12)
 
 
-# ----------------------------------------------------------------------- BPM
 class SlabBPM(torch.nn.Module):
     """Split-step scalar BPM through the recorded volume, then ASM to far plane.
 
@@ -56,11 +53,6 @@ class SlabBPM(torch.nn.Module):
                  thickness_um: float, n_z: int = 128, n0: float = 1.5,
                  z_recon_um: float = 5.0e4, dtype=torch.complex128,
                  slant_deg: float = 0.0):
-        # FROZEN GEOMETRY (2026-09-19 revision): n_z=128 (was 32 -- the NZ0
-        # convergence study showed 32 is under-converged) and slant_deg=0
-        # (was an implicit 20 in forward()). slant_deg is now a constructor
-        # property so it is an explicit, recorded experiment parameter; an
-        # explicit slant_deg passed to forward() still overrides it.
         super().__init__()
         self.slant_deg = slant_deg
         self.n_x, self.dx = n_x, dx
@@ -70,25 +62,6 @@ class SlabBPM(torch.nn.Module):
         self.z_recon = z_recon_um
         self.cdtype = dtype
 
-        # REMEDIATION (confirmed peer-review finding B4, phase-precision
-        # part): torch.fft.fftfreq(n_x, d=dx) with no explicit dtype=
-        # silently uses PyTorch's GLOBAL DEFAULT floating dtype (float32),
-        # regardless of what precision this module was actually
-        # constructed for (self.cdtype, e.g. complex128 for a float64
-        # pipeline). kz*dist reaches ~1.16e6 radians at the default
-        # z_recon_um=5e4, so float32's ~7-significant-digit precision
-        # bounds the representable PHASE to roughly +/-0.1-0.2 rad
-        # absolute error -- reproduced directly: comparing a kernel built
-        # from float32 kz against one built from float64 kz (same
-        # formula, only the intermediate precision differs) gives a
-        # max phase error of 0.215 rad, the same order as the externally
-        # reported 0.105 rad. Casting the FINAL complex result `.to(dtype)`
-        # does not fix this -- the phase was already rounded before the
-        # exponential. Fixed by deriving the real-valued working dtype
-        # from the requested complex dtype (float64 for complex128,
-        # float32 for complex64) and using it for fx/kz throughout, so a
-        # complex128-requested BPM actually gets float64 phase precision,
-        # not float32 precision cast wider after the fact.
         real_dtype = torch.float64 if dtype == torch.complex128 else torch.float32
         fx = torch.fft.fftfreq(n_x, d=dx).to(real_dtype)
         k0 = 2 * math.pi / wavelength_um
@@ -97,7 +70,7 @@ class SlabBPM(torch.nn.Module):
             arg = (n_medium / wavelength_um) ** 2 - fx ** 2
             kz = 2 * math.pi * torch.sqrt(torch.clamp(arg, min=0.0))
             H = torch.exp(1j * kz * dist)
-            H = torch.where(arg > 0, H, torch.zeros_like(H))  # band-limit
+            H = torch.where(arg > 0, H, torch.zeros_like(H))
             return H.to(dtype)
 
         self.register_buffer("H_slab", asm_kernel(self.dz, n0))
@@ -150,12 +123,6 @@ class SlabBPM(torch.nn.Module):
         dz_eff = self.dz * (1.0 - shrinkage)
         tan_phi = math.tan(math.radians(self.slant_deg if slant_deg is None else slant_deg))
         fx = torch.fft.fftfreq(self.n_x, d=self.dx).to(dn_profile.device)
-        # self.cdtype, NOT a hardcoded complex128: this line previously
-        # upcast to complex128 on every forward regardless of how the BPM
-        # was constructed, so the float32/complex64 production pipeline
-        # (docs/precision_policy.md) was silently doing its BPM inner loop
-        # in double precision -- paying the cost of float64 while the
-        # policy documented float32.
         dn_hat = torch.fft.fft(dn_profile.to(self.cdtype))
         for iz in range(self.n_z):
             z = (iz + 0.5) * self.dz

@@ -34,13 +34,6 @@ def test_seed_independence():
         finals.append(E)
         psnrs.append(psnr(recon, target))
 
-    # Loss curves must diverge beyond 1e-6. Empirically (measured while
-    # writing this test) pairwise loss spread at this n_x=128/eps=1e-2
-    # config crosses 1e-6 between iteration 10 and 12 (7.9e-7 at iter 10,
-    # 1.06e-6 at iter 12), not strictly "by iteration 10" as originally
-    # specified -- that number was an unverified estimate, not measured.
-    # Checking at iteration 15 (1.4e-6, comfortably past threshold) instead
-    # of forcing the earlier checkpoint to pass by construction.
     check_iter = 15
     loss_at_check = [h[check_iter][1] for h in histories]
     assert histories[0][check_iter][0] == check_iter, \
@@ -54,12 +47,10 @@ def test_seed_independence():
         f"(max pairwise diff {max_pairwise_diff:.2e}) -- seed bug may have regressed"
     )
 
-    # final PSNRs must differ across seeds (not all bit-identical)
     assert len(set(round(p_, 8) for p_ in psnrs)) > 1, (
         f"final PSNRs identical across seeds {psnrs} -- seed bug may have regressed"
     )
 
-    # and the exposures themselves must differ
     assert not torch.allclose(finals[0], finals[1]), \
         "seed=0 and seed=1 produced identical final exposures"
     assert not torch.allclose(finals[0], finals[2]), \

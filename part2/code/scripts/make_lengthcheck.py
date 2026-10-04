@@ -55,7 +55,6 @@ def main():
     email = re.sub(r"\\authormark\{[^}]*\}", "", _arg(src, "email"))
     abstract = re.search(r"\\begin\{abstract\*\}(.*?)\\end\{abstract\*\}", src, re.S).group(1)
     body = src.split(r"\end{abstract*}", 1)[1].split(r"\end{document}", 1)[0]
-    # Figures span both columns in the journal layout.
     body = body.replace(r"\begin{figure}", r"\begin{figure*}").replace(r"\end{figure}", r"\end{figure*}")
     body = body.replace(r"\begin{figure*}[!htbp]", r"\begin{figure*}[!t]")
     head = PREAMBLE.replace("%(title)s", title).replace("%(affil)s", affil).replace("%(email)s", email)
