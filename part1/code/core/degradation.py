@@ -20,9 +20,6 @@ import numpy as np
 from PIL import Image
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  1. Resolution
-# ─────────────────────────────────────────────────────────────────────────────
 
 def degrade_resolution(image: np.ndarray, target_size: int) -> np.ndarray:
     """
@@ -36,7 +33,6 @@ def degrade_resolution(image: np.ndarray, target_size: int) -> np.ndarray:
     is_3d = image.ndim == 3
 
     if is_float:
-        # Convert to uint8 for PIL, process, convert back
         arr_uint8 = np.clip(image * 255, 0, 255).astype(np.uint8)
     else:
         arr_uint8 = image
@@ -78,11 +74,9 @@ def degrade_resolution_phase(phase: np.ndarray, target_size: int) -> np.ndarray:
     """
     from PIL import Image as PILImage
     H, W = phase.shape
-    # Convert phase to complex phasor
     phasor = np.exp(1j * phase).astype(np.complex64)
 
     def _resize_channel(arr_real):
-        # arr_real is float32 in [-1, 1]
         pil = PILImage.fromarray(((arr_real + 1) / 2 * 255).clip(0, 255).astype(np.uint8), mode='L')
         small = pil.resize((target_size, target_size), PILImage.NEAREST)
         restored = small.resize((W, H), PILImage.NEAREST)
@@ -90,14 +84,10 @@ def degrade_resolution_phase(phase: np.ndarray, target_size: int) -> np.ndarray:
 
     real_degraded = _resize_channel(phasor.real)
     imag_degraded = _resize_channel(phasor.imag)
-    # Reconstruct complex phasor and extract phase
     phasor_degraded = real_degraded + 1j * imag_degraded
     return np.angle(phasor_degraded).astype(np.float32)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  2. Phase quantisation
-# ─────────────────────────────────────────────────────────────────────────────
 
 def quantise_phase(phase: np.ndarray, bits: int) -> np.ndarray:
     """
@@ -125,17 +115,12 @@ def quantise_phase(phase: np.ndarray, bits: int) -> np.ndarray:
     """
     n_levels = 2 ** bits
     step = 2 * np.pi / n_levels
-    # Map phase to [0, 2π), assign to one of n_levels bins.
     wrapped = np.mod(phase + np.pi, 2 * np.pi)
     idx = np.clip(np.floor(wrapped / step).astype(np.int64), 0, n_levels - 1)
-    # Bin centre, shifted back to [-π, π).
     quantised = (idx + 0.5) * step - np.pi
     return quantised.astype(np.float32)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  3. Color channel degradation
-# ─────────────────────────────────────────────────────────────────────────────
 
 def degrade_color(image_rgb: np.ndarray, mode: str) -> np.ndarray:
     """
@@ -157,11 +142,10 @@ def degrade_color(image_rgb: np.ndarray, mode: str) -> np.ndarray:
 
     elif mode == "RG":
         out = image_rgb.copy()
-        out[:, :, 2] = 0          # zero blue channel
+        out[:, :, 2] = 0
         return out
 
     elif mode == "mono":
-        # Luminance weights (ITU-R BT.601)
         gray = (
             0.299 * image_rgb[:, :, 0].astype(np.float32)
             + 0.587 * image_rgb[:, :, 1].astype(np.float32)
@@ -173,9 +157,6 @@ def degrade_color(image_rgb: np.ndarray, mode: str) -> np.ndarray:
         raise ValueError(f"Unknown mode '{mode}'. Choose 'RGB', 'RG', or 'mono'.")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  4. Viewing angle (spatial-frequency bandwidth limit)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def limit_viewing_angle(phase: np.ndarray, bandwidth_fraction: float) -> np.ndarray:
     """
@@ -195,7 +176,6 @@ def limit_viewing_angle(phase: np.ndarray, bandwidth_fraction: float) -> np.ndar
     field = np.exp(1j * phase).astype(np.complex64)
     spectrum = np.fft.fftshift(np.fft.fft2(field))
 
-    # Build circular mask
     cx, cy = W // 2, H // 2
     radius = bandwidth_fraction * min(H, W) / 2
     Y, X = np.ogrid[:H, :W]
@@ -206,9 +186,6 @@ def limit_viewing_angle(phase: np.ndarray, bandwidth_fraction: float) -> np.ndar
     return np.angle(field_back).astype(np.float32)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  5. Speckle noise
-# ─────────────────────────────────────────────────────────────────────────────
 
 def add_speckle_legacy(image: np.ndarray, sigma: float = 0.1, seed: int = 0) -> np.ndarray:
     """
@@ -232,7 +209,6 @@ def add_speckle_legacy(image: np.ndarray, sigma: float = 0.1, seed: int = 0) -> 
     return np.clip(noisy, 0, 1).astype(np.float32)
 
 
-# Backward-compatible alias (deprecated name).
 add_speckle = add_speckle_legacy
 
 
@@ -259,13 +235,9 @@ def add_speckle_physical(phase: np.ndarray, sigma_rad: float = 0.3, seed: int = 
     rng = np.random.default_rng(seed)
     phase_noise = rng.normal(0.0, sigma_rad, phase.shape).astype(np.float32)
     perturbed = phase + phase_noise
-    # Wrap back to [-π, π]
     return np.angle(np.exp(1j * perturbed)).astype(np.float32)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  6. Depth-plane simulation helper
-# ─────────────────────────────────────────────────────────────────────────────
 
 def depth_planes_to_z_list(n_planes: int, z_near: float = 0.05, z_far: float = 0.30):
     """

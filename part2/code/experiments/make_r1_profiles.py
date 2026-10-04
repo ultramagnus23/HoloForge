@@ -49,19 +49,8 @@ def run_one_K(K: float, rec, bpm, device) -> dict:
     t_mil = time.time() - t0
 
     with torch.no_grad():
-        # REMEDIATION (confirmed peer-review finding I4): this previously
-        # plotted dn_bsgd = dn_max*(E_bsgd - mean(E_bsgd)) -- BSGD's own
-        # NAIVE LINEAR ASSUMPTION about what it is recording, not what the
-        # real twin actually records for that exposure. That is an
-        # apples-to-oranges comparison against dn_mil (already the real
-        # recorded profile) and, worse, is UNBOUNDED by construction, so it
-        # can never show the very clipping-against-dn_max effect the
-        # accompanying manuscript prose (Sec. on baseline completeness)
-        # describes BSGD's exposure as causing. Both curves now come from
-        # the SAME real recorder call, so the figure shows what each
-        # method's exposure actually produces on the real medium.
-        dn_bsgd = rec(E_bsgd)  # BSGD's exposure through the real twin
-        dn_mil = rec(E_mil)    # MIL's exposure through the real twin
+        dn_bsgd = rec(E_bsgd)
+        dn_mil = rec(E_mil)
 
     print(f"K={K:.3f} done ({t_bsgd:.0f}s + {t_mil:.0f}s)", flush=True)
     return dict(

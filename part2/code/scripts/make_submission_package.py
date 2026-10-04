@@ -103,8 +103,6 @@ def main():
     if pages["manuscript"] > 10:
         raise SystemExit(f"manuscript is {pages['manuscript']} pages; JOSA A limit is 10")
 
-    # JOSA A bills overlength against published pages: compile the same body in
-    # Optica's two-column journal class as well (not shipped in the package).
     import make_lengthcheck
     make_lengthcheck.main()
     lc = "manuscript_lengthcheck"

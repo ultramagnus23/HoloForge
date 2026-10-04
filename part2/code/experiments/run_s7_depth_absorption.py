@@ -60,10 +60,7 @@ from run_s3_mismatch import design_one, _build_stack
 from methods import contrast_stats
 
 S7_OPTICAL_DENSITIES = [0.0, 0.1, 0.3]
-S7_N_Z = 16  # coarser than SlabBPM's usual n_z=32 default -- forward passes
-            # here cost n_z recorder evaluations each, so this keeps S7's
-            # total cost bounded; verified this doesn't change the OD=0
-            # equivalence (that check is exact regardless of n_z).
+S7_N_Z = 16
 
 
 def s7_result_config(design_config: dict, optical_density: float) -> dict:
@@ -78,11 +75,6 @@ def evaluate_depth_resolved(E: torch.Tensor, cfg: dict, medium_dict: dict,
     mask = (target > 0.05).double()
     with torch.no_grad():
         if optical_density == 0.0:
-            # exact-equivalence path (verified in holomedia.npdd's tests):
-            # skip the batched n_z-slice recorder call entirely when it is
-            # guaranteed to reproduce the uniform profile, cheaper and
-            # avoids relying on a numerically-exact-but-still-more-costly
-            # depth-resolved call for a condition that needs it least.
             dn = rec(E.to(device))
             recon = bpm(dn, shrinkage=rec.p.shrinkage)
         else:

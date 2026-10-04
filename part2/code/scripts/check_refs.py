@@ -27,7 +27,6 @@ def find_pending_entries(text: str) -> list[str]:
     pending = []
     for i, line in enumerate(lines):
         if TODO_RE.search(line):
-            # scan forward for the next @entry{key, line
             for j in range(i, min(i + 10, len(lines))):
                 m = ENTRY_KEY_RE.search(lines[j])
                 if m:

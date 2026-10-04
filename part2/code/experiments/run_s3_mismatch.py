@@ -78,9 +78,6 @@ from run_manifest import (DTYPE, build_target, atomic_write_json,
 
 
 def design_path(job: dict) -> str:
-    # run_manifest.RESULTS_ROOT is read through the module (not imported by
-    # value) so set_results_root() from a test or a --results-dir run is
-    # actually honored here too.
     return os.path.join(run_manifest.RESULTS_ROOT, "S3", "_designs",
                         job["config_hash"],
                         f"{job['method_id']}_seed{job['seed']}.pt")
@@ -164,8 +161,6 @@ def run(n_x=1024, n_iters=800, converge_tol=1e-4, seeds=None, device=None,
     n_written = n_skipped = 0
     for job in designs:
         cfg = job["config"]
-        # Designed lazily: if every evaluation for this design is already on
-        # disk, the (expensive) optimization is never re-run on resume.
         E = None
         for cond in conditions:
             eval_cfg = s3_result_config(cfg, cond)

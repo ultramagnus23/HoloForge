@@ -1,4 +1,3 @@
-# Holography Sandbox — core package
 from .waveoptics  import gerchberg_saxton, reconstruct, propagate_asm, propagate_fresnel
 from .degradation import (
     degrade_resolution, quantise_phase, degrade_color,

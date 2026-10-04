@@ -12,12 +12,8 @@ import matplotlib.pyplot as plt
 CM = 1 / 2.54
 SINGLE_COL_IN = 8.6 * CM
 DOUBLE_COL_IN = 17.8 * CM
-# Text block of the Optica universal manuscript template (8.5 in page,
-# 1.625 in side margins): figures drawn at this width print at true font size
-# in the submitted PDF.
 TEXT_IN = 5.25
 
-# Okabe & Ito (2008) colorblind-safe palette (yellow omitted: unreadable on white).
 COLORS = dict(
     black="#000000", orange="#E69F00", sky_blue="#56B4E9",
     bluish_green="#009E73", blue="#0072B2",
@@ -40,7 +36,6 @@ METHOD_MARKERS = {
     "GS": "o", "BSGD": "s", "LPC": "^", "GPC": "p",
     "RSGD": "*", "SAT": "X", "MIL": "D",
 }
-# Contrast budgets B_c = 2, 4, 8.
 BUDGET_COLORS = {2.0: COLORS["blue"], 4.0: COLORS["vermillion"], 8.0: COLORS["bluish_green"]}
 BUDGET_LINESTYLES = {2.0: "-", 4.0: "--", 8.0: ":"}
 BUDGET_MARKERS = {2.0: "o", 4.0: "s", 8.0: "^"}
@@ -53,7 +48,7 @@ plt.rcParams.update({
     "xtick.labelsize": 6.5, "ytick.labelsize": 6.5, "legend.fontsize": 6.5,
     "lines.linewidth": 1.0, "axes.linewidth": 0.6,
     "mathtext.fontset": "dejavusans",
-    "pdf.fonttype": 42, "ps.fonttype": 42,  # embed fonts as text, not curves
+    "pdf.fonttype": 42, "ps.fonttype": 42,
 })
 
 

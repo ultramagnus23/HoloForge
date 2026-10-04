@@ -51,10 +51,6 @@ REQUIRED_SCHEMA_KEYS = {"experiment_id", "config_hash", "method_id", "seed",
                         "config", "psnr", "diffraction_efficiency", "contrast"}
 
 
-# --------------------------------------------------------------- loading
-# Seeds the analysis is allowed to use. Mirrors manifest.PAPER_SEEDS.
-# None => use every seed found on disk. See this module's seed-filter note
-# on load_all_results for why this is not None today.
 ANALYSIS_SEEDS: set | None = {0, 1, 2}
 
 
@@ -82,9 +78,6 @@ def load_all_results(results_root: str = RESULTS_ROOT,
               f"(e.g. pre-manifest gpu_reruns/ sweeps): {skipped[:3]}"
               f"{'...' if len(skipped) > 3 else ''}")
 
-    # Seed restriction (see this function's docstring note). Reported, not
-    # silent: a quietly narrowed input set looks exactly like missing data
-    # when someone later checks n per cell.
     allowed = ANALYSIS_SEEDS if seeds == "default" else seeds
     if allowed is not None:
         kept = [r for r in out if r["seed"] in allowed]
@@ -147,8 +140,6 @@ def group_by_config(results: list[dict]) -> dict:
     return g
 
 
-# Methods exempt from the M1 completeness rule: no headline number uses the
-# unconstrained oracle, and one otherwise-complete cell is missing one ORU seed.
 M1_COMPLETENESS_EXEMPT = {"ORU"}
 
 
@@ -184,7 +175,6 @@ def load_grouped_complete(results_root: str = RESULTS_ROOT) -> dict:
     return split_complete_m1(group_by_config(load_all_results(results_root)))[0]
 
 
-# --------------------------------------------------------------- stats
 def bootstrap_ci(values: list[float], n_resamples: int = 10000, alpha: float = 0.05,
                  seed: int = 0) -> dict:
     """Nonparametric percentile bootstrap CI on the mean (WP4 item 2:
@@ -245,7 +235,6 @@ def paired_gain(rows_a: list[dict], rows_b: list[dict], key: str = "psnr") -> li
            for r in rows_a if r["seed"] in by_seed_b]
 
 
-# --------------------------------------------------------------- cliff estimators
 def find_zero_crossing_K(K_gain_pairs: list[tuple]) -> float | None:
     """FIRST-crossing estimator: linear-interpolation zero-crossing where
     mean paired gain first goes positive -> non-positive as K increases.
@@ -293,7 +282,7 @@ def find_last_crossing_K(K_gain_pairs: list[tuple],
         return None
     i = above[-1]
     if i == len(K_gain_pairs) - 1:
-        return None  # still positive at the top of the grid: cliff not bracketed
+        return None
     K0, g0 = K_gain_pairs[i]
     K1, g1 = K_gain_pairs[i + 1]
     if g0 == g1:
@@ -377,7 +366,7 @@ def gain_vs_bsgd_seed_mean(grouped: dict, experiment_id: str, budget: float,
         rows, bsgd = by_method.get(method, []), by_method.get("BSGD", [])
         if not rows or not bsgd:
             continue
-        method_val = rows[0]["psnr"]  # deterministic: exactly one row expected
+        method_val = rows[0]["psnr"]
         bsgd_mean = sum(r["psnr"] for r in bsgd) / len(bsgd)
         entries.append((cfg["K_nominal"], method_val - bsgd_mean, None, None))
     return sorted(entries, key=lambda e: e[0])
@@ -436,7 +425,7 @@ def _self_consistent_Kc(rec, contrast_by_K: dict) -> float | None:
         return None
     K_t = torch.tensor(Ks, dtype=rec.dtype)
     inv_H = (1.0 / rec.small_signal_mtf(K_t)).tolist()
-    deficit = [ih - contrast_by_K[k] for ih, k in zip(inv_H, Ks)]  # >0 => infeasible
+    deficit = [ih - contrast_by_K[k] for ih, k in zip(inv_H, Ks)]
     for i in range(len(Ks)):
         if deficit[i] > 0:
             if i == 0:
@@ -461,22 +450,6 @@ def headroom_closure(grouped: dict, experiment_id: str = "M1", budgets=BUDGETS) 
         curve = gain_curve(grouped, experiment_id, budget)
         configs_and_methods = _configs_for_budget(grouped, experiment_id, budget)
 
-        # Measured contrast C, PER K (not averaged over K).
-        #
-        # This used to be one scalar: the mean of MIL's realized max/mean
-        # over every (K, seed) in the budget group. That is a
-        # mis-specification whenever the realized contrast is itself
-        # K-dependent -- which it measurably is. On the real M1 data at
-        # 8x budget, MIL realized C = 8.0 at the lowest K but only ~3.4-5.6
-        # across the mid range, and 1.03 at the top K, so a single
-        # K-averaged C described no K in particular. It was also outlier-
-        # driven: at 2x budget the near-constant C~2.02 was dragged to
-        # 1.95 purely by the single collapsed K=15.7 point.
-        #
-        # Kc is now solved SELF-CONSISTENTLY: the cliff is where the boost
-        # the medium demands, 1/H(K), first exceeds the contrast the
-        # optimizer actually realized AT THAT K, C(K) -- i.e. the smallest
-        # K with 1/H(K) > C(K), rather than 1/H(K) > (one global C).
         contrast_by_K = {}
         for cfg, by_method in configs_and_methods:
             vals = [r["contrast"]["max_over_mean"] for r in by_method.get("MIL", [])
@@ -488,7 +461,7 @@ def headroom_closure(grouped: dict, experiment_id: str = "M1", budgets=BUDGETS) 
             table.append(dict(budget=budget, status="no_data"))
             continue
 
-        measured_C = statistics.fmean(contrast_by_K.values())  # reported for continuity only
+        measured_C = statistics.fmean(contrast_by_K.values())
         any_cfg = configs_and_methods[0][0]
         medium = MediumParams(**any_cfg["medium"])
         rec = NPDDRecorder(any_cfg["n_x"], any_cfg["dx"], params=medium)
@@ -500,13 +473,10 @@ def headroom_closure(grouped: dict, experiment_id: str = "M1", budgets=BUDGETS) 
             budget=budget,
             measured_contrast_C=measured_C,
             contrast_by_K=sorted(contrast_by_K.items()),
-            # primary (self-consistent, per-K C) and the old K-averaged
-            # form side by side, so the change in method is visible in the
-            # output rather than being a silent redefinition of Kc.
             predicted_Kc_from_measured_C=predicted_Kc,
             predicted_Kc_from_Kaveraged_C=predicted_Kc_avgC,
-            observed_Kstar_last=find_last_crossing_K(K_gain_pairs),   # preferred
-            observed_Kstar_interp=find_zero_crossing_K(K_gain_pairs),  # legacy/fragile
+            observed_Kstar_last=find_last_crossing_K(K_gain_pairs),
+            observed_Kstar_interp=find_zero_crossing_K(K_gain_pairs),
             observed_Kstar_ci=find_ci_includes_zero_K(curve),
             n_K_points=len(curve), gain_curve=curve,
         ))
@@ -560,8 +530,7 @@ def m3_cliff_shift(grouped: dict, budgets=BUDGETS) -> list[dict]:
     return out
 
 
-# ----------------------------------------------------------- sub-cliff check
-SUB_CLIFF_OLD_VALUES = {  # from results_prelim.json, single effective seed (bug)
+SUB_CLIFF_OLD_VALUES = {
     0.98: 1.6458, 1.96: 0.9481, 2.62: 2.3740,
 }
 
@@ -783,15 +752,6 @@ def s3_mismatch_summary(grouped: dict) -> dict:
     if not rows:
         return dict(status="no_data")
 
-    # (param, pct) -> per-seed, K-averaged paired gains.
-    #
-    # Pairing happens inside each config group (one K), which is the only
-    # place paired_gain is safe -- it matches arms by seed alone, so
-    # handing it several K at once would silently keep one K's BSGD value
-    # per seed. Each seed's gains are then averaged over K, so the
-    # reported CI is over SEEDS. Pooling (seed, K) instead would make the
-    # interval reflect between-K spread, which is a real effect being
-    # averaged over, not uncertainty about the mean.
     per_seed: dict = {}
     for exp_id, ch in rows:
         by_method = grouped[(exp_id, ch)]
@@ -807,8 +767,6 @@ def s3_mismatch_summary(grouped: dict) -> dict:
                for k, seeds in per_seed.items()}
 
     params = sorted({k[0] for k in buckets if k[0] is not None})
-    # pct=0 (nominal) is emitted under the first parameter only, by
-    # construction in build_S3_conditions -- shared across all curves.
     nominal_key = next((k for k in buckets if k[1] == 0), None)
     nominal = mean_std_median_ci95(buckets.get(nominal_key, []))
 
@@ -956,9 +914,6 @@ def sat_surrogate_summary(grouped: dict, experiment_id: str = "M1",
         mil_means = [c[1] for c in mil]
         sat_mean = statistics.fmean(sat_means)
         mil_mean = statistics.fmean(mil_means)
-        # Per-K fraction as well as ratio-of-means: a single ratio can
-        # hide a surrogate that tracks MIL at low K and collapses at high
-        # K, which is exactly the failure mode worth knowing about.
         by_K = {}
         common = {c[0]: c[1] for c in mil}
         for K, m, _lo, _hi in sat:
@@ -973,7 +928,6 @@ def sat_surrogate_summary(grouped: dict, experiment_id: str = "M1",
     if have:
         out["status"] = "ok"
 
-    # Surrogate calibration quality, carried on the SAT result rows.
     nrmses, a_effs = [], []
     for (exp_id, _ch), by_method in grouped.items():
         if exp_id != experiment_id:
@@ -1020,7 +974,6 @@ def sub_cliff_non_monotonicity_status(grouped: dict) -> dict:
     return dict(status="answered_from_real_data", data=found)
 
 
-# --------------------------------------------------------------- top level
 def _paired_gains_by(grouped: dict, exp_id: str, key_fn) -> dict:
     """{key_fn(config): [per-seed MIL-BSGD gains, ...]} for one experiment."""
     out: dict = {}
@@ -1115,13 +1068,6 @@ def build_paper_numbers(results_root: str = RESULTS_ROOT) -> dict:
         nz0_convergence_summary=nz0_convergence_summary(grouped),
         s1_by_K=_s1_by_K(grouped),
         s1x_by_K=_s1x_by_K(grouped),
-        # M2 carries SAT at the sub-cliff K = 1.31 rad/um, which lies
-        # below M1's grid minimum of 1.96 -- i.e. exactly where
-        # media-in-the-loop's advantage is largest and the cheap
-        # surrogate is most interesting. Reported separately rather than
-        # merged into the M1 summary, because M2's BSGD arm is
-        # compute-matched (~21.7x SAT's iterations) and the two
-        # denominators are therefore not the same quantity.
         sat_surrogate_summary_m2=sat_surrogate_summary(grouped, "M2"),
     )
     return out

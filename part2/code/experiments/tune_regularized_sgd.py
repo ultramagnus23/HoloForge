@@ -31,8 +31,8 @@ torch.set_default_dtype(torch.float32)
 
 N_X, DX = 1024, 51.2 / 1024
 LAM_UM = 0.405
-TUNE_N_ITERS = 200  # short: tuning only needs a relative ranking, not convergence
-TUNE_K_POINTS = [1.963495, 4.833219, 10.471976]  # low/mid/high, representative
+TUNE_N_ITERS = 200
+TUNE_K_POINTS = [1.963495, 4.833219, 10.471976]
 TV_WEIGHTS = [0.0, 0.001, 0.01, 0.1]
 BUDGETS = [2.0, 4.0, 8.0]
 

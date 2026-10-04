@@ -51,32 +51,23 @@ def test_load_curve_csv_schema():
 
 def test_fit_recovers_known_parameters_on_synthetic_data():
     orig_n_x, orig_dx = flc.N_X, flc.DX
-    flc.N_X, flc.DX = 96, 0.1  # shrink for test speed; fitting logic unaffected
+    flc.N_X, flc.DX = 96, 0.1
     try:
         true_kappa, true_D0 = 1.5, 0.05
         K = 6.0
         t_values = [1.0, 3.0, 6.0, 10.0]
         base_params = MediumParams()
 
-        # synthesize "digitized" data from the twin itself at known params
         clean = flc.simulate_growth_de(t_values, K, true_kappa, true_D0, base_params, 30.0)
         rng = np.random.default_rng(0)
-        noisy = clean + rng.normal(0, 0.002, size=clean.shape)  # small noise, real digitization-like
+        noisy = clean + rng.normal(0, 0.002, size=clean.shape)
 
-        # n_starts=1: this test checks the fitting mechanics on a single,
-        # easy, near-noiseless case -- the separate multi-start test below
-        # exercises n_starts>1 specifically. Keeping this one single-start
-        # keeps the test suite fast (each start is a full NPDD solve).
         fit = flc.fit_curve("growth", K, t_values, noisy.tolist(), base_params=base_params, n_starts=1)
 
         print(f"true kappa={true_kappa} D0={true_D0} | "
               f"fit kappa={fit['kappa_fit']:.3f} D0={fit['D0_fit']:.4f} rmse={fit['rmse']:.4f}")
         assert fit["converged"]
         assert fit["rmse"] < 0.02, f"fit RMSE too high on synthetic (near-noiseless) data: {fit['rmse']}"
-        # recovered params should be in the right ballpark (order of magnitude),
-        # not necessarily exact -- growth curves have limited sensitivity to D0
-        # at a single K, so this checks the fit is finding a REASONABLE
-        # explanation of the curve, not pinning exact recovery
         assert 0.3 * true_kappa < fit["kappa_fit"] < 3.0 * true_kappa, fit["kappa_fit"]
         print("fit recovers known parameters on synthetic data OK (self-consistency check)")
     finally:
@@ -96,21 +87,11 @@ def test_growth_dn_fit_recovers_known_dn_max_on_synthetic_data():
     try:
         true_kappa, true_dn_max = 1.5, 0.01
         K = 8.98
-        # span growth AND plateau like the real digitized data (0.17-180
-        # mJ/cm^2) -- a narrow, plateau-only dose window leaves parameters
-        # degenerate (checked: a 1-20 window recovered neither parameter),
-        # same sensitivity limitation the "growth" (DE) branch already
-        # documents for a single K.
         dose_values = [0.2, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]
         base_params = MediumParams(dn_max=true_dn_max)
 
         clean = flc.simulate_growth_dn(dose_values, K, true_kappa, base_params.D0, base_params)
         rng = np.random.default_rng(1)
-        # noise scaled to 2% of the clean curve's own range, not a fixed
-        # absolute value -- Delta-n1's scale depends heavily on K/kappa/dn_max,
-        # so a noise level borrowed from the DE-scale (O(1)) test above
-        # would swamp a small-range Delta-n1 curve and fail for reasons
-        # that have nothing to do with the fit itself (checked: it does).
         noise_scale = 0.02 * (clean.max() - clean.min())
         noisy = clean + rng.normal(0, noise_scale, size=clean.shape)
 
@@ -152,12 +133,6 @@ def test_multi_start_reports_spread_and_picks_best():
         assert fit["n_starts"] == 3
         assert "nrmse_min" in fit and "nrmse_max" in fit and "nrmse_std" in fit
         assert fit["nrmse_min"] <= fit["nrmse"] <= fit["nrmse_max"]
-        # 0.05 (the codebase's own "GOOD" fit-quality threshold), not the
-        # tighter 0.02 used for the single, literature-init-only case above
-        # -- checked: with a different noise draw, best-of-3 (which always
-        # includes that same literature-init start as one of the three) can
-        # land a bit above 0.02 on this easy case without indicating a real
-        # problem; 0.05 is still a meaningful bar, not a rubber stamp.
         assert fit["nrmse_min"] <= 0.05, "best of 3 starts should still find the easy near-noiseless optimum"
         print(f"multi-start spread: min={fit['nrmse_min']:.4f} max={fit['nrmse_max']:.4f} "
               f"std={fit['nrmse_std']:.4f}")

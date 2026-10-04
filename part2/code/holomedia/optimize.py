@@ -20,7 +20,7 @@ from __future__ import annotations
 import math
 import torch
 
-from .npdd import NPDDRecorder, MediumParams
+from .npdd import NPDDRecorder
 from .diffraction import SlabBPM
 
 
@@ -36,7 +36,6 @@ def _complex_dtype_for(real_dtype: torch.dtype) -> torch.dtype:
     return torch.complex64 if real_dtype == torch.float32 else torch.complex128
 
 
-# ---------------------------------------------------------------- utilities
 def dose_project(E: torch.Tensor, budget: float) -> torch.Tensor:
     """Scale exposure so mean dose == budget (projection onto dose simplex)."""
     return E * (budget / (E.mean() + 1e-12))
@@ -125,28 +124,6 @@ def psnr(a: torch.Tensor, b: torch.Tensor) -> float:
     return float(10.0 * torch.log10(1.0 / (mse + 1e-12)))
 
 
-# ------------------------------------------- scale-invariant objective/metric
-# WHY THIS EXISTS (objective/metric alignment bug, fixed here):
-# every optimizer below used to minimize a SUM-normalized MSE
-#     r/r.sum() vs t/t.sum()
-# while the reported score psnr() used a MAX-normalized MSE
-#     r/r.max() vs t/t.max().
-# Those are different objectives, so a method could genuinely minimize
-# what it was asked to minimize and still score worse on what was
-# reported -- exactly the failure mode that made media_in_the_loop look
-# like it fell off a "cliff" at high K while media_blind_sgd stayed flat.
-#
-# Both normalizations are really just two arbitrary choices of a single
-# scalar. The principled fix is to remove the choice: minimize over the
-# scale. si_mse solves for the optimal alpha in closed form
-#     alpha* = <a,b> / <a,a>
-# (differentiable, so it is safe inside the unrolled loop) and reports the
-# residual at that alpha. psnr_si is the same quantity in dB, normalized
-# by the target peak. Loss and metric are now the SAME function up to a
-# monotone transform, so "optimized better" and "scored better" cannot
-# disagree. This is standard practice (cf. scale-invariant SNR); it is
-# also the honest comparison here, since a hologram's absolute brightness
-# is set by readout gain, not by the design.
 def si_mse(a: torch.Tensor, b: torch.Tensor, dim: int | None = None) -> torch.Tensor:
     """Scale-invariant MSE: min_alpha ||alpha*a - b||^2 / N, normalized by
     b's peak^2 so it is dimensionless and comparable across targets.
@@ -183,7 +160,6 @@ def diffraction_efficiency(recon: torch.Tensor, target_mask: torch.Tensor) -> fl
     return float((recon * target_mask).sum() / (recon.sum() + 1e-12))
 
 
-# ------------------------------------------------------- batched utilities
 def dose_project_batch(E: torch.Tensor, budget: float) -> torch.Tensor:
     """dose_project, per batch row (E: (B, n_x))."""
     return E * (budget / (E.mean(dim=-1, keepdim=True) + 1e-12))
@@ -211,7 +187,6 @@ def diffraction_efficiency_batch(recon: torch.Tensor, target_mask: torch.Tensor)
     return (recon * target_mask).sum(dim=-1) / (recon.sum(dim=-1) + 1e-12)
 
 
-# ------------------------------------------------------------------ methods
 def media_in_the_loop(target: torch.Tensor, recorder: NPDDRecorder,
                       bpm: SlabBPM, n_iters: int = 400, lr: float = 5e-2,
                       dose_budget: float = 1.0, seed: int = 0,
@@ -230,7 +205,6 @@ def media_in_the_loop(target: torch.Tensor, recorder: NPDDRecorder,
         dose-only projection exactly.
     """
     device = target.device
-    # softplus-parameterized exposure, initialized near uniform dose
     theta = _seeded_init_theta(recorder.n_x, device, recorder.dtype, seed)
     opt = torch.optim.Adam([theta], lr=lr)
     history = []
@@ -260,14 +234,6 @@ def media_in_the_loop(target: torch.Tensor, recorder: NPDDRecorder,
                     break
             prev_loss = cur
 
-    # Guarantee history[-1][0] is the TRUE last iteration run whenever the
-    # loop completed its full budget (not just the last log_every-aligned
-    # checkpoint) -- without this, `iterations_run = history[-1][0]` looks
-    # like an early stop even when converge_tol never triggered, since the
-    # last checkpoint before n_iters is almost never exactly n_iters-1.
-    # When the loop DID break early, the break already happened right after
-    # appending the entry that triggered it, so history[-1] is already the
-    # true stopping point and needs no adjustment.
     if not broke_early and n_iters > 0 and history and history[-1][0] != n_iters - 1:
         history.append((n_iters - 1, float(loss.detach())))
 
@@ -293,15 +259,15 @@ def media_blind_sgd(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
     device = target.device
     theta = _seeded_init_theta(recorder.n_x, device, recorder.dtype, seed)
     opt = torch.optim.Adam([theta], lr=lr)
-    c_lin = recorder.p.dn_max  # ideal linear map with same index budget
+    c_lin = recorder.p.dn_max
     history = []
 
     for it in range(n_iters):
         opt.zero_grad()
         E = torch.nn.functional.softplus(theta) + 1e-6
         E = contrast_project(E, dose_budget, contrast_cap)
-        dn_ideal = c_lin * (E - E.mean())          # linear, zero-mean modulation
-        recon = bpm(dn_ideal, shrinkage=0.0)       # blind: no shrinkage either
+        dn_ideal = c_lin * (E - E.mean())
+        recon = bpm(dn_ideal, shrinkage=0.0)
         loss = si_mse(recon, target)
         loss.backward()
         opt.step()
@@ -345,30 +311,9 @@ def linear_precomp(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
     dtype = recorder.dtype
     cdtype = _complex_dtype_for(dtype)
     n_x, dx = recorder.n_x, recorder.dx
-    freq = torch.fft.fftfreq(n_x, d=dx).to(device=device, dtype=dtype)  # cycles/um
-    K = (2.0 * math.pi * freq).abs()  # rad/um; H depends on K^2, sign irrelevant
+    freq = torch.fft.fftfreq(n_x, d=dx).to(device=device, dtype=dtype)
+    K = (2.0 * math.pi * freq).abs()
     H = recorder.small_signal_mtf(K, I_mean=I_mean)
-    # Boost ceiling = the contrast budget, NOT 1e6.
-    #
-    # This was `clamp(..., max=1e6)`, described as "numerical safety only".
-    # 1e6 is not a safety margin, it is no ceiling at all: H -> 0 near
-    # Nyquist, so 1/H actually REACHED the 1e6 clamp on the production grid
-    # (measured: 1/H = 1.92 at K=4, 29 at K=15.7, 1e6 at K=60). A bar
-    # target has energy at every odd harmonic, so multiplying by that
-    # profile made the resulting exposure dominated by near-Nyquist
-    # harmonics rather than the target's own fundamental -- which is why
-    # LPC returned an essentially K-independent result (0.56 dB spread
-    # across the whole 14-point K grid and all three budgets), i.e. it was
-    # not functioning as a baseline at all.
-    #
-    # The correct ceiling is the contrast budget itself. That IS the
-    # paper's cliff condition (Eq. 5): compensation is feasible only where
-    # the required boost 1/H(K) fits inside the available contrast
-    # headroom B. Capping here makes LPC the honest closed-form
-    # realization of that theory -- boost every frequency by 1/H(K), up to
-    # what the budget actually permits -- instead of an unbounded boost
-    # that contrast_project then has to salvage after the spectrum has
-    # already been destroyed.
     max_boost = contrast_cap if contrast_cap is not None else 1e6
     boost = torch.clamp(1.0 / (H + 1e-9), max=max_boost)
 
@@ -414,7 +359,6 @@ def gamma_precomp(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
     re-fitting -- same fitted sensitivity, same fit cost amortization,
     consistent with sat_sgd's own a_eff handling.
     """
-    device = target.device
     dtype = recorder.dtype
     if a_eff is None:
         a_eff = _cached_sat_fit(recorder, fit_samples, dose_budget)
@@ -424,9 +368,7 @@ def gamma_precomp(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
     t_norm = (t / (t.max() + 1e-12)).clamp(min=0.0, max=0.999)
     dn_desired = dn_max * t_norm
 
-    # Invert dn = dn_max * tanh(1.5*N)  =>  N = artanh(dn/dn_max) / 1.5
     N = torch.atanh((dn_desired / dn_max).clamp(max=0.999)) / 1.5
-    # Invert N = 1 - exp(-a*E^gamma)  =>  E = (-ln(1-N)/a)^(1/gamma)
     E = (-torch.log((1.0 - N).clamp(min=1e-12)) / a_eff).clamp(min=0.0) ** (1.0 / gamma_exp)
 
     E = contrast_project(E, dose_budget, contrast_cap)
@@ -514,8 +456,6 @@ def media_blind_gs(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
         near = torch.fft.ifft(far)
         field = torch.exp(1j * torch.angle(near))
     phase = torch.angle(field).real
-    # naive conversion: exposure proportional to desired phase (mod 2pi),
-    # assuming dn linear in dose -- exactly the assumption we critique.
     E = contrast_project((phase - phase.min()) + 1e-6, dose_budget, contrast_cap)
     with torch.no_grad():
         recon_real = bpm(recorder(E), shrinkage=recorder.p.shrinkage)
@@ -563,18 +503,6 @@ def oracle_ideal(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
         dn_lin = dn_max * (E - E.mean())
         return E, dn_max * torch.tanh(dn_lin / dn_max)
 
-    # REMEDIATION (confirmed peer-review finding B6): this oracle previously
-    # evaluated with shrinkage=0.0 while MIL and BSGD both evaluate with the
-    # real medium's shrinkage (recorder.p.shrinkage) -- an unfair readout
-    # advantage for the "ceiling" this method is meant to bound against.
-    # Measured directly at a representative (K, budget) point: 0.11 dB
-    # inflation from skipping shrinkage alone, a real fraction of the
-    # headline 0.34-0.73 dB gains this ceiling is compared against. Using
-    # the SAME shrinkage as every other method's real-twin evaluation here
-    # closes that gap; it does not change what index-map this oracle
-    # assumes (still the simplified linear-then-saturated map, not the full
-    # NPDD dynamics -- see this function's own docstring for that separate,
-    # disclosed scope limitation).
     for _ in range(n_iters):
         opt.zero_grad()
         _, dn = _dn_from(theta)
@@ -626,18 +554,13 @@ def oracle_unconstrained(target: torch.Tensor, recorder: NPDDRecorder, bpm: Slab
     dn_max = recorder.p.dn_max
     g = torch.Generator(device="cpu")
     g.manual_seed(seed)
-    # u is dimensionless (O(1)), matching the softplus pre-activations the
-    # other methods optimize, so the shared lr is correctly scaled.
     u = (1e-2 * torch.randn(recorder.n_x, generator=g, dtype=recorder.dtype)
          ).to(device).requires_grad_(True)
     opt = torch.optim.Adam([u], lr=lr)
 
-    # REMEDIATION (confirmed peer-review finding B6, same fix as
-    # oracle_ideal above): use the real medium's shrinkage, not 0.0, so this
-    # oracle isn't evaluated under an easier readout than MIL/BSGD.
     for _ in range(n_iters):
         opt.zero_grad()
-        dn = dn_max * torch.tanh(u)  # soft-bounded, no hard E/dose constraint
+        dn = dn_max * torch.tanh(u)
         recon = bpm(dn, shrinkage=recorder.p.shrinkage)
         loss = si_mse(recon, target)
         loss.backward()
@@ -650,11 +573,6 @@ def oracle_unconstrained(target: torch.Tensor, recorder: NPDDRecorder, bpm: Slab
 
 
 
-# Calibration cache: the SAT fit depends only on (medium, grid, dtype,
-# dose), never on the target, the seed or the iteration budget -- so a
-# full M1 sweep pays for it once per medium/grid rather than 135 times.
-# This is the amortization that makes the "cheap surrogate" claim true in
-# the harness as well as on paper.
 _SAT_FIT_CACHE: dict = {}
 
 
@@ -725,7 +643,7 @@ def sat_sgd(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
     bargain, not a per-run cost. Returned `fit_nrmse` (via
     last_fit_nrmse) is the residual the pointwise model cannot explain.
     """
-    from .npdd import SaturationOnlyTwin, fit_saturation_only
+    from .npdd import SaturationOnlyTwin
 
     device = target.device
     if a_eff is None and calibrate:
@@ -764,9 +682,6 @@ def sat_sgd(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
     if not broke_early and n_iters > 0 and history and history[-1][0] != n_iters - 1:
         history.append((n_iters - 1, float(loss.detach())))
 
-    # Evaluation is on the REAL twin -- this is the whole point of the
-    # baseline: design against the cheap model, pay the real medium's
-    # price.
     with torch.no_grad():
         E = contrast_project(torch.nn.functional.softplus(theta) + 1e-6,
                              dose_budget, contrast_cap)
@@ -774,17 +689,6 @@ def sat_sgd(target: torch.Tensor, recorder: NPDDRecorder, bpm: SlabBPM,
     return E.detach(), recon_real.detach(), history
 
 
-# -------------------------------------------------------------- batched methods
-# Batched counterparts: one (B, n_x) theta run through one Python/Adam loop
-# instead of B separate (n_x,) thetas run in B sequential Python loops.
-# NPDDRecorder/SlabBPM have no cross-batch-row mixing (per-row FFT + the
-# per-row D_bar fix in npdd.py), and the backward scalar below is always
-# loss_per_row.SUM() rather than .mean() specifically so each row's Adam
-# trajectory is bit-identical to that (target, seed) run through the
-# unbatched function alone -- verified by direct comparison, see
-# tests/test_smoke.py::test_batched_matches_unbatched. Batching changes
-# wall-clock only, never the numbers. No early-stopping (converge_tol):
-# rows would need independently-timed stopping, not implemented here.
 
 def media_in_the_loop_batched(targets: torch.Tensor, recorder: NPDDRecorder,
                               bpm: SlabBPM, seeds, n_iters: int = 400,
@@ -880,8 +784,6 @@ def oracle_ideal_batched(targets: torch.Tensor, recorder: NPDDRecorder,
         dn_lin = dn_max * (E - E.mean(dim=-1, keepdim=True))
         return E, dn_max * torch.tanh(dn_lin / dn_max)
 
-    # REMEDIATION (confirmed peer-review finding B6, same fix as the
-    # unbatched oracle_ideal): real shrinkage, not 0.0.
     for _ in range(n_iters):
         opt.zero_grad()
         _, dn = _dn_from(theta)

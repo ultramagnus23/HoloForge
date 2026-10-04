@@ -17,9 +17,6 @@ Conventions:
 import numpy as np
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Low-level helpers
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _freq_grid(H: int, W: int, dx: float):
     """
@@ -37,18 +34,15 @@ def _transfer_function(H: int, W: int, dx: float, wavelength: float, z: float):
     Evanescent waves are zeroed out.
     """
     fx, fy = _freq_grid(H, W, dx)
-    k = 1.0 / wavelength                  # wavenumber in cycles/metre
+    k = 1.0 / wavelength
     kz_sq = k**2 - fx**2 - fy**2
-    propagating = kz_sq >= 0              # mask out evanescent waves
+    propagating = kz_sq >= 0
     kz = np.where(propagating, np.sqrt(np.maximum(kz_sq, 0)), 0).astype(np.float32)
     H_tf = np.exp(1j * 2 * np.pi * kz * z).astype(np.complex64)
     H_tf[~propagating] = 0.0
     return H_tf
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Propagation
-# ─────────────────────────────────────────────────────────────────────────────
 
 def propagate_asm(field: np.ndarray, z: float, wavelength: float, dx: float) -> np.ndarray:
     """
@@ -81,15 +75,11 @@ def propagate_fresnel(field: np.ndarray, z: float, wavelength: float, dx: float)
     x = np.fft.fftfreq(W, d=dx).astype(np.float32)
     y = np.fft.fftfreq(H, d=dx).astype(np.float32)
     fx, fy = np.meshgrid(x, y)
-    # Fresnel transfer function
     H_tf = np.exp(1j * k * z) * np.exp(-1j * np.pi * wavelength * z * (fx**2 + fy**2))
     spectrum = np.fft.fft2(field)
     return np.fft.ifft2(spectrum * H_tf).astype(np.complex64)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Phase retrieval — Gerchberg-Saxton
-# ─────────────────────────────────────────────────────────────────────────────
 
 def gerchberg_saxton(
     target_amplitude: np.ndarray,
@@ -131,7 +121,6 @@ def gerchberg_saxton(
     rng = np.random.default_rng(seed)
     H, W = target_amplitude.shape
 
-    # Start with random phase at SLM plane, uniform amplitude
     slm_phase = rng.uniform(-np.pi, np.pi, (H, W)).astype(np.float32)
     slm_field = np.exp(1j * slm_phase).astype(np.complex64)
 
@@ -139,22 +128,17 @@ def gerchberg_saxton(
     history = [] if return_history else None
 
     for _ in range(n_iter):
-        # Forward propagate to image plane
         img_field = propagate_asm(slm_field, z, wavelength, dx)
 
-        # Track per-iteration reconstruction error (normalised amplitude MSE)
         if return_history:
             recon_amp = np.abs(img_field)
             recon_amp = recon_amp / (recon_amp.max() + 1e-12)
             err = float(np.mean((recon_amp - target_amp) ** 2))
             history.append(err)
 
-        # Replace amplitude with target, keep phase
         img_phase = np.angle(img_field)
         img_field_constrained = target_amp * np.exp(1j * img_phase)
-        # Back-propagate to SLM plane
         slm_field = propagate_asm(img_field_constrained, -z, wavelength, dx)
-        # Enforce phase-only constraint at SLM
         slm_field = np.exp(1j * np.angle(slm_field)).astype(np.complex64)
 
     phase = np.angle(slm_field).astype(np.float32)
@@ -163,9 +147,6 @@ def gerchberg_saxton(
     return phase
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Reconstruction from hologram
-# ─────────────────────────────────────────────────────────────────────────────
 
 def reconstruct(
     phase_hologram: np.ndarray,
@@ -181,6 +162,5 @@ def reconstruct(
     slm_field = np.exp(1j * phase_hologram).astype(np.complex64)
     img_field = propagate_asm(slm_field, z, wavelength, dx)
     intensity = np.abs(img_field) ** 2
-    # Normalise to [0, 1]
     intensity /= intensity.max() + 1e-12
     return intensity.astype(np.float32)
