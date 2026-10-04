@@ -25,7 +25,7 @@ writes the files below to `part2/submission/`.
 - **Abstract:** paste `Abstract (plain text).txt` (about 100 words, as JOSA A asks).
 - **Author:** Chaitanya Tripathi, Ashoka University, Rajiv Gandhi Education City, Sonipat,
   Haryana 131029, India. Corresponding author email:
-  chaitanya.tripathi_ug2025@ashoka.edu.in. Add your ORCID iD if you have one.
+  chaitanya.tripathi_ug2025@ashoka.edu.in. ORCID iD: 0009-0002-4094-0323 (https://orcid.org/0009-0002-4094-0323).
 - **Funding:** none (the manuscript's Funding section says "This research received no
   external funding"; Optica generates the published Funding section from what you enter
   in Prism, so the two must agree).
