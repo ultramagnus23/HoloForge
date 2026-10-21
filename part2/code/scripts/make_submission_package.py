@@ -1,5 +1,5 @@
 """
-Build the JOSA A submission package.
+Build the Applied Optics submission package.
 
 Copies the manuscript, supplement, cover letter, generated macros,
 bibliography, Optica template files and every referenced figure into a clean
@@ -30,6 +30,13 @@ PAPER = os.path.normpath(os.path.join(HERE, "..", "..", "paper"))
 FIGS = os.path.normpath(os.path.join(PAPER, "..", "code", "figures", "paper"))
 OUT = os.path.normpath(os.path.join(PAPER, "..", "submission"))
 BUILD = os.path.join(OUT, "_build")
+
+# Applied Optics bills overlength charges against PUBLISHED pages (the
+# two-column journal layout), with a 10-page limit and $300 per page
+# beyond. The universal submission template runs longer for the same
+# body, so its page count is only a sanity bound on the build.
+JOURNAL_PAGE_LIMIT = 10
+UNIVERSAL_TEMPLATE_SANITY_PAGES = 16
 
 TITLE_FILE = ("Media-in-the-Loop Holography - Designing Photopolymer Exposures "
               "Through a Differentiable Recording Model")
@@ -100,8 +107,14 @@ def main():
 
     print("compiling in", BUILD)
     pages = {doc: compile_doc(doc, bib=(doc != "cover_letter")) for doc in DOCS}
-    if pages["manuscript"] > 10:
-        raise SystemExit(f"manuscript is {pages['manuscript']} pages; JOSA A limit is 10")
+    # Applied Optics bills overlength against PUBLISHED pages, which is the
+    # two-column journal layout checked below, not the universal submission
+    # template. The template count is only a sanity bound against a runaway
+    # build; the gate that matters is `journal_pages`.
+    if pages["manuscript"] > UNIVERSAL_TEMPLATE_SANITY_PAGES:
+        raise SystemExit(f"manuscript is {pages['manuscript']} pages in the "
+                         f"universal template, over the sanity bound of "
+                         f"{UNIVERSAL_TEMPLATE_SANITY_PAGES}; check the build")
 
     import make_lengthcheck
     make_lengthcheck.main()
@@ -113,9 +126,12 @@ def main():
     shutil.copy2(os.path.join(PAPER, "opticajnl.cls"), BUILD)
     shutil.copytree(os.path.join(PAPER, "legacy-styles"), os.path.join(BUILD, "legacy-styles"))
     journal_pages = compile_doc(lc, bib=True)
-    if journal_pages > 10:
-        raise SystemExit(f"two-column layout is {journal_pages} pages; JOSA A limit is 10")
-    print(f"  journal layout: {journal_pages} pages (limit 10)")
+    if journal_pages > JOURNAL_PAGE_LIMIT:
+        raise SystemExit(f"two-column layout is {journal_pages} published "
+                         f"pages; the Applied Optics limit is "
+                         f"{JOURNAL_PAGE_LIMIT} before overlength charges")
+    print(f"  journal layout: {journal_pages} pages "
+          f"(limit {JOURNAL_PAGE_LIMIT})")
 
     for doc, name in DOCS.items():
         shutil.copy2(os.path.join(BUILD, doc + ".pdf"), os.path.join(OUT, name))

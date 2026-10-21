@@ -35,6 +35,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "experiments"))
 import numpy as np
 
 from style import (new_fig, savefig, no_data_placeholder, panel_label, COLORS,
+                   SINGLE_COL_IN,
                    METHOD_COLORS, METHOD_LABELS, METHOD_MARKERS, METHOD_LINESTYLES,
                    BUDGET_COLORS, BUDGET_LINESTYLES, BUDGET_MARKERS,
                    K_LABEL, GAIN_LABEL)
@@ -220,45 +221,243 @@ S3_PARAM_LABELS = {"D0": r"$D_0$", "sigma": r"$\sigma$", "kappa": r"$\kappa$",
                    "dn_max": r"$\Delta n_{\max}$"}
 
 
-def make_fig3_slant_mismatch():
-    """(a) Paired gain vs grating slant at two K (S8). (b) Paired gain when
-    the exposure is designed on the nominal twin and recorded on a twin with
-    one parameter scaled (S3), K-averaged over the three ablation K points,
-    plotted against the recorded-to-design parameter ratio on a log axis so
-    that the wide dn_max sweep and the +/-50% sweeps share one panel."""
-    path = _out("Fig3_slant_mismatch.pdf")
+# Diverging map for signed paired gain: two house hues with a NEUTRAL grey
+# midpoint (never a hue at zero, never a rainbow). Built from the same
+# Okabe-Ito pair the line figures use, so a cell and a curve of the same sign
+# read as the same colour family.
+def _gain_diverging_cmap():
+    from matplotlib.colors import LinearSegmentedColormap
+    return LinearSegmentedColormap.from_list(
+        "gain_div", [COLORS["vermillion"], "#F2F2F2", COLORS["blue"]], N=256)
+
+
+def make_fig3_regime_map():
+    """Where exposure design through the recording model pays off, and where
+    it stops.
+
+    (a) The full M1 grid as a map over spatial frequency and contrast budget:
+        paired gain in dB, with cells whose 95% interval includes zero marked,
+        so "positive" and "resolved as positive" stay visually distinct.
+    (b) Paired gain against fringe slant at the two tested K (tier S8).
+    (c) The mechanism behind (b): RCWA first-order transmitted efficiency at
+        Bragg incidence over the same slant grid
+        (experiments/rcwa_slant_sweep.py). The diffracted order collapses as
+        soon as the fringes tilt, because a slanted grating is no longer
+        Bragg-matched at a fixed readout angle, and a reconstruction carried
+        by the undiffracted beam leaves an exposure design nothing to act on.
+
+    Panels (b) and (c) share the slant axis but are deliberately NOT drawn on
+    twin y-axes: they are different quantities and each gets its own panel.
+    """
+    path = _out("Fig3_regime_map.pdf")
+    grouped = load_grouped_complete()
     s8 = [r for r in load_all_results() if r["experiment_id"] == "S8"]
-    s3 = [r for r in load_all_results() if r["experiment_id"] == "S3"]
-    if not s8 or not s3:
-        no_data_placeholder(path, "Fig. 3: slant and miscalibration",
-                            "needs tier S8 and S3 results.", width="double")
+    sweep = _load_json(os.path.join("results", "applied_optics",
+                                    "rcwa_slant_sweep.json"))
+    curves = {b: gain_curve(grouped, "M1", b) for b in BUDGETS}
+    if not any(curves.values()) or not s8:
+        no_data_placeholder(path, "Fig. 3: operating regime map",
+                            "needs tier M1 and S8 results.", width="double")
         return False
 
-    fig, (ax_a, ax_b) = new_fig(width="text", height_in=1.95, ncols=2)
+    fig, (ax_a, ax_b, ax_c) = new_fig(width="text", height_in=2.55, ncols=3)
+
+    # ---- (a) K x budget map ------------------------------------------------
+    Ks = sorted({k for b in BUDGETS for k, *_ in curves[b]})
+    grid = np.full((len(BUDGETS), len(Ks)), np.nan)
+    unresolved = []
+    for i, b in enumerate(BUDGETS):
+        for K, mean, lo, hi in curves[b]:
+            j = Ks.index(K)
+            grid[i, j] = mean
+            if lo is not None and hi is not None and lo <= 0.0 <= hi:
+                unresolved.append((j, i))
+    vmax = float(np.nanmax(np.abs(grid)))
+    im = ax_a.imshow(grid, cmap=_gain_diverging_cmap(), vmin=-vmax, vmax=vmax,
+                     aspect="auto", origin="lower")
+    if unresolved:
+        ax_a.plot([u[0] for u in unresolved], [u[1] for u in unresolved],
+                  ls="none", marker="x", ms=3.5, mew=0.8, color=COLORS["black"])
+        # Only two cells are marked, so a direct note beats a legend box; it
+        # sits over the palest cells, where dark ink stays legible.
+        ax_a.annotate(r"$\times$  95% CI includes 0", xy=(0.97, 0.05),
+                      xycoords="axes fraction", ha="right", va="bottom",
+                      fontsize=5.5, color=COLORS["black"])
+    ax_a.set_xticks(range(len(Ks)))
+    ax_a.set_xticklabels([f"{k:.2f}" for k in Ks], rotation=90, fontsize=5.5)
+    ax_a.set_yticks(range(len(BUDGETS)))
+    ax_a.set_yticklabels([f"{b:.0f}" for b in BUDGETS])
+    ax_a.set_xlabel(K_LABEL)
+    ax_a.set_ylabel(r"contrast budget $B_c$")
+    cb = fig.colorbar(im, ax=ax_a, pad=0.03, fraction=0.05)
+    # The quantity is named in panel (b)'s axis and in the caption; repeating
+    # it here only collides with that label, so the bar carries the unit alone.
+    cb.ax.set_title("dB", fontsize=6, pad=3)
+    cb.ax.tick_params(labelsize=6)
+    cb.outline.set_linewidth(0.4)
+    panel_label(ax_a, "a")
+
+    # ---- (b) gain vs slant -------------------------------------------------
     by = {}
     for r in s8:
         c = r["config"]
-        by.setdefault((round(c["K_nominal"], 4), float(c["slant_deg"])), {}) \
-          .setdefault(r["method_id"], []).append(r)
-    for i, K in enumerate(sorted({k for k, _ in by})):
+        key = (round(c["K_nominal"], 4), float(c["slant_deg"]))
+        by.setdefault(key, {}).setdefault(r["method_id"], []).append(r)
+    s8_Ks = sorted({k for k, _ in by})
+    slant_colors = [COLORS["blue"], COLORS["vermillion"]]
+    slant_markers = ["o", "s"]
+    slant_ls = ["-", "--"]
+    for i, K in enumerate(s8_Ks):
         xs, ms, los, his = [], [], [], []
-        for slant in sorted({s for k, s in by if k == K}):
+        for slant in sorted({t for k, t in by if k == K}):
             arms = by[(K, slant)]
-            gains = [g for _, g in paired_gain(arms.get("MIL", []), arms.get("BSGD", []),
-                                               key="psnr")]
+            gains = [g for _, g in paired_gain(arms.get("MIL", []),
+                                               arms.get("BSGD", []), key="psnr")]
             if gains:
                 st = mean_std_median_ci95(gains)
-                xs.append(slant); ms.append(st["mean"])
-                los.append(st["ci95_lo"]); his.append(st["ci95_hi"])
-        ax_a.errorbar(xs, ms, yerr=_ci_err(ms, los, his), color=[COLORS["blue"],
-                      COLORS["vermillion"]][i % 2], marker="os"[i % 2], ls=["-", "--"][i % 2],
-                      ms=3.5, capsize=2, label=rf"$K={K:.2f}$ rad/$\mu$m")
-    ax_a.axhline(0, color=COLORS["black"], lw=0.5)
-    ax_a.set_xlabel(r"grating slant $\phi$ (deg)")
-    ax_a.set_ylabel(GAIN_LABEL)
-    ax_a.legend(frameon=False)
+                xs.append(slant)
+                ms.append(st["mean"])
+                los.append(st["ci95_lo"])
+                his.append(st["ci95_hi"])
+        ax_b.errorbar(xs, ms, yerr=_ci_err(ms, los, his), color=slant_colors[i % 2],
+                      marker=slant_markers[i % 2], ls=slant_ls[i % 2], ms=3.5,
+                      capsize=2, label=rf"$K={K:.2f}$")
+    ax_b.axhline(0, color=COLORS["black"], lw=0.5)
+    ax_b.axvspan(1.25, 21, color=COLORS["black"], alpha=0.06, linewidth=0)
+    ax_b.set_xlim(-1, 21)
+    ax_b.annotate("readout not checked\nagainst RCWA here", xy=(0.97, 0.40),
+                  xycoords="axes fraction", ha="right", va="top", fontsize=5.5,
+                  color="0.35")
+    ax_b.set_xlabel(r"fringe slant $\phi$ (deg)")
+    ax_b.set_ylabel("paired gain (dB)")
+    ax_b.legend(frameon=False, loc="upper right", handlelength=1.6)
+    panel_label(ax_b, "b")
+
+    # ---- (c) mechanism: RCWA orders vs slant -------------------------------
+    drew_c = False
+    bragg = (sweep or {}).get("by_incidence_s8_K_only", {}).get("bragg")
+    if bragg and bragg.get("by_slant"):
+        rec = bragg["by_slant"]
+        slants = sorted((float(k) for k in rec), key=float)
+        first = [rec[f"{t:g}"].get("median_rcwa_first_order") for t in slants]
+        zeroth = [rec[f"{t:g}"].get("median_rcwa_zero_order") for t in slants]
+        ax_c.plot(slants, first, color=COLORS["blue"], marker="o", ls="-", ms=3.5,
+                  label="first order")
+        ax_c.plot(slants, zeroth, color=COLORS["black"], marker="^", ls=":", ms=3.5,
+                  label="undiffracted")
+        ax_c.set_ylim(-0.03, 1.03)
+        ax_c.set_xlim(-1, 21)
+        ax_c.set_xlabel(r"fringe slant $\phi$ (deg)")
+        ax_c.set_ylabel("transmitted efficiency")
+        ax_c.legend(frameon=False, loc="center right", handlelength=1.6,
+                    title="RCWA order", title_fontsize=6)
+        drew_c = True
+    else:
+        ax_c.axis("off")
+        ax_c.text(0.5, 0.5, "NOT AVAILABLE:\nrun experiments/rcwa_slant_sweep.py",
+                  ha="center", va="center", fontsize=6, color=COLORS["vermillion"],
+                  transform=ax_c.transAxes)
+    panel_label(ax_c, "c")
+
+    savefig(fig, path)
+    return drew_c
+
+
+SENS_LABELS = {"D0": r"$D_0$", "sigma": r"$\sigma$", "kappa": r"$\kappa$",
+               "dn_max": r"$\Delta n_{\max}$"}
+
+
+def make_fig4_sensitivity():
+    """Which twin parameter the gain depends on most (analysis/sensitivity.py).
+
+    (a) Tornado: the span of K-averaged paired gain each parameter covers when
+        it alone is wrong by up to +/-50% (tier S3), against the nominal gain.
+        Row identity is the axis label, so the bars carry no colour code.
+    (b) First-order attribution from the joint Monte Carlo draws (tier S6):
+        dB of gain per standard deviation of each parameter's error, with
+        bootstrap 95% intervals over draws. Colour encodes sign only, and the
+        sign is also readable from the side of zero.
+
+    Both panels use the same row order, largest effect at the top, so the two
+    independent views can be compared row by row.
+    """
+    path = _out("Fig4_sensitivity.pdf")
+    d = _load_json(os.path.join("results", "applied_optics", "sensitivity.json"))
+    if not d or d.get("tornado", {}).get("status") != "ok":
+        no_data_placeholder(path, "Fig. 4: parameter sensitivity",
+                            "needs results/applied_optics/sensitivity.json "
+                            "(analysis/sensitivity.py).", width="double")
+        return False
+
+    torn = d["tornado"]
+    order = list(reversed(torn["ranked"]))          # largest effect at the top
+    nominal = torn["nominal"]["mean"]
+
+    fig, (ax_a, ax_b) = new_fig(width="text", height_in=1.9, ncols=2)
+
+    y = np.arange(len(order))
+    lows = [torn["params"][p]["min_mean"] for p in order]
+    highs = [torn["params"][p]["max_mean"] for p in order]
+    ax_a.barh(y, [h - lo for lo, h in zip(lows, highs)], left=lows, height=0.55,
+              color=COLORS["sky_blue"], edgecolor=COLORS["blue"], linewidth=0.5)
+    ax_a.axvline(nominal, color=COLORS["black"], lw=0.8, ls="--",
+                 label=f"nominal {nominal:.2f} dB")
+    # Which end of each sweep is the worst case goes in the caption rather
+    # than on the bars: at this size the labels collide with the tick labels.
+    ax_a.set_yticks(y)
+    ax_a.set_yticklabels([SENS_LABELS.get(p, p) for p in order])
+    ax_a.set_xlabel(r"$K$-averaged gain over $\pm50\%$ error (dB)")
+    ax_a.legend(frameon=False, loc="upper right", handlelength=1.6)
     panel_label(ax_a, "a")
 
+    j = d.get("joint_attribution", {})
+    if j.get("status") == "ok":
+        coeffs = j["coefficients"]
+        rows = [p for p in order if p in coeffs]
+        yj = np.arange(len(rows))
+        vals = [coeffs[p]["beta_dB_per_sd"] for p in rows]
+        err = [[v - coeffs[p]["ci95_lo"] for v, p in zip(vals, rows)],
+               [coeffs[p]["ci95_hi"] - v for v, p in zip(vals, rows)]]
+        cols = [COLORS["blue"] if v >= 0 else COLORS["vermillion"] for v in vals]
+        ax_b.barh(yj, vals, height=0.55, color=cols, alpha=0.85, linewidth=0)
+        ax_b.errorbar(vals, yj, xerr=err, ls="none", ecolor=COLORS["black"],
+                      elinewidth=0.7, capsize=2)
+        ax_b.axvline(0, color=COLORS["black"], lw=0.5)
+        ax_b.set_yticks(yj)
+        ax_b.set_yticklabels([SENS_LABELS.get(p, p) for p in rows])
+        ax_b.set_xlabel("gain change per sd of error (dB)")
+        ax_b.annotate(rf"linear $R^2={j['r2']:.2f}$, {j['n_draws']} draws",
+                      xy=(0.03, 0.94), xycoords="axes fraction", va="top",
+                      fontsize=5.5, color="0.35")
+    else:
+        ax_b.axis("off")
+        ax_b.text(0.5, 0.5, "NOT AVAILABLE:\njoint draws (tier S6)", ha="center",
+                  va="center", fontsize=6, color=COLORS["vermillion"],
+                  transform=ax_b.transAxes)
+    panel_label(ax_b, "b")
+
+    savefig(fig, path)
+    return True
+
+
+def make_figS6_miscalibration():
+    """Paired gain when the exposure is designed on the nominal twin and
+    recorded on a twin with one parameter scaled (S3), K-averaged over the
+    three ablation K points, plotted against the recorded-to-design parameter
+    ratio on a log axis so that the wide dn_max sweep and the +/-50% sweeps
+    share one panel. The main text carries the compact tornado view of the
+    same tier (Fig. 4a); this is the full curve per parameter.
+
+    Moved out of the main text for the Applied Optics version, where Fig. 3
+    carries the operating-regime map and Fig. 4 the sensitivity ranking."""
+    path = _out("FigS6_miscalibration.pdf")
+    s3 = [r for r in load_all_results() if r["experiment_id"] == "S3"]
+    if not s3:
+        no_data_placeholder(path, "Fig. S6: one-parameter miscalibration",
+                            "needs tier S3 results.")
+        return False
+
+    fig, ax_b = new_fig(width="single", height_in=SINGLE_COL_IN * 0.78)
     styles = {"D0": ("o", "-"), "sigma": ("s", "--"), "kappa": ("^", ":"),
               "dn_max": ("D", "-.")}
     palette = {"D0": COLORS["blue"], "sigma": COLORS["vermillion"],
@@ -282,20 +481,19 @@ def make_fig3_slant_mismatch():
     ax_b.set_xlabel("recorded-medium parameter / design value")
     ax_b.set_ylabel(r"$K$-averaged gain (dB)")
     ax_b.legend(frameon=False, loc="lower left", ncol=2)
-    panel_label(ax_b, "b")
     savefig(fig, path)
     return True
 
 
-def make_fig4_twin_validation():
+def make_fig5_twin_validation():
     """Bayfol HX Delta-n1(dose), source model and measurement (Bruder et al.
     2017, Fig. 3), with the twin fitted to each series with (kappa, dn_max,
     k_bleach) free (solid) and the parameter-free prediction from the fit to
     the OTHER series (dashed). Data: experiments/fit_twin_holdout.py."""
-    path = _out("Fig4_twin_validation.pdf")
+    path = _out("Fig5_twin_validation.pdf")
     d = _load_json("results_twin_holdout.json")
     if not d or "fits" not in d:
-        no_data_placeholder(path, "Fig. 4: twin validation",
+        no_data_placeholder(path, "Fig. 5: twin validation",
                             "needs results_twin_holdout.json "
                             "(experiments/fit_twin_holdout.py).", width="double")
         return False
@@ -518,10 +716,11 @@ def make_figS5_twin_fits_held_kbleach():
 
 
 ALL_FIGURES = [
-    make_fig1_paired_gain, make_fig2_reconstructions, make_fig3_slant_mismatch,
-    make_fig4_twin_validation,
+    make_fig1_paired_gain, make_fig2_reconstructions, make_fig3_regime_map,
+    make_fig4_sensitivity, make_fig5_twin_validation,
     make_figS1_exposure_profiles, make_figS2_ablation, make_figS3_factorial,
     make_figS4_rcwa_envelope, make_figS5_twin_fits_held_kbleach,
+    make_figS6_miscalibration,
 ]
 
 
