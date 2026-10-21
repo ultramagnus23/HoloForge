@@ -14,6 +14,7 @@ reaches a PDF.
 Usage: python scripts/make_numbers_tex.py
 """
 import json
+import math
 import os
 import statistics
 import sys
@@ -849,6 +850,74 @@ def build_applied_optics_macros(paper_numbers: dict) -> str:
     L.append(macro("SlantCollapseDeg", fmt(collapse_deg, ".1f")))
     L.append(macro("SlantMaxGainBeyondCollapse", fmt(max_gain_beyond, ".2f")))
     L.append(macro("SlantCollapseThreshDB", fmt(SLANT_COLLAPSE_THRESHOLD_DB, ".1f")))
+
+    L.append(build_bpm_rcwa_macros())
+    return "".join(L)
+
+
+# The design loop reads the slab out at normal incidence with the default
+# medium's index budget, so that is the slice of the comparison the main text
+# quotes; dn = 3.5e-3 is Table 1's dn_max.
+BPM_QUOTED_DN = 3.5e-3
+BPM_KLABELS = {16: "KLow", 32: "KMid"}
+
+
+def build_bpm_rcwa_macros() -> str:
+    """Macros for the direct comparison of the design loop's split-step beam
+    propagation against RCWA (experiments/bpm_vs_rcwa.py), and for the slant
+    that Bragg-matches a normally incident readout."""
+    L = ["\n% ---- beam propagation against RCWA ----\n"]
+    d = _load("results", "applied_optics", "bpm_vs_rcwa.json") or {}
+    by_inc = d.get("by_incidence", {})
+
+    L.append(macro("BPMRCWANCases", str(d["n_cases"]) if d.get("n_cases") else None))
+    L.append(macro("BPMRCWAMaxDev", fmt(d.get("max_abs_deviation"), ".3f")))
+    L.append(macro("BPMRCWAAnchored",
+                   "yes" if d.get("anchor_passed") else ("no" if d else None)))
+    for inc, lab in (("normal", "Normal"), ("bragg", "Bragg")):
+        rec = by_inc.get(inc, {})
+        for key, klab in (("overall", ""), ("unslanted", "Unslanted"),
+                          ("slanted", "Slanted")):
+            s = rec.get(key, {})
+            L.append(macro(f"BPMRCWA{lab}{klab}Median", fmt(s.get("median"), ".3f")))
+            L.append(macro(f"BPMRCWA{lab}{klab}Max", fmt(s.get("max"), ".3f")))
+
+    # First-order fraction against slant at normal incidence, the quantity the
+    # mechanism argument rests on, at the quoted index modulation.
+    cases = [c for c in d.get("cases", [])
+             if c.get("incidence") == "normal"
+             and abs(c.get("dn", 0) - BPM_QUOTED_DN) < 1e-9
+             and c.get("bpm_eta1") is not None]
+    periods = d.get("K_values", [])
+    for n_per, klab in BPM_KLABELS.items():
+        K_target = next((k for k in periods
+                         if abs(k * d.get("window_um", 51.2) / (2 * math.pi) - n_per) < 1e-3),
+                        None)
+        rows = sorted((c for c in cases if K_target is not None
+                       and abs(c["K"] - K_target) < 1e-6),
+                      key=lambda c: c["slant_deg"])
+        if not rows:
+            for suffix in ("PeakSlant", "PeakEta", "ZeroEta", "SevenFiveEta",
+                           "BraggMatchSlant"):
+                L.append(macro(f"BPM{klab}{suffix}", None))
+            continue
+        peak = max(rows, key=lambda c: c["bpm_eta1"])
+        zero = next((c for c in rows if c["slant_deg"] == 0.0), None)
+        sevenfive = next((c for c in rows if c["slant_deg"] == 7.5), None)
+        L.append(macro(f"BPM{klab}PeakSlant", fmt(peak["slant_deg"], ".1f")))
+        L.append(macro(f"BPM{klab}PeakEta", fmt(peak["bpm_eta1"], ".2f")))
+        L.append(macro(f"BPM{klab}ZeroEta",
+                       fmt(zero["bpm_eta1"], ".2f") if zero else None))
+        L.append(macro(f"BPM{klab}SevenFiveEta",
+                       fmt(sevenfive["bpm_eta1"], ".3f") if sevenfive else None))
+        # Closed form for the slant that Bragg-matches normal incidence:
+        # sin(phi) = K*lambda/(4*pi*n0), i.e. the Bragg angle itself, since
+        # tilting the fringes by theta_B is the same as tilting the beam.
+        lam = d.get("wavelength_um", 0.405)
+        n0 = d.get("n0", 1.5)
+        s = peak["K"] * lam / (4 * math.pi * n0)
+        phi = math.degrees(math.asin(min(max(s, -1.0), 1.0)))
+        L.append(macro(f"BPM{klab}BraggMatchSlant", fmt(phi, ".2f")))
     return "".join(L)
 
 

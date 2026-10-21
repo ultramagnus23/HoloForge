@@ -39,6 +39,34 @@ below is validation, uncertainty and presentation.
   figure numbers and axes, for the multi-spatial-frequency datasets the
   cross-K held-out validation needs. That validation is not yet run; the data
   does not exist in the repository.
+- `experiments/bpm_vs_rcwa.py` (new): compares the split-step beam propagation
+  used INSIDE the design loop against RCWA directly, which no previous check
+  did; every earlier comparison bounded only the closed-form Kogelnik
+  reference. 84 cases over both spatial frequencies, three index-modulation
+  levels, the full slant range and both incidence conventions. The engines
+  agree on the first-order fraction to a median of 0.001 and at worst 0.027 at
+  normal incidence, the geometry the design loop reads out in, with slanted
+  cases no worse than unslanted; 0.037 is the worst over the whole grid.
+  `rcwa_crosscheck.rcwa_order_powers` is an additive companion to
+  `rcwa_de_general`, which is untouched so committed results stay reproducible.
+- That result changed a conclusion. The earlier draft of this revision
+  reported the gain enhancement at 2.5 to 5 degrees of slant as a
+  model-dependent artifact, on the grounds that the closed-form reference
+  fails there. With the propagator itself validated, the enhancement is real
+  and has a closed-form explanation: a tilt of arcsin(K*lambda/(4*pi*n0)), the
+  Bragg angle itself, brings a normally illuminated grating onto Bragg. That
+  predicts 2.42 and 4.84 degrees at the two tested K with nothing fitted, and
+  the measured gain peaks at the two tested angles nearest those, 2.5 and 5.0,
+  where the first-order fraction peaks as well. Section 4.6, the limitations
+  and the conclusion were rewritten, and Fig. 3(c) now shows both engines at
+  normal incidence instead of RCWA alone at Bragg incidence.
+- Bibliography: DOI coverage raised from 6 of 28 entries to 25, each matched
+  against the Crossref registry record on title, first author, year,
+  container, volume and pages. The three without one carry a comment saying
+  what was checked and why none was added. Verifying them turned up two more
+  errors in `sheridan2012reply`, an entry already corrected once before: it
+  had issue 2 and pages 1--3, against the publisher's own "Vol. 29, Issue 3,
+  pp. 460-462 (2012)".
 
 ## JOSA A submission (2026-10-03)
 - Manuscript retargeted to JOSA A and fitted to 10 pages in the Optica

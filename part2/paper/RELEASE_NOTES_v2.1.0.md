@@ -52,8 +52,25 @@ has moved.
   the apparent gain enhancement between 2.5 and 5 degrees is now reported as
   model-dependent rather than as an effect.
 
-Both scripts read result files already in `results/` or use the existing RCWA
-machinery; neither re-runs the design campaign. New outputs live in
+- **The design loop's propagator validated against RCWA directly**
+  (`experiments/bpm_vs_rcwa.py`). Every earlier check in this repository
+  compared the closed-form Kogelnik reference with RCWA and left the
+  split-step beam propagation that actually sits inside the optimizer
+  unchecked. Over 84 cases the two engines agree on the first-order fraction
+  to a median of 0.001 and at worst 0.027 at normal incidence, the geometry
+  the design loop reads out in, with the slanted cases no worse than the
+  unslanted ones.
+
+  This reversed a conclusion. The gain enhancement at 2.5 to 5 degrees of
+  slant was reported earlier in this revision as a model-dependent artifact.
+  It is real: a tilt of arcsin(K*lambda/(4*pi*n0)), the Bragg angle itself,
+  brings a normally illuminated grating onto Bragg, predicting 2.42 and 4.84
+  degrees at the two tested spatial frequencies with nothing fitted. The
+  measured gain peaks at the two nearest tested angles, and so does the
+  first-order diffracted fraction.
+
+These scripts read result files already in `results/` or use the existing RCWA
+machinery; none re-runs the design campaign. New outputs live in
 `results/applied_optics/`.
 
 ## Manuscript
@@ -104,6 +121,6 @@ machinery; neither re-runs the design campaign. New outputs live in
   model output, with points read visually rather than with a calibrated
   digitizer. The cross-spatial-frequency held-out validation is specified but
   not run.
-- The split-step beam propagation used inside the design loop has still not
-  been compared with RCWA directly; the slant sweep bounds the closed-form
-  reference only.
+- The recording model itself is still compared only against the closed-form
+  reference and published growth curves. The propagator is now validated
+  against RCWA, but that says nothing about the photochemistry.

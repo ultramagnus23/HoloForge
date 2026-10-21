@@ -53,15 +53,18 @@ was raised. I can supply the decision letter.
 \textbf{What has changed since.} The manuscript now quantifies which recording
 parameters the gain depends on, by two independent routes that agree, and finds
 the medium's index budget dominating the other three by more than a factor of
-three, with a several-fold underestimate reversing the benefit. It explains the
-failure at nonzero fringe slant rather than reporting it: a rigorous
-coupled-wave sweep over intermediate angles shows the first diffracted order
-collapsing as the grating detunes from Bragg, leaving the reconstruction to the
-undiffracted beam, where no exposure design can help. That sweep also shows the
-closed-form readout reference losing validity at the smallest nonzero angle
-tested, so the apparent improvement at small slant is reported as
-model-dependent rather than as an effect. The main text is self-contained;
-Supplement~1 keeps only full derivations and extra sweeps.
+three, with a several-fold underestimate reversing the benefit. It also
+explains the method's dependence on fringe slant rather than merely reporting
+it. The gain rises to a peak and then collapses, and both features follow from
+one closed form: a fringe tilt of $\arcsin(K\lambda/4\pi n_0)$, the Bragg angle
+itself, brings a normally illuminated grating onto the Bragg condition. That
+predicts the peak angle at each tested spatial frequency with nothing fitted,
+and the measurements agree. Supporting this, the split-step beam propagation
+used inside the design loop is now compared with rigorous coupled-wave analysis
+directly, across the full slant range, rather than only through the
+closed-form reference as before; the two agree to within 0.04 in first-order
+fraction everywhere. The main text is self-contained; Supplement~1 keeps only
+full derivations and extra sweeps.
 
 The limitations are stated plainly. The study is in simulation; no hologram has
 been recorded. The model is compared with published dose-response data for one

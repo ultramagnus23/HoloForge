@@ -89,6 +89,9 @@ extra sweeps.
 Each of these is already disclosed in the paper:
 
 - Simulation only, with no physical recording (Section 7, first paragraph).
+- Why the gain rises at small fringe slant before collapsing. Section 4.6 answers this
+  with a closed form, arcsin(K*lambda/(4*pi*n0)), the tilt that Bragg-matches a normally
+  illuminated grating, predicted with nothing fitted and confirmed against RCWA.
 - The twin is validated against one commercial medium at one spatial frequency, so
   transfer across K and across media is untested (Sections 5 and 7). The calibration
   protocol asks a lab to make exactly the multi-K measurement that would close this.
@@ -97,7 +100,10 @@ Each of these is already disclosed in the paper:
   cheapest available improvement; see `code/data/literature/DIGITIZE_TODO.md`.
 - Three seeds measure initialization sensitivity only. Model error is probed by the
   miscalibration and sensitivity studies (Sections 4.7 and 4.8).
-- The scalar readout is restricted to unslanted gratings (Sections 4.6 and 7), and the
-  slant sweep now quantifies where the closed-form reference stops agreeing with RCWA.
+- The readout is no longer a soft spot. The split-step beam propagation used inside the
+  design loop is now compared with RCWA directly (Section 4.6, Supplement 1 Section S11)
+  and agrees to at worst 0.037 in first-order fraction across the whole slant range. What
+  restricts the headline results to unslanted gratings is the recording model and the
+  benchmark, not the propagator, and the manuscript says so.
 - The first-order attribution in Section 4.8 uses 30 draws and is stated as such: it
   ranks the parameters, it is not a Sobol decomposition.

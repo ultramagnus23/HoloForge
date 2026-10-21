@@ -323,38 +323,48 @@ def make_fig3_regime_map():
                       marker=slant_markers[i % 2], ls=slant_ls[i % 2], ms=3.5,
                       capsize=2, label=rf"$K={K:.2f}$")
     ax_b.axhline(0, color=COLORS["black"], lw=0.5)
-    ax_b.axvspan(1.25, 21, color=COLORS["black"], alpha=0.06, linewidth=0)
     ax_b.set_xlim(-1, 21)
-    ax_b.annotate("readout not checked\nagainst RCWA here", xy=(0.97, 0.40),
-                  xycoords="axes fraction", ha="right", va="top", fontsize=5.5,
-                  color="0.35")
     ax_b.set_xlabel(r"fringe slant $\phi$ (deg)")
     ax_b.set_ylabel("paired gain (dB)")
     ax_b.legend(frameon=False, loc="upper right", handlelength=1.6)
     panel_label(ax_b, "b")
 
-    # ---- (c) mechanism: RCWA orders vs slant -------------------------------
+    # ---- (c) mechanism: first-order fraction vs slant ----------------------
+    # Normal incidence, because that is what SlabBPM reads the slab out at and
+    # therefore the geometry panel (b)'s gains were measured in. Both engines
+    # are drawn: the lines are the design loop's own propagator and the open
+    # markers are RCWA, so the panel carries the mechanism and the validation
+    # of the propagator at the same time.
     drew_c = False
-    bragg = (sweep or {}).get("by_incidence_s8_K_only", {}).get("bragg")
-    if bragg and bragg.get("by_slant"):
-        rec = bragg["by_slant"]
-        slants = sorted((float(k) for k in rec), key=float)
-        first = [rec[f"{t:g}"].get("median_rcwa_first_order") for t in slants]
-        zeroth = [rec[f"{t:g}"].get("median_rcwa_zero_order") for t in slants]
-        ax_c.plot(slants, first, color=COLORS["blue"], marker="o", ls="-", ms=3.5,
-                  label="first order")
-        ax_c.plot(slants, zeroth, color=COLORS["black"], marker="^", ls=":", ms=3.5,
-                  label="undiffracted")
-        ax_c.set_ylim(-0.03, 1.03)
+    bpm = _load_json(os.path.join("results", "applied_optics", "bpm_vs_rcwa.json"))
+    rows = [c for c in (bpm or {}).get("cases", [])
+            if c.get("incidence") == "normal" and c.get("bpm_eta1") is not None
+            and abs(c.get("dn", 0) - 3.5e-3) < 1e-9]
+    if rows:
+        for i, K in enumerate(sorted({c["K"] for c in rows})):
+            series = sorted((c for c in rows if abs(c["K"] - K) < 1e-9),
+                            key=lambda c: c["slant_deg"])
+            xs = [c["slant_deg"] for c in series]
+            ax_c.plot(xs, [c["bpm_eta1"] for c in series],
+                      color=slant_colors[i % 2], ls=slant_ls[i % 2],
+                      marker=slant_markers[i % 2], ms=3.5,
+                      label=rf"$K={K:.2f}$")
+            ax_c.plot(xs, [c["rcwa_eta1"] for c in series], ls="none",
+                      marker="o", ms=5, mfc="none", mew=0.7,
+                      mec=COLORS["black"])
+        # One proxy entry after the loop, so the legend reads K, K, RCWA
+        # rather than interleaving the engine with the first spatial frequency.
+        ax_c.plot([], [], ls="none", marker="o", ms=5, mfc="none", mew=0.7,
+                  mec=COLORS["black"], label="RCWA")
+        ax_c.set_ylim(-0.03, 0.78)
         ax_c.set_xlim(-1, 21)
         ax_c.set_xlabel(r"fringe slant $\phi$ (deg)")
-        ax_c.set_ylabel("transmitted efficiency")
-        ax_c.legend(frameon=False, loc="center right", handlelength=1.6,
-                    title="RCWA order", title_fontsize=6)
+        ax_c.set_ylabel("first-order fraction")
+        ax_c.legend(frameon=False, loc="upper right", handlelength=1.6)
         drew_c = True
     else:
         ax_c.axis("off")
-        ax_c.text(0.5, 0.5, "NOT AVAILABLE:\nrun experiments/rcwa_slant_sweep.py",
+        ax_c.text(0.5, 0.5, "NOT AVAILABLE:\nrun experiments/bpm_vs_rcwa.py",
                   ha="center", va="center", fontsize=6, color=COLORS["vermillion"],
                   transform=ax_c.transAxes)
     panel_label(ax_c, "c")

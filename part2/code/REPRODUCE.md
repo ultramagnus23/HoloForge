@@ -134,6 +134,15 @@ stops agreeing with RCWA (CPU, about 2 minutes, needs `torcwa`):
 python experiments/rcwa_slant_sweep.py
 ```
 
+Direct comparison of the design loop's beam propagation against RCWA, which
+is what Section 4.6 of the manuscript rests on (CPU, a few minutes, needs
+`torcwa`). It anchors its own order extraction against the closed form before
+sweeping, and refuses to write a result file if that anchor fails:
+
+```bash
+python experiments/bpm_vs_rcwa.py
+```
+
 Finite-difference gradient check (CPU, seconds):
 
 ```bash

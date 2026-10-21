@@ -510,50 +510,72 @@ $20^\circ$ it is \SEightGainKLowSlantZero, \SEightGainKLowSlantFive,
 \SEightGainKLowSlantTen{} and \SEightGainKLowSlantTwenty\,dB at
 $K=1.96$\,rad/\textmu m and \SEightGainKMidSlantZero,
 \SEightGainKMidSlantFive, \SEightGainKMidSlantTen{} and
-\SEightGainKMidSlantTwenty\,dB at $K=\SOneKNear$\,rad/\textmu m. Small slants
-appear to increase the gain; from $\phi=\SlantCollapseDeg^\circ$ onwards it has
-collapsed at both tested $K$, with no value above
-\SlantMaxGainBeyondCollapse\,dB at any larger angle.
+\SEightGainKMidSlantTwenty\,dB at $K=\SOneKNear$\,rad/\textmu m. The gain rises
+to a peak at a small slant that differs between the two $K$, and from
+$\phi=\SlantCollapseDeg^\circ$ onwards it has collapsed at both, with no value
+above \SlantMaxGainBeyondCollapse\,dB at any larger angle.
 
-\textbf{Mechanism.} The collapse is Bragg detuning, not a failure of the
-exposure design. Over a grid of \RCWASlantNCases{} RCWA cases spanning the
-tested $K$, three index-modulation levels, both polarizations and both
-incidence conventions, the first-order transmitted efficiency at Bragg
-incidence falls from \RCWASlantFirstZero{} at $\phi=0^\circ$ to
-\RCWASlantFirstTwoFive{} at $\phi=2.5^\circ$ and
-\RCWASlantFirstTwenty{} at $20^\circ$, while the undiffracted order rises from
-\RCWASlantZerothZero{} to \RCWASlantZerothTwenty{}
-(Fig.~\ref{fig:regime}(c)). Tilting the fringes rotates the grating vector out
-of the symmetric two-wave geometry, so at a fixed readout angle the grating
-simply stops diffracting. Once the reconstruction is carried by the
-undiffracted beam, there is nothing left for any exposure design to improve and
-the paired difference between two designs goes to zero. The angular scale is
-the grating's own selectivity, of order $\Lambda/T$, which is $6.1^\circ$ at
-$K=1.96$ and $3.1^\circ$ at $K=\SOneKNear$\,rad/\textmu m.
+\textbf{Mechanism.} Both features are Bragg matching, and neither is a property
+of the exposure design. The slab is read out at normal incidence, where an
+unslanted grating is off Bragg. Tilting the fringes by $\phi$ rotates the
+grating vector, and the tilt that brings a normally incident readout onto the
+Bragg condition follows from $2\mathbf{k}_{\text{inc}}\!\cdot\!\mathbf{K}+|\mathbf{K}|^2=0$ as
+\begin{equation}
+\label{eq:bragg-slant}
+\sin\phi_\star=\frac{K\lambda}{4\pi n_0},
+\end{equation}
+which is the Bragg angle itself: tilting the fringes by $\theta_B$ does what
+tilting the beam by $\theta_B$ would. That predicts
+$\phi_\star=\BPMKLowBraggMatchSlant^\circ$ at $K=1.96$ and
+$\BPMKMidBraggMatchSlant^\circ$ at $K=\SOneKNear$\,rad/\textmu m, with no fitted
+quantity. The measured gain peaks at $\BPMKLowPeakSlant^\circ$ and
+$\BPMKMidPeakSlant^\circ$ (Fig.~\ref{fig:regime}(b)), the two tested angles
+nearest those predictions, and the first-order diffracted fraction peaks at the
+same two angles (Fig.~\ref{fig:regime}(c)), rising from \BPMKLowZeroEta{} to
+\BPMKLowPeakEta{} at $K=1.96$ and from \BPMKMidZeroEta{} to \BPMKMidPeakEta{}
+at $K=\SOneKNear$\,rad/\textmu m. Past $\phi_\star$ the grating detunes again:
+by $\phi=\SlantCollapseDeg^\circ$ the first-order fraction is
+\BPMKLowSevenFiveEta{} and \BPMKMidSevenFiveEta. A reconstruction carried
+almost entirely by the undiffracted beam leaves nothing for an exposure design
+to improve, so the paired difference between two designs goes to zero.
 
-\textbf{Why the apparent enhancement is not reported as one.} The same sweep
-shows that the closed-form readout reference loses validity at the first
-nonzero tested angle: the median deviation of Kogelnik theory from RCWA jumps
-from \RCWASlantDevZero{} at $\phi=0^\circ$ to \RCWASlantDevTwoFive{} at
-$\phi=\RCWASlantOnsetDeg^\circ$ and stays there. The peak in
-Fig.~\ref{fig:regime}(b) at $2.5$ to $5^\circ$ therefore sits entirely inside
-the range where the closed form is already wrong by about half the available
-efficiency, and the split-step readout in the design loop shares its scalar
-paraxial approximation and has not itself been checked against RCWA at slant.
-We therefore state the validated envelope as unslanted gratings only, and treat
-both the apparent enhancement at small slant and the exact collapse angle as
-model-dependent. The useful design statement is the conservative one: do not
-expect this method to help a slanted hologram on the strength of these results.
+\textbf{The readout is validated at slant, directly.} The agreement above is
+not a scalar-model artifact. We compared the split-step beam propagation used
+inside the design loop against RCWA on the same gratings, over
+\BPMRCWANCases{} cases spanning both tested $K$, three index-modulation levels,
+every slant in the sweep and both incidence conventions, matching the
+illumination and the order bookkeeping explicitly and normalizing both engines
+the same way, so that the Fresnel losses RCWA models and the beam propagation
+does not are kept out of the comparison (Supplement 1, Section S11). At normal
+incidence, the geometry the design loop reads out in, the two engines agree on
+the first-order fraction to a median of \BPMRCWANormalMedian{} and at worst
+\BPMRCWANormalMax, with the slanted cases no worse than the unslanted ones
+(\BPMRCWANormalSlantedMax{} against \BPMRCWANormalUnslantedMax). At Bragg
+incidence the worst deviation over the whole grid is \BPMRCWAMaxDev.
+
+This is a sharper result than the closed-form check supports, and it separates
+two things the earlier Kogelnik comparison could not. The closed form carries
+no slant term, so it fails as soon as the fringes tilt: its median deviation
+from RCWA jumps from \RCWASlantDevZero{} at $\phi=0^\circ$ to
+\RCWASlantDevTwoFive{} at $\phi=\RCWASlantOnsetDeg^\circ$ over a
+\RCWASlantNCases-case sweep and stays there. The beam propagation does model
+the per-slice shear, and tracks RCWA across the same range. The restriction of
+the headline results to unslanted gratings therefore rests on the recording
+model and the benchmark, not on the readout, which is checked here across the
+full slant range.
 
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=\linewidth]{../code/figures/paper/Fig3_regime_map.pdf}
 \caption{Operating regime. (a) Paired gain over the \MOneNCells{} grid cells;
 crosses mark cells whose 95\% interval includes zero. (b) Paired gain versus
-fringe slant at two $K$, $B_c=2$, 95\% $t$-intervals over three seeds; the
-shaded region is where the readout has not been checked against RCWA. (c)
-Median RCWA transmitted efficiency at Bragg incidence over the same slant grid:
-the diffracted order collapses as soon as the fringes tilt.}
+fringe slant at two $K$, $B_c=2$, 95\% $t$-intervals over three seeds. (c)
+First-order diffracted fraction over the same slant grid at normal incidence,
+the geometry the design loop reads out in, for
+$\Delta n=3.5\times10^{-3}$: lines, the split-step beam propagation used in the
+design loop; open circles, RCWA. The gain in (b) peaks where the grating
+becomes Bragg-matched in (c), at the angle Eq.~\eqref{eq:bragg-slant}
+predicts, and collapses once it detunes past it.}
 \label{fig:regime}
 \end{figure}
 
@@ -697,10 +719,14 @@ absolute agreement with a real medium.
 This section is the operational summary: what a laboratory would measure,
 in what order, and when not to bother.
 
-\textbf{Step 1: decide whether the geometry qualifies.} Use the method for
-unslanted transmission gratings only. The gain collapses from
-$\phi=\SlantCollapseDeg^\circ$ and the readout is unvalidated at any nonzero
-slant (Section~\ref{sec:slant}). Within that geometry, read
+\textbf{Step 1: decide whether the geometry qualifies.} The results support
+unslanted transmission gratings, which is where the recording model and the
+benchmark were run. Fringe slant is not a free parameter: the gain depends on
+it through Bragg matching, peaking near
+$\phi_\star=\arcsin(K\lambda/4\pi n_0)$ and collapsing from
+$\phi=\SlantCollapseDeg^\circ$ (Section~\ref{sec:slant}). A setup that cannot
+hold the slant to well inside that window should not expect the gains reported
+here. Within the qualifying geometry, read
 Fig.~\ref{fig:regime}(a): the benefit is concentrated below about
 $3$\,rad/\textmu m and grows with the contrast budget the setup can deliver. At
 the top of the tested range the gain is under \GainHighKEightX\,dB and not
@@ -741,7 +767,8 @@ the media-blind baseline that factor more iterations
 (Section~\ref{sec:compute-matched}). At the grid size used, a design is minutes
 on a laptop GPU, which is small against the cost of a wasted film.
 
-\textbf{When not to use the method.} If the fringes are slanted; if the target
+\textbf{When not to use the method.} If the recording geometry is slanted,
+since nothing here was run at $\phi\ne0$ beyond the sweep itself; if the target
 spatial frequency is at the top of the tested range; if $\Delta n_{\max}$ is
 not known to better than a factor of two under the recording condition; or if
 the application sits at the very lowest spatial frequencies and a calibrated
@@ -768,15 +795,18 @@ calibrating laboratory to make.
 
 \textbf{Geometry and targets.} One-dimensional transverse recording of binary
 bar targets in unslanted gratings, with one default medium and three seeds per
-cell. Against RCWA~\cite{moharam1981rigorous} (computed with
-TORCWA~\cite{kim2023torcwa}) over a \RCWAVGridNCases-case grid of $K$,
-$\Delta n$, polarization and slant, Kogelnik theory deviates by at most
-\RCWAUnslantedMaxDev{} in diffraction efficiency for unslanted geometries but
+cell. The readout itself is not the limitation here: the beam propagation used
+in the design loop agrees with RCWA~\cite{moharam1981rigorous} (computed with
+TORCWA~\cite{kim2023torcwa}) to at worst \BPMRCWAMaxDev{} in first-order
+fraction across the slant range (Section~\ref{sec:slant}). The closed-form
+Kogelnik reference is the weaker tier: over a \RCWAVGridNCases-case grid of
+$K$, $\Delta n$, polarization and slant it deviates by at most
+\RCWAUnslantedMaxDev{} in diffraction efficiency for unslanted geometries and
 by up to \RCWAVGridMaxDev{} at a $20^\circ$ slant (Supplement 1, Section S5),
-and the slant sweep of Section~\ref{sec:slant} shows that departure setting in
-at the smallest nonzero angle tested. The check concerns the closed-form
-reference; the beam propagation in the design loop shares its paraxial scalar
-approximation and was not separately checked against RCWA at slant.
+and it is used only as a cross-check, never inside the design loop. What
+restricts the headline results to unslanted gratings is therefore the
+recording model and the benchmark, which were run at $\phi=0$ throughout, not
+the propagator.
 
 \textbf{Model and statistics.} The recorded profile is uniform through depth
 except in the Beer--Lambert check; diffusion uses a spatially averaged
@@ -800,11 +830,12 @@ saturating mechanism, which means a laboratory need not identify its medium's
 nonlinearity, only model it. It decays toward zero at high spatial frequency,
 survives joint parameter errors of $\pm$\SSixPctRange\%, and depends above all
 on the recorded index budget $\Delta n_{\max}$, a several-fold underestimate of
-which reverses the benefit. It collapses once the fringes tilt, for a reason
-that is optical rather than algorithmic: a slanted grating stops diffracting at
-a fixed readout angle. The calibration protocol of
-Section~\ref{sec:guidelines} states the minimum measurement set; testing these
-predictions in a recorded medium is the next step.
+which reverses the benefit. Its dependence on fringe slant is optical rather than
+algorithmic: the gain peaks where a tilt of $\arcsin(K\lambda/4\pi n_0)$ brings
+the normally illuminated grating onto Bragg, and collapses once it detunes past
+that angle, a correspondence confirmed against RCWA. The calibration protocol
+of Section~\ref{sec:guidelines} states the minimum measurement set; testing
+these predictions in a recorded medium is the next step.
 
 \begin{backmatter}
 

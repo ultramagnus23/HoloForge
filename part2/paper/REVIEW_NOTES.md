@@ -83,21 +83,32 @@ Verified while searching for Phase 1a datasets, and available to cite:
   `SUGGESTED_REVIEWERS.md` has every contact checked against an institutional
   page. Please do not reinstate him.
 
-- **Only 6 of 28 bibliography entries carry a DOI or URL field.** This is not a
-  submission blocker: the Optica bibliography style does not print DOI fields
-  and Optica resolves them at production, and the entries were verified by
-  author, title, venue and year for the earlier submission. It is still worth
-  closing, and `scripts/pre_submit_check.py` reports the list every run so it
-  stays visible. Adding them means verifying 22 DOIs one at a time; I have not
-  done it, and will not add a DOI I have not resolved.
+- **The bibliography now carries 25 DOIs out of 28, up from 6.** Each was
+  matched against the Crossref registry record on title, first author, year,
+  container, volume and pages. The three without one are annotated in
+  `refs.bib` with what was checked: Gerchberg and Saxton (Optik 1972, no DOI
+  registered), Goodman (the Roberts & Company 3rd edition has none, and the
+  records that come back are a 1969 review of the 1st edition and an unrelated
+  2024 chapter), and Efron and Tibshirani (only per-chapter DOIs exist, under
+  Springer's later reissue, not the Chapman & Hall edition cited).
 
-- **The split-step beam propagation inside the design loop has still never been
-  compared with RCWA directly.** The new slant sweep bounds the closed-form
-  Kogelnik reference only, which is what the committed cross-check also does.
-  A direct comparison would need first-order efficiencies extracted from the
-  beam-propagation field at matched incidence, which is a self-contained piece
-  of work and the strongest remaining answer to a reviewer who doubts the
-  readout.
+  **That pass found two more errors in `sheridan2012reply`**, an entry this
+  repository had already corrected once. It carried issue 2 and pages 1--3;
+  the publisher's page for `10.1364/JOSAB.29.000460` reads "Vol. 29, Issue 3,
+  pp. 460-462 (2012)". The page range looks like a placeholder that survived
+  the earlier correction. Both fields are fixed, with the history recorded
+  above the entry. Worth knowing that this entry has now been wrong twice.
+
+- **The beam propagation in the design loop is now validated against RCWA
+  directly** (`experiments/bpm_vs_rcwa.py`, Supplement 1 Section S11). This
+  closed the gap that every earlier check left open, and it reversed a
+  conclusion: the gain enhancement at small fringe slant, which an earlier
+  draft of this revision reported as a model-dependent artifact, is real. The
+  tilt that brings a normally illuminated grating onto Bragg is
+  `arcsin(K*lambda/(4*pi*n0))`, the Bragg angle itself, which predicts 2.42
+  and 4.84 degrees at the two tested spatial frequencies with nothing fitted;
+  the gain peaks at 2.5 and 5.0 degrees, the nearest tested angles, and the
+  first-order diffracted fraction peaks there too.
 
 ## Open items that are yours, not mine
 
