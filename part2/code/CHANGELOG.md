@@ -1,5 +1,45 @@
 # Changelog
 
+## Applied Optics submission (2026-10-21)
+
+JOSA A declined manuscript 620231 on 15 October 2026 at the editorial stage,
+without peer review, on scope grounds and that journal's limit on papers
+relying on computer-simulated results. No scientific objections were raised.
+Retargeted to Applied Optics. The recording model is unchanged; everything
+below is validation, uncertainty and presentation.
+
+- `analysis/sensitivity.py` (new): ranks the four recording parameters by how
+  much the design gain depends on each, two independent ways that agree.
+  One-at-a-time over +/-50% (tier S3) and a first-order attribution across the
+  30 joint draws (tier S6) with bootstrap intervals and a reported linear R^2.
+  Delta n_max dominates, outranking kappa by 3.4x; sigma is the only parameter
+  whose joint coefficient does not exclude zero. Writes
+  `results/applied_optics/sensitivity.json`.
+- `experiments/rcwa_slant_sweep.py` (new): fills in the intermediate slants
+  the committed RCWA grid skips, 336 cases over both incidence conventions,
+  the two S8 spatial frequencies and three index-modulation levels. Shows the
+  slant collapse is Bragg detuning (first transmitted order 0.460 at 0 deg,
+  0.023 at 2.5 deg, undiffracted order rising to 0.85) and that the
+  closed-form reference loses validity at the smallest nonzero tested angle.
+- Figures renumbered: new Fig. 3 (operating regime map: the K-by-budget grid,
+  the slant sweep, and the RCWA mechanism panel) and Fig. 4 (sensitivity
+  tornado plus joint attribution); twin validation becomes Fig. 5; the
+  one-parameter miscalibration curves move to Fig. S6.
+- Manuscript restructured for Applied Optics: the introduction opens on the
+  practitioner's question, the small-signal transfer function is derived in
+  condensed form in the main text, the compute-matched intervals are inlined,
+  and a new Section 6 gives a step-by-step calibration protocol with the
+  minimum measurement set and the parameters worth spending effort on.
+  Limitations are a section of their own. The main text no longer depends on
+  the supplement. Abstract trimmed to about 100 words.
+- `scripts/make_submission_package.py` now gates on published pages (the
+  two-column journal layout, limit 10) rather than the universal template,
+  which runs longer for the same body. Currently 9 published pages.
+- `data/literature/DIGITIZE_TODO.md` (new): verified specifications, with
+  figure numbers and axes, for the multi-spatial-frequency datasets the
+  cross-K held-out validation needs. That validation is not yet run; the data
+  does not exist in the repository.
+
 ## JOSA A submission (2026-10-03)
 - Manuscript retargeted to JOSA A and fitted to 10 pages in the Optica
   universal template (7 in the two-column journal layout): new title,

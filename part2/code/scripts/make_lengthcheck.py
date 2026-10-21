@@ -1,7 +1,8 @@
 """
 Generate paper/manuscript_lengthcheck.tex from paper/manuscript.tex.
 
-JOSA A bills overlength charges against published pages (limit 10). The
+Applied Optics bills overlength charges against published pages (limit 10,
+$300 per page beyond). The
 length check compiles the SAME body in Optica's two-column journal class
 (opticajnl, 9pt), which approximates the composed layout. It is derived
 mechanically from the manuscript so it cannot drift from it.

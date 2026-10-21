@@ -73,6 +73,32 @@ Verified while searching for Phase 1a datasets, and available to cite:
   `10.1364/JOSAB.26.001746`. Metadata verified on the Optica abstract page;
   **full text paywalled, so its figure numbers are unverified.**
 
+## Found while preparing the submission
+
+- **The JOSA A guide's first suggested reviewer had died.** Prof. John T.
+  Sheridan, who originated the NPDD model this paper builds on, died on
+  1 November 2022 (obituaries from Optica and SPIE; University College Dublin
+  runs a memorial bursary in his name). He was listed first in the old
+  `SUBMISSION_GUIDE.md`. The entry is removed and the replacement list in
+  `SUGGESTED_REVIEWERS.md` has every contact checked against an institutional
+  page. Please do not reinstate him.
+
+- **Only 6 of 28 bibliography entries carry a DOI or URL field.** This is not a
+  submission blocker: the Optica bibliography style does not print DOI fields
+  and Optica resolves them at production, and the entries were verified by
+  author, title, venue and year for the earlier submission. It is still worth
+  closing, and `scripts/pre_submit_check.py` reports the list every run so it
+  stays visible. Adding them means verifying 22 DOIs one at a time; I have not
+  done it, and will not add a DOI I have not resolved.
+
+- **The split-step beam propagation inside the design loop has still never been
+  compared with RCWA directly.** The new slant sweep bounds the closed-form
+  Kogelnik reference only, which is what the committed cross-check also does.
+  A direct comparison would need first-order efficiencies extracted from the
+  beam-propagation field at matched incidence, which is a self-contained piece
+  of work and the strongest remaining answer to a reviewer who doubts the
+  readout.
+
 ## Open items that are yours, not mine
 
 1. **Digitize at least one multi-spatial-frequency dataset.** Exact

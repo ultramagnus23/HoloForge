@@ -13,7 +13,10 @@ sources are self-contained, fails on any LaTeX error, undefined reference or
   Cover Letter.pdf
   LaTeX source.zip                  self-contained sources, .bbl included
   Abstract (plain text).txt         for the Prism abstract field
-  SUBMISSION_GUIDE.md               upload steps, form fields, reviewers, checklist
+  SUBMISSION_GUIDE.md               upload steps and the author-only tasks
+  FORM_FIELDS.md                    every value to paste into Prism
+  SUGGESTED_REVIEWERS.md            three verified names, and who not to ask
+  PRE_SUBMIT_CHECKLIST.md           results of scripts/pre_submit_check.py
 
 The previous package is replaced. part2/submission/ is git-ignored.
 
@@ -28,7 +31,7 @@ import zipfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAPER = os.path.normpath(os.path.join(HERE, "..", "..", "paper"))
 FIGS = os.path.normpath(os.path.join(PAPER, "..", "code", "figures", "paper"))
-OUT = os.path.normpath(os.path.join(PAPER, "..", "submission"))
+OUT = os.path.normpath(os.path.join(PAPER, "..", "submission", "applied_optics"))
 BUILD = os.path.join(OUT, "_build")
 
 # Applied Optics bills overlength charges against PUBLISHED pages (the
@@ -45,11 +48,20 @@ DOCS = {"manuscript": f"{TITLE_FILE}.pdf",
         "cover_letter": "Cover Letter.pdf"}
 SUPPORT = ["numbers.tex", "refs.bib", "optica-article.cls", "opticajnl.bst",
            "jabbrv.sty", "jabbrv-ltwa-all.ldf", "jabbrv-ltwa-en.ldf"]
+# Author-facing markdown that ships beside the PDFs. Not uploaded to Prism
+# as files: SUBMISSION_GUIDE and FORM_FIELDS are what you read while filling
+# the form, and SUGGESTED_REVIEWERS holds names Prism takes as fields.
+GUIDE_DOCS = ["SUBMISSION_GUIDE.md", "FORM_FIELDS.md",
+              "SUGGESTED_REVIEWERS.md", "PRE_SUBMIT_CHECKLIST.md"]
 FIG_RE = re.compile(r"\\includegraphics(\[[^\]]*\])?\{\.\./code/figures/paper/([^}]+)\}")
 
 
 def run(cmd):
-    return subprocess.run(cmd, cwd=BUILD, capture_output=True, text=True).returncode
+    # errors="replace": pdflatex writes the micro sign from \textmu as a raw
+    # latin-1 byte, which makes a strict UTF-8 decode blow up in subprocess's
+    # reader thread and bury the real output in a traceback.
+    return subprocess.run(cmd, cwd=BUILD, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace").returncode
 
 
 def compile_doc(doc, bib):
@@ -148,7 +160,12 @@ def main():
 
     with open(os.path.join(OUT, "Abstract (plain text).txt"), "w", encoding="utf-8") as f:
         f.write(plain_abstract() + "\n")
-    shutil.copy2(os.path.join(PAPER, "SUBMISSION_GUIDE.md"), OUT)
+    for doc in GUIDE_DOCS:
+        src = os.path.join(PAPER, doc)
+        if os.path.exists(src):
+            shutil.copy2(src, OUT)
+        else:
+            print(f"  WARNING: {doc} missing, not copied into the package")
     shutil.rmtree(BUILD)
     print(f"wrote {OUT}:")
     for f in sorted(os.listdir(OUT)):

@@ -314,10 +314,10 @@ parameter-sensitivity jobs on its CPU).
 \subsection{Where designing through the model pays off}
 \label{sec:gain}
 The paired gain is positive in \MOneNPositive{} of \MOneNCells{} cells and its
-95\% interval excludes zero in \MOneNCIAboveZero{} (Fig.~\ref{fig:gain}(a);
-Fig.~\ref{fig:regime}(a) maps the same \MOneNCells{} cells). The largest cell
-means are \MaxGainTwoX, \MaxGainFourX{} and \MaxGainEightX\,dB at $B_c=2$, 4
-and 8, all at $K\le\MaxGainKTwoX$\,rad/\textmu m; the grid means are
+95\% interval excludes zero in \MOneNCIAboveZero{} (Fig.~\ref{fig:gain}(a)).
+The largest cell means are \MaxGainTwoX, \MaxGainFourX{} and
+\MaxGainEightX\,dB at $B_c=2$, 4 and 8, all at
+$K\le\MaxGainKTwoX$\,rad/\textmu m; the grid means are
 \MeanGainTwoX/\MeanGainFourX/\MeanGainEightX\,dB. At the highest tested
 $K=\MOneKMax$\,rad/\textmu m the gain is \GainHighKTwoX, \GainHighKFourX{} and
 \GainHighKEightX\,dB, which is to say nothing. One cell is negative:
@@ -329,12 +329,6 @@ same budget ordering (mean paired gain
 \DEMeanGainTwoX/\DEMeanGainFourX/\DEMeanGainEightX{} percentage points) but
 \DENNegative{} of \DENPairs{} per-seed pairs are negative (minimum
 \DEMinGainAllBudgets{} points).
-
-The practical reading of Fig.~\ref{fig:regime}(a) is that the benefit is
-concentrated at the low-frequency, high-budget corner. A larger contrast budget
-buys more, and a higher spatial frequency takes it away: the advantage is
-substantial below about $3$\,rad/\textmu m and is not resolved from zero at the
-two highest $K$ at $B_c=4$ and 8.
 
 The heuristic of Section~\ref{sec:model-mtf} predicts a sign change at
 $K_c=\KcPredTwoX$, \KcPredFourX{} and \KcPredEightX\,rad/\textmu m (dashed
@@ -371,6 +365,13 @@ legends give $\mathrm{PSNR}_{\text{si}}$. Single-seed illustrations;
 Fig.~\ref{fig:gain} carries the statistics.}
 \label{fig:recon}
 \end{figure}
+
+Figure~\ref{fig:regime}(a) maps the same \MOneNCells{} cells as a single
+picture, and its practical reading is that the benefit is concentrated at the
+low-frequency, high-budget corner. A larger contrast budget buys more, and a
+higher spatial frequency takes it away: the advantage is substantial below
+about $3$\,rad/\textmu m and is not resolved from zero at the two highest $K$
+at $B_c=4$ and 8.
 
 \subsection{How much material a media-blind design wastes}
 \label{sec:failure-rate}
