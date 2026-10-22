@@ -1,13 +1,13 @@
-# Release notes: v2.1.0-applied-optics
+# HoloForge v2.1.0: Applied Optics submission
 
-**Prepared, not published.** Nothing here has been tagged or pushed. Create the
-tag and the GitHub release yourself once `applied-optics` is merged into `main`,
-so that Zenodo archives the exact code behind the submitted paper. The Data
-availability statement cites the concept DOI `10.5281/zenodo.22202762`, which
-always resolves to the newest release, so the manuscript needs no edit when this
-one appears.
+Released 22 October 2026 from `main` at the merge of
+[#15](https://github.com/ultramagnus23/HoloForge/pull/15), which follows
+[#14](https://github.com/ultramagnus23/HoloForge/pull/14). Archived on Zenodo
+as version DOI `10.5281/zenodo.23559270`, under the concept DOI
+`10.5281/zenodo.22202762` that the manuscript's Data availability statement
+cites, so no edit to the paper was needed.
 
-Suggested release title: **HoloForge v2.1.0: Applied Optics submission**
+This is the code behind the version submitted to Applied Optics.
 
 ---
 
