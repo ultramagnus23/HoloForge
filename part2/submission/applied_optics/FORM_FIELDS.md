@@ -28,21 +28,17 @@ from the PDF. About 100 words.
 holographic recording materials; photopolymers; volume holography; computer-generated holography; inverse design; differentiable simulation; diffraction gratings
 ```
 
-## OCIS codes
+## Topic codes: none to enter
 
-Applied Optics asks for three to five. These are the standard Optica OCIS
-terms that match the manuscript's content:
+**Do not supply OCIS codes.** Optica has retired the scheme. Its author page
+states that OCIS codes "should no longer be included on manuscript submissions
+to our journals", and that "all articles in the Optica Publishing Group website
+are automatically indexed to the Optics and Photonics Topics" instead. Indexing
+is automatic, so there is nothing for you to choose or paste here.
 
-| Code | Term | Why |
-| --- | --- | --- |
-| 090.2900 | Optical storage materials | The photopolymer recording medium itself |
-| 090.7330 | Volume gratings | The recorded structure the paper designs and reads out |
-| 160.5470 | Polymers | The material class |
-| 090.1760 | Computer holography | The design loop |
-| 050.1755 | Computational electromagnetic methods | The beam-propagation and RCWA modelling |
-
-Check each code against the OCIS list in Prism as you enter it; Optica revises
-the taxonomy periodically and the interface is the authority.
+If Prism does present a topic or classification field anyway, take whatever the
+interface offers and ignore this section; the interface is the authority. An
+earlier draft of this file listed five OCIS codes to enter, which was wrong.
 
 ## Author
 

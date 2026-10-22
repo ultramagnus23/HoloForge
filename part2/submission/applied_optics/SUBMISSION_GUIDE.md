@@ -61,17 +61,19 @@ Every value you will paste is also collected in `FORM_FIELDS.md` in the built pa
    take responsibility for every statement.
 2. **Save the JOSA A decision email as a PDF.** Prism may ask for the previous decision
    letter alongside the "previously submitted" answer.
-3. **Check the AI-use statement** in the Acknowledgment. Optica requires the name, model
+3. **Do not enter OCIS codes.** Optica retired the scheme; indexing to the Optics
+   and Photonics Topics is automatic. See `FORM_FIELDS.md`.
+4. **Check the AI-use statement** in the Acknowledgment. Optica requires the name, model
    and purpose of any generative AI tool. The statement lists Claude (Anthropic, through
    Claude Code: Sonnet 5, Opus 4.8, Opus 5 and Opus 5.5) for code, analysis scripts,
    reading the digitized literature points, and drafting and editing text. That list
    comes from the repository's commit history. Add any other tool you used.
-4. **Archive the submitted code on Zenodo.** The Data availability reference uses the
+5. **Archive the submitted code on Zenodo.** The Data availability reference uses the
    concept DOI `10.5281/zenodo.22202762`, which always resolves to the newest release.
    Create the `v2.1.0-applied-optics` release from the merged `main` so Zenodo archives
    the exact code behind the submitted paper. Draft release notes are in
    `RELEASE_NOTES_v2.1.0.md`.
-5. **Confirm the affiliation and address** on the title page.
+6. **Confirm the affiliation and address** on the title page.
 
 ## 4. Why this fits Applied Optics
 
