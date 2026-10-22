@@ -1,5 +1,73 @@
 # Changelog
 
+## Applied Optics submission (2026-10-21)
+
+JOSA A declined manuscript 620231 on 15 October 2026 at the editorial stage,
+without peer review, on scope grounds and that journal's limit on papers
+relying on computer-simulated results. No scientific objections were raised.
+Retargeted to Applied Optics. The recording model is unchanged; everything
+below is validation, uncertainty and presentation.
+
+- `analysis/sensitivity.py` (new): ranks the four recording parameters by how
+  much the design gain depends on each, two independent ways that agree.
+  One-at-a-time over +/-50% (tier S3) and a first-order attribution across the
+  30 joint draws (tier S6) with bootstrap intervals and a reported linear R^2.
+  Delta n_max dominates, outranking kappa by 3.4x; sigma is the only parameter
+  whose joint coefficient does not exclude zero. Writes
+  `results/applied_optics/sensitivity.json`.
+- `experiments/rcwa_slant_sweep.py` (new): fills in the intermediate slants
+  the committed RCWA grid skips, 336 cases over both incidence conventions,
+  the two S8 spatial frequencies and three index-modulation levels. Shows the
+  slant collapse is Bragg detuning (first transmitted order 0.460 at 0 deg,
+  0.023 at 2.5 deg, undiffracted order rising to 0.85) and that the
+  closed-form reference loses validity at the smallest nonzero tested angle.
+- Figures renumbered: new Fig. 3 (operating regime map: the K-by-budget grid,
+  the slant sweep, and the RCWA mechanism panel) and Fig. 4 (sensitivity
+  tornado plus joint attribution); twin validation becomes Fig. 5; the
+  one-parameter miscalibration curves move to Fig. S6.
+- Manuscript restructured for Applied Optics: the introduction opens on the
+  practitioner's question, the small-signal transfer function is derived in
+  condensed form in the main text, the compute-matched intervals are inlined,
+  and a new Section 6 gives a step-by-step calibration protocol with the
+  minimum measurement set and the parameters worth spending effort on.
+  Limitations are a section of their own. The main text no longer depends on
+  the supplement. Abstract trimmed to about 100 words.
+- `scripts/make_submission_package.py` now gates on published pages (the
+  two-column journal layout, limit 10) rather than the universal template,
+  which runs longer for the same body. Currently 9 published pages.
+- `data/literature/DIGITIZE_TODO.md` (new): verified specifications, with
+  figure numbers and axes, for the multi-spatial-frequency datasets the
+  cross-K held-out validation needs. That validation is not yet run; the data
+  does not exist in the repository.
+- `experiments/bpm_vs_rcwa.py` (new): compares the split-step beam propagation
+  used INSIDE the design loop against RCWA directly, which no previous check
+  did; every earlier comparison bounded only the closed-form Kogelnik
+  reference. 84 cases over both spatial frequencies, three index-modulation
+  levels, the full slant range and both incidence conventions. The engines
+  agree on the first-order fraction to a median of 0.001 and at worst 0.027 at
+  normal incidence, the geometry the design loop reads out in, with slanted
+  cases no worse than unslanted; 0.037 is the worst over the whole grid.
+  `rcwa_crosscheck.rcwa_order_powers` is an additive companion to
+  `rcwa_de_general`, which is untouched so committed results stay reproducible.
+- That result changed a conclusion. The earlier draft of this revision
+  reported the gain enhancement at 2.5 to 5 degrees of slant as a
+  model-dependent artifact, on the grounds that the closed-form reference
+  fails there. With the propagator itself validated, the enhancement is real
+  and has a closed-form explanation: a tilt of arcsin(K*lambda/(4*pi*n0)), the
+  Bragg angle itself, brings a normally illuminated grating onto Bragg. That
+  predicts 2.42 and 4.84 degrees at the two tested K with nothing fitted, and
+  the measured gain peaks at the two tested angles nearest those, 2.5 and 5.0,
+  where the first-order fraction peaks as well. Section 4.6, the limitations
+  and the conclusion were rewritten, and Fig. 3(c) now shows both engines at
+  normal incidence instead of RCWA alone at Bragg incidence.
+- Bibliography: DOI coverage raised from 6 of 28 entries to 25, each matched
+  against the Crossref registry record on title, first author, year,
+  container, volume and pages. The three without one carry a comment saying
+  what was checked and why none was added. Verifying them turned up two more
+  errors in `sheridan2012reply`, an entry already corrected once before: it
+  had issue 2 and pages 1--3, against the publisher's own "Vol. 29, Issue 3,
+  pp. 460-462 (2012)".
+
 ## JOSA A submission (2026-10-03)
 - Manuscript retargeted to JOSA A and fitted to 10 pages in the Optica
   universal template (7 in the two-column journal layout): new title,

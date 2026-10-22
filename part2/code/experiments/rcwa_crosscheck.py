@@ -145,6 +145,60 @@ def rcwa_de_general(K_um, dn, theta_B_deg, polarization="ss", slant_deg=0.0,
     return float((torch.abs(t0) ** 2).real), float((torch.abs(t1) ** 2).real)
 
 
+def rcwa_order_powers(K_um, dn, theta_B_deg, orders=(-1, 0, 1),
+                      polarization="ss", slant_deg=0.0, incidence="bragg",
+                      n_x=128, order=15, n_z_layers=12) -> dict:
+    """Transmitted power in each requested diffraction order, as a dict
+    {m: |t_m|^2}.
+
+    Additive companion to rcwa_de_general: same geometry construction, same
+    incidence and slant conventions (incident wave enters at -theta_air; for
+    an unslanted transmission grating the symmetric two-wave Bragg-matched
+    order is m=+1), but it returns several orders instead of just 0 and +1,
+    which a propagator comparison needs in order to normalize the two engines
+    the same way. rcwa_de_general is untouched so every committed result file
+    stays reproducible.
+    """
+    period = 2 * math.pi / K_um
+    Ly = period / 8.0
+    lamb0 = torch.tensor(WAVELENGTH_UM, dtype=geo_dtype, device=device)
+
+    if incidence == "bragg":
+        sin_air = min(max(N0 * math.sin(math.radians(theta_B_deg)), -1.0), 1.0)
+        theta_air = math.asin(sin_air)
+    elif incidence == "normal":
+        theta_air = 0.0
+    else:
+        raise ValueError(f"unknown incidence {incidence!r}")
+
+    sim = torcwa.rcwa(freq=1.0 / lamb0, order=[order, 0], L=[period, Ly],
+                      dtype=sim_dtype, device=device)
+    sim.add_input_layer(eps=1.0)
+    sim.add_output_layer(eps=1.0)
+    sim.set_incident_angle(inc_ang=-theta_air, azi_ang=0.0)
+
+    x = torch.linspace(0, period, n_x, dtype=geo_dtype, device=device)
+    dz = THICKNESS_UM / n_z_layers
+    tan_phi = math.tan(math.radians(slant_deg))
+    for iz in range(n_z_layers):
+        z = (iz + 0.5) * dz
+        n_profile = N0 + dn * torch.cos(K_um * (x - tan_phi * z))
+        eps_x = (n_profile ** 2).to(geo_dtype)
+        eps_grid = eps_x.unsqueeze(1).repeat(1, 4)
+        sim.add_layer(thickness=dz,
+                      eps=eps_grid.to(torch.complex64 if geo_dtype == torch.float32
+                                      else torch.complex128))
+    sim.solve_global_smatrix()
+
+    out = {}
+    for m in orders:
+        t = sim.S_parameters(orders=[int(m), 0], direction="forward",
+                             port="transmission", polarization=polarization,
+                             ref_order=[0, 0])
+        out[int(m)] = float((torch.abs(t) ** 2).real)
+    return out
+
+
 E7_K_VALUES = [2.0, 4.0, 6.0, 8.0, 12.0]
 
 E7_DN_VALUES = [1.0e-3, 3.5e-3, 6.0e-3]

@@ -2,7 +2,7 @@
 
 Code, experiment manifests and results for the paper *Media-in-the-loop
 holography: designing photopolymer exposures through a differentiable
-recording model* (submitted to JOSA A).
+recording model* (submitted to Applied Optics).
 
 Camera-in-the-loop correction needs a rewritable display; photopolymer holograms
 are write-once, so the reconstruction error can be measured only after it is

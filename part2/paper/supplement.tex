@@ -19,18 +19,22 @@
 differentiable recording model: supplemental document}
 
 \begin{abstract*}
-This document supports the main article with the heuristic small-signal
-analysis behind the $K_c$ prediction, the full mechanism ablations, the
-slice-count and slant tables, the miscalibration, compute-matched, target and
-noise studies, the RCWA check of the closed-form readout, the twin fits with the
-dye-bleaching rate held, implementation checks, and a map from every reported
-result to the files and scripts that produce it. Section, figure and table
-numbers without an ``S'' refer to the main article.
+This document supports the main article with the full derivation behind the
+heuristic small-signal transfer function and the $K_c$ prediction, the complete
+mechanism factorial including its unmatched conditions, the slice-count and
+slant tables, the miscalibration, compute-matched, target and noise studies,
+the RCWA check of the closed-form readout, the twin fits with the dye-bleaching
+rate held, implementation checks, the conventions behind the direct comparison
+of the design loop's beam propagation with RCWA, and a map from every reported
+result to the files and scripts that produce it. The main article is self-contained; nothing
+here is needed to follow it. Section, figure and table numbers without an
+``S'' refer to the main article.
 \end{abstract*}
 
 \section{Heuristic small-signal transfer function and $K_c$}
 \label{sec:s1}
-\textbf{Derivation.} Take $I(x)=I_{\text{mean}}(1+m\cos Kx)$ with $m\ll1$,
+\textbf{Derivation.} The main article states the result as its Eq.~(7); this is
+the derivation. Take $I(x)=I_{\text{mean}}(1+m\cos Kx)$ with $m\ll1$,
 neglect dye depletion ($d\approx1$) and hold $D_{\text{eff}}=D_0$, i.e.\
 linearize Eqs.~(2)--(4) about the start of recording. The uniform fields obey
 $\dot u_0=-F_0u_0$ with $F_0=\kappa I_{\text{mean}}^\gamma$. Eliminating the
@@ -155,9 +159,11 @@ $K$, $B_c=2$, 95\% $t$-intervals over seeds.}
 Table~\ref{tab:s2} gives the paired gain for $n_z=32$, 128 and 256 (one seed,
 $B_c=2$, unslanted). All experiments use $n_z=128$; $n_z=32$ is not converged at
 $K=3.93$\,rad/\textmu m. Table~\ref{tab:s3} gives the slant dependence of
-Fig.~3(a) with intervals. The slanted values rely on the scalar readout outside
+Fig.~3(b) with intervals. The slanted values rely on the scalar readout outside
 the geometry in which it was checked against RCWA (Section~\ref{sec:s5}) and
-are model-dependent.
+are model-dependent; the intermediate-slant RCWA sweep behind Fig.~3(c), which
+shows the closed-form reference losing validity at the smallest nonzero tested
+angle, is produced by \texttt{experiments/rcwa\_slant\_sweep.py}.
 
 \begin{table}[!htbp]
 \centering
@@ -199,7 +205,8 @@ Both exposures are designed on the nominal twin and recorded, unchanged, on a
 twin with one of $D_0$, $\sigma$, $\kappa$ or $\Delta n_{\max}$ perturbed, at
 $K=\SOneKSub$, \SOneKNear{} and \SOneKPost\,rad/\textmu m, $B_c=2$; the gain is
 averaged over $K$ for each seed and the 95\% interval is taken over seeds
-(Fig.~3(b)). Within $\pm50\%$ the gain stays between \SThreeWorstWithinFifty{}
+(Fig.~\ref{fig:s6}). The main article carries the compact tornado view of the
+same tier as its Fig.~4(a). Within $\pm50\%$ the gain stays between \SThreeWorstWithinFifty{}
 and \SThreeBestWithinFifty\,dB, the lowest value belonging to $\Delta n_{\max}$
 at $-50\%$ (nominal \SThreeNominalGain\,dB). For $\Delta n_{\max}$ the sweep is
 extended to bracket the \BayfolDnMaxRatio$\times$ disagreement between the two
@@ -213,6 +220,17 @@ changes is not resolved. BSGD's design depends on the medium only through the
 scale $\Delta n_{\max}$ of its linear model, so its exposure is the same at
 every perturbation; the change in paired gain reflects how MIL's design and both
 recordings respond to the error.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.62\linewidth]{../code/figures/paper/FigS6_miscalibration.pdf}
+\caption{Paired gain when the exposure is designed on the nominal twin and
+recorded on a twin with one parameter scaled, $K$-averaged over the three
+ablation $K$, $B_c=2$; shading, 95\% intervals over seeds; grey band,
+$\pm50\%$. The main article's Fig.~4(a) summarizes the same data as a tornado
+ranking.}
+\label{fig:s6}
+\end{figure}
 
 \section{RCWA check of the closed-form readout}
 \label{sec:s5}
@@ -263,7 +281,9 @@ SAT as \% of MIL & \MTwoRSATFracSub & \MTwoRSATFracNear & \MTwoRSATFracPost \\
 
 \section{Calibrating the twin for a new medium}
 \label{sec:s7}
-From the fits of Section~5 and Section~\ref{sec:s9}: (i) $\kappa$ and
+Section~6 of the main article states the protocol; these are the fit-level
+observations it rests on. From the fits of Section~5 and Section~\ref{sec:s9}:
+(i) $\kappa$ and
 $\Delta n_{\max}$ are identifiable from one $\Delta n_1$(dose) curve;
 (ii) $D_0$ and $\sigma$ act through the spatial-frequency dependence and need a
 multi-$K$ family or an independent measurement, so a single-$K$ curve should
@@ -311,7 +331,7 @@ model curve the fit reproduces the rise and decline (NRMSE
 before the first measured dose, so the twin returns an almost constant
 $\Delta n_1$, and the fitted $\Delta n_{\max}$ (\HoldoutAExpDnMax) is
 \BayfolDnMaxRatio$\times$ that of the model-curve fit (\HoldoutASimDnMax).
-Freeing $k_{\text{bleach}}$ removes the degeneracy (Fig.~4). The PQ/PMMA curve
+Freeing $k_{\text{bleach}}$ removes the degeneracy (Fig.~5). The PQ/PMMA curve
 of Hsieh et al.~\cite{hsieh2022pqpmma} is the source's own kinetic-model output
 at $K=24.94$\,rad/\textmu m, outside the tested range, and is still rising at the
 end of the record, so $\Delta n_{\max}$ is under-constrained; its fit (NRMSE
@@ -349,8 +369,56 @@ exposure is kept below the contrast cap so the projection is smooth there).
 the git commit of the code that produced it and the device; the seed enters only
 through the optimizer initialization.
 
-\section{Provenance of reported results}
+\section{Beam propagation against RCWA}
 \label{sec:s11}
+Section~4.6 compares the split-step beam propagation used inside the design
+loop with RCWA directly. The conventions matter, because a mismatch would
+produce a confidently wrong number rather than an obvious failure, so they are
+stated here in full; \texttt{experiments/bpm\_vs\_rcwa.py} is the
+implementation.
+
+\textbf{Geometry.} $\Delta n(x)=\Delta n\cos(Kx)$, extruded through $T$ and
+sheared laterally by $z\tan\phi$ at depth $z$, which is what both engines apply
+for a slant.
+
+\textbf{Incidence.} Two cases. ``Normal'' is what the design loop uses, since
+\texttt{SlabBPM.forward} launches a uniform field, and it is the case the main
+text quotes. ``Bragg'' illuminates both engines at the symmetric two-wave angle;
+for the beam propagation that means an incident $\exp(ik_xx)$ with
+$k_x=-K/2$ inside the medium, the sign fixed by the RCWA convention that the
+incident wave enters at $-\theta_{\text{air}}$ so that the Bragg-matched order
+is $m=+1$. Illuminating at $+K/2$ instead would place the matched partner at
+$m=-1$ and leave $m=+1$ far off Bragg, which is a silent factor-of-twenty
+error rather than a crash.
+
+\textbf{Order bookkeeping.} The field is taken immediately after the slab,
+before the free-space step to the reconstruction plane, and Fourier
+transformed. Order $m$ lands in bin $b_{\text{inc}}+m(L/\Lambda)$ with
+$L=n_x\,\mathrm{d}x$ the periodic window. Both tested $K$ give integer
+$L/\Lambda$ (16 and 32) and integer $L/2\Lambda$, so at either incidence every
+order falls exactly on a bin and nothing leaks; the script asserts this rather
+than assuming it, and builds $K$ from the integer period count so that rounding
+$K$ to four decimals cannot break commensurability.
+
+\textbf{Normalization.} The beam propagation models no interfaces and so has no
+Fresnel loss, while RCWA has air on both sides of an $n_0=1.5$ slab. Comparing
+raw efficiencies would charge the propagator for physics it does not claim to
+model, so the reported quantity is the first-order fraction
+$P(+1)/[P(-1)+P(0)+P(+1)]$, computed identically from both engines. Raw
+per-order values are in the released result file.
+
+\textbf{Anchor.} Before the sweep runs, the extraction is checked at unslanted
+Bragg incidence against the closed-form efficiency at
+$\Delta n\le3.5\times10^{-3}$, where the grid of Section~\ref{sec:s5} shows the
+closed form is itself reliable; the worst deviation there is 0.05. The
+strongest modulation, $6\times10^{-3}$, is computed and printed but not gated
+on, since that is where the closed form is known to depart. The anchor fixes
+the bookkeeping only. It is not independent evidence about the propagator,
+because the closed form and the beam propagation share the scalar paraxial
+approximation; the sweep against RCWA is what tests the physics.
+
+\section{Provenance of reported results}
+\label{sec:s12}
 Every number in the main article and this supplement is a macro in
 \texttt{numbers.tex}, generated by \texttt{scripts/make\_numbers\_tex.py}
 (with \texttt{analysis/de\_confirmation.py} and
@@ -371,16 +439,19 @@ and \texttt{REPRODUCE.md} there lists the commands.
 \toprule
 Result & Tier and source \\
 \midrule
-Paired gain on the grid, Fig.~1(a), failure rates (Table~2), diffraction efficiency & M1; \texttt{aggregate.py}, \texttt{wasted\_media.py}, \texttt{de\_confirmation.py} \\
+Paired gain on the grid, Figs.~1(a) and 3(a), failure rates (Table~2), diffraction efficiency & M1; \texttt{aggregate.py}, \texttt{wasted\_media.py}, \texttt{de\_confirmation.py} \\
 Baselines and SAT, Fig.~1(b) & M1 \\
 Reconstructions and profiles, Figs.~2 and S1 & \texttt{experiments/make\_r1\_reconstructions.py}, \texttt{make\_r1\_profiles.py} \\
 Compute-matched control & M2R \\
 Ablations and factorial, Table~3, Tables~S1, Figs.~S2--S3 & S1, S1X \\
-Slant and slice count, Fig.~3(a), Tables~S2--S3 & S8, NZ0 \\
-Miscalibration, joint draws, depth absorption, Fig.~3(b) & S3, S6, S7 (\texttt{experiments/run\_s3\_mismatch.py}, \texttt{run\_s6\_joint\_mismatch.py}, \texttt{run\_s7\_depth\_absorption.py}) \\
+Slant and slice count, Fig.~3(b), Tables~S2--S3 & S8, NZ0 \\
+Intermediate-slant RCWA sweep (closed-form reference) & \texttt{experiments/rcwa\_slant\_sweep.py} $\rightarrow$ \texttt{results/applied\_optics/rcwa\_slant\_sweep.json} \\
+Beam propagation against RCWA, Fig.~3(c) & \texttt{experiments/bpm\_vs\_rcwa.py} $\rightarrow$ \texttt{results/applied\_optics/bpm\_vs\_rcwa.json} \\
+Miscalibration, joint draws, depth absorption, Fig.~S6 & S3, S6, S7 (\texttt{experiments/run\_s3\_mismatch.py}, \texttt{run\_s6\_joint\_mismatch.py}, \texttt{run\_s7\_depth\_absorption.py}) \\
+Parameter sensitivity ranking, Fig.~4 & S3, S6 via \texttt{analysis/sensitivity.py} $\rightarrow$ \texttt{results/applied\_optics/sensitivity.json} \\
 Re-optimized parameter sensitivity & S2R \\
 Targets and noise, Table~S5 & S4, S5 \\
-Twin fits and held-out prediction, Figs.~4 and S5 & \texttt{experiments/fit\_literature\_curves.py}, \texttt{fit\_twin\_holdout.py}; digitized data in \texttt{data/literature/} \\
+Twin fits and held-out prediction, Figs.~5 and S5 & \texttt{experiments/fit\_literature\_curves.py}, \texttt{fit\_twin\_holdout.py}; digitized data in \texttt{data/literature/} \\
 RCWA check, Fig.~S4 & \texttt{experiments/rcwa\_crosscheck.py} \\
 Medium and simulation parameters (Table~1) & \texttt{experiments/manifest.py}, \texttt{configs/media/} \\
 \bottomrule

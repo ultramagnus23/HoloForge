@@ -1,5 +1,5 @@
 """
-Build the JOSA A submission package.
+Build the Applied Optics submission package.
 
 Copies the manuscript, supplement, cover letter, generated macros,
 bibliography, Optica template files and every referenced figure into a clean
@@ -13,7 +13,10 @@ sources are self-contained, fails on any LaTeX error, undefined reference or
   Cover Letter.pdf
   LaTeX source.zip                  self-contained sources, .bbl included
   Abstract (plain text).txt         for the Prism abstract field
-  SUBMISSION_GUIDE.md               upload steps, form fields, reviewers, checklist
+  SUBMISSION_GUIDE.md               upload steps and the author-only tasks
+  FORM_FIELDS.md                    every value to paste into Prism
+  SUGGESTED_REVIEWERS.md            three verified names, and who not to ask
+  PRE_SUBMIT_CHECKLIST.md           results of scripts/pre_submit_check.py
 
 The previous package is replaced. part2/submission/ is git-ignored.
 
@@ -28,8 +31,15 @@ import zipfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAPER = os.path.normpath(os.path.join(HERE, "..", "..", "paper"))
 FIGS = os.path.normpath(os.path.join(PAPER, "..", "code", "figures", "paper"))
-OUT = os.path.normpath(os.path.join(PAPER, "..", "submission"))
+OUT = os.path.normpath(os.path.join(PAPER, "..", "submission", "applied_optics"))
 BUILD = os.path.join(OUT, "_build")
+
+# Applied Optics bills overlength charges against PUBLISHED pages (the
+# two-column journal layout), with a 10-page limit and $300 per page
+# beyond. The universal submission template runs longer for the same
+# body, so its page count is only a sanity bound on the build.
+JOURNAL_PAGE_LIMIT = 10
+UNIVERSAL_TEMPLATE_SANITY_PAGES = 16
 
 TITLE_FILE = ("Media-in-the-Loop Holography - Designing Photopolymer Exposures "
               "Through a Differentiable Recording Model")
@@ -38,11 +48,20 @@ DOCS = {"manuscript": f"{TITLE_FILE}.pdf",
         "cover_letter": "Cover Letter.pdf"}
 SUPPORT = ["numbers.tex", "refs.bib", "optica-article.cls", "opticajnl.bst",
            "jabbrv.sty", "jabbrv-ltwa-all.ldf", "jabbrv-ltwa-en.ldf"]
+# Author-facing markdown that ships beside the PDFs. Not uploaded to Prism
+# as files: SUBMISSION_GUIDE and FORM_FIELDS are what you read while filling
+# the form, and SUGGESTED_REVIEWERS holds names Prism takes as fields.
+GUIDE_DOCS = ["SUBMISSION_GUIDE.md", "FORM_FIELDS.md",
+              "SUGGESTED_REVIEWERS.md", "PRE_SUBMIT_CHECKLIST.md"]
 FIG_RE = re.compile(r"\\includegraphics(\[[^\]]*\])?\{\.\./code/figures/paper/([^}]+)\}")
 
 
 def run(cmd):
-    return subprocess.run(cmd, cwd=BUILD, capture_output=True, text=True).returncode
+    # errors="replace": pdflatex writes the micro sign from \textmu as a raw
+    # latin-1 byte, which makes a strict UTF-8 decode blow up in subprocess's
+    # reader thread and bury the real output in a traceback.
+    return subprocess.run(cmd, cwd=BUILD, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace").returncode
 
 
 def compile_doc(doc, bib):
@@ -100,8 +119,14 @@ def main():
 
     print("compiling in", BUILD)
     pages = {doc: compile_doc(doc, bib=(doc != "cover_letter")) for doc in DOCS}
-    if pages["manuscript"] > 10:
-        raise SystemExit(f"manuscript is {pages['manuscript']} pages; JOSA A limit is 10")
+    # Applied Optics bills overlength against PUBLISHED pages, which is the
+    # two-column journal layout checked below, not the universal submission
+    # template. The template count is only a sanity bound against a runaway
+    # build; the gate that matters is `journal_pages`.
+    if pages["manuscript"] > UNIVERSAL_TEMPLATE_SANITY_PAGES:
+        raise SystemExit(f"manuscript is {pages['manuscript']} pages in the "
+                         f"universal template, over the sanity bound of "
+                         f"{UNIVERSAL_TEMPLATE_SANITY_PAGES}; check the build")
 
     import make_lengthcheck
     make_lengthcheck.main()
@@ -113,9 +138,12 @@ def main():
     shutil.copy2(os.path.join(PAPER, "opticajnl.cls"), BUILD)
     shutil.copytree(os.path.join(PAPER, "legacy-styles"), os.path.join(BUILD, "legacy-styles"))
     journal_pages = compile_doc(lc, bib=True)
-    if journal_pages > 10:
-        raise SystemExit(f"two-column layout is {journal_pages} pages; JOSA A limit is 10")
-    print(f"  journal layout: {journal_pages} pages (limit 10)")
+    if journal_pages > JOURNAL_PAGE_LIMIT:
+        raise SystemExit(f"two-column layout is {journal_pages} published "
+                         f"pages; the Applied Optics limit is "
+                         f"{JOURNAL_PAGE_LIMIT} before overlength charges")
+    print(f"  journal layout: {journal_pages} pages "
+          f"(limit {JOURNAL_PAGE_LIMIT})")
 
     for doc, name in DOCS.items():
         shutil.copy2(os.path.join(BUILD, doc + ".pdf"), os.path.join(OUT, name))
@@ -132,7 +160,12 @@ def main():
 
     with open(os.path.join(OUT, "Abstract (plain text).txt"), "w", encoding="utf-8") as f:
         f.write(plain_abstract() + "\n")
-    shutil.copy2(os.path.join(PAPER, "SUBMISSION_GUIDE.md"), OUT)
+    for doc in GUIDE_DOCS:
+        src = os.path.join(PAPER, doc)
+        if os.path.exists(src):
+            shutil.copy2(src, OUT)
+        else:
+            print(f"  WARNING: {doc} missing, not copied into the package")
     shutil.rmtree(BUILD)
     print(f"wrote {OUT}:")
     for f in sorted(os.listdir(OUT)):

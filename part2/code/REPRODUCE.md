@@ -39,6 +39,10 @@ python analysis/wasted_media.py
 ```
 
 ```bash
+python analysis/sensitivity.py
+```
+
+```bash
 python figures/make_all.py
 ```
 
@@ -54,13 +58,23 @@ python scripts/make_lengthcheck.py
 python scripts/make_submission_package.py
 ```
 
-Order matters: `make_numbers_tex.py` rewrites `numbers.tex`, and the two
-`analysis/*.py` scripts append their blocks afterwards. The last command
+```bash
+python scripts/pre_submit_check.py
+```
+
+Order matters: `make_numbers_tex.py` rewrites `numbers.tex`, and the
+`analysis/*.py` scripts append their blocks afterwards. `sensitivity.py` must
+run before the final `make_numbers_tex.py` pass, since the sensitivity macros
+are read from `results/applied_optics/sensitivity.json`; run
+`make_numbers_tex.py` once more after it if you have changed the tier S3 or S6
+results. `pre_submit_check.py` reads the logs the package build leaves behind,
+so it goes last. The last command
 compiles the manuscript, Supplement 1 and the cover letter in a clean
 directory and writes the upload-ready files to `part2/submission/`
 (see `part2/paper/SUBMISSION_GUIDE.md`). `manuscript_lengthcheck.tex` is the
-same body in Optica's two-column journal class, for the page count JOSA A
-bills against.
+same body in Optica's two-column journal class, for the published page
+count Applied Optics bills overlength charges against (limit 10, $300 per
+page beyond).
 
 ## 2. Rerun the simulations (hours to days)
 
@@ -111,6 +125,22 @@ Kogelnik versus RCWA check (CPU, needs `torcwa`):
 
 ```bash
 python experiments/rcwa_crosscheck.py e7
+```
+
+Intermediate-slant RCWA sweep, which locates where the closed-form reference
+stops agreeing with RCWA (CPU, about 2 minutes, needs `torcwa`):
+
+```bash
+python experiments/rcwa_slant_sweep.py
+```
+
+Direct comparison of the design loop's beam propagation against RCWA, which
+is what Section 4.6 of the manuscript rests on (CPU, a few minutes, needs
+`torcwa`). It anchors its own order extraction against the closed form before
+sweeping, and refuses to write a result file if that anchor fails:
+
+```bash
+python experiments/bpm_vs_rcwa.py
 ```
 
 Finite-difference gradient check (CPU, seconds):

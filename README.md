@@ -6,7 +6,7 @@ HoloForge models the full pipeline of a phase-only holographic display (Angular-
 
 > **Part 1 preprint published:** *"Systematic Degradation Analysis in Phase-Only Computational Holography: A Simulation Framework"* — [Optica Open](https://preprints.opticaopen.org/articles/preprint/Systematic_Degradation_Analysis_in_Phase-Only_Computational_Holography_A_Simulation_Framework/32874356?file=66233162). Source and code: [`part1/`](part1/).
 >
-> **Part 2 (submitted to JOSA A):** *"Media-in-the-loop holography: designing photopolymer exposures through a differentiable recording model"* — manuscript [`part2/paper/manuscript.tex`](part2/paper/manuscript.tex), Supplement 1 [`part2/paper/supplement.tex`](part2/paper/supplement.tex), code and results in [`part2/code/`](part2/code/). A simulation study: designing the exposure through a differentiable photopolymer recording model beats media-blind design in 29 of 30 unslanted grating cells, mostly at low spatial frequency. Every number in the paper is generated from the committed per-job results; [`part2/code/REPRODUCE.md`](part2/code/REPRODUCE.md) gives the commands.
+> **Part 2 (submitted to Applied Optics):** *"Media-in-the-loop holography: designing photopolymer exposures through a differentiable recording model"* — manuscript [`part2/paper/manuscript.tex`](part2/paper/manuscript.tex), Supplement 1 [`part2/paper/supplement.tex`](part2/paper/supplement.tex), code and results in [`part2/code/`](part2/code/). A simulation study: designing the exposure through a differentiable photopolymer recording model beats media-blind design in 29 of 30 unslanted grating cells, mostly at low spatial frequency; the gain depends most on the medium's index budget and collapses once the fringes tilt, for an optical reason the paper identifies. The paper includes a calibration protocol stating the minimum measurements a lab needs. Every number is generated from the committed per-job results; [`part2/code/REPRODUCE.md`](part2/code/REPRODUCE.md) gives the commands.
 
 ---
 
@@ -70,7 +70,7 @@ part1/                     # Part 1: phase-only CGH degradation study
     ├── part1_main.tex       # IEEEtran source, published to Optica Open
     └── README.md             # build instructions
 
-part2/                     # Part 2: media-in-the-loop holography (JOSA A)
+part2/                     # Part 2: media-in-the-loop holography (Applied Optics)
 ├── code/
 │   ├── holomedia/         # differentiable NPDD recording model + optimizers
 │   ├── experiments/       # tier manifests, runners, twin fits, checks
@@ -81,7 +81,7 @@ part2/                     # Part 2: media-in-the-loop holography (JOSA A)
 │   ├── results/           # per-job result JSONs
 │   └── REPRODUCE.md       # how to regenerate everything
 └── paper/
-    ├── manuscript.tex      # JOSA A manuscript (Optica universal template)
+    ├── manuscript.tex      # Applied Optics manuscript (Optica universal template)
     ├── supplement.tex      # Supplement 1
     ├── cover_letter.tex
     ├── numbers.tex         # generated: every number in the three documents

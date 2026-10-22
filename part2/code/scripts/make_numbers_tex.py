@@ -14,6 +14,7 @@ reaches a PDF.
 Usage: python scripts/make_numbers_tex.py
 """
 import json
+import math
 import os
 import statistics
 import sys
@@ -759,6 +760,167 @@ def build_path7_macros(pn: dict) -> str:
     return "".join(L)
 
 
+_SENS_PARAM_LABELS = {"D0": "DZero", "sigma": "Sigma", "kappa": "Kappa",
+                      "dn_max": "DnMax"}
+_SENS_PARAM_TEX = {"D0": r"$D_0$", "sigma": r"$\sigma$", "kappa": r"$\kappa$",
+                   "dn_max": r"$\Delta n_{\max}$"}
+_AO_SLANT_LABELS = {0.0: "Zero", 2.5: "TwoFive", 5.0: "Five", 7.5: "SevenFive",
+                    10.0: "Ten", 15.0: "Fifteen", 20.0: "Twenty"}
+# A slant counts as "collapsed" once the mean gain at every tested K is at or
+# below this, in dB. Fixed here, not chosen after looking at the numbers.
+SLANT_COLLAPSE_THRESHOLD_DB = 0.5
+
+
+def build_applied_optics_macros(paper_numbers: dict) -> str:
+    """Macros added for the Applied Optics version: the parameter-sensitivity
+    ranking (analysis/sensitivity.py) and the intermediate-slant RCWA sweep
+    (experiments/rcwa_slant_sweep.py), plus the slant at which the gain
+    collapses, derived from the S8 summary rather than read off a plot."""
+    L = ["\n% ---- Applied Optics additions: sensitivity and slant boundary ----\n"]
+
+    sens = _load("results", "applied_optics", "sensitivity.json") or {}
+    torn = sens.get("tornado", {})
+    ok = torn.get("status") == "ok"
+    L.append(macro("SensNominalGain",
+                   fmt(torn.get("nominal", {}).get("mean")) if ok else None))
+    for param, lab in _SENS_PARAM_LABELS.items():
+        rec = (torn.get("params", {}) or {}).get(param, {}) if ok else {}
+        L.append(macro(f"SensRange{lab}", fmt(rec.get("range_dB"), ".2f")))
+        L.append(macro(f"SensWorst{lab}", fmt(rec.get("min_mean"), ".2f")))
+        L.append(macro(f"SensWorstPct{lab}",
+                       str(rec["worst_pct"]) if rec.get("worst_pct") is not None else None))
+    ranked = torn.get("ranked", []) if ok else []
+    for i, name in enumerate(("One", "Two", "Three", "Four")):
+        L.append(macro(f"SensRank{name}",
+                       _SENS_PARAM_TEX.get(ranked[i]) if i < len(ranked) else None))
+    # How far the top parameter outranks the next one, so the text can say
+    # "by a factor of X" without a hand-typed division.
+    ratio = None
+    if len(ranked) >= 2:
+        a = torn["params"][ranked[0]]["range_dB"]
+        b = torn["params"][ranked[1]]["range_dB"]
+        ratio = a / b if b else None
+    L.append(macro("SensTopRangeRatio", fmt(ratio, ".1f")))
+
+    joint = sens.get("joint_attribution", {})
+    jok = joint.get("status") == "ok"
+    L.append(macro("SensRSquared", fmt(joint.get("r2"), ".2f") if jok else None))
+    L.append(macro("SensNDraws", str(joint.get("n_draws")) if jok else None))
+    for param, lab in _SENS_PARAM_LABELS.items():
+        c = (joint.get("coefficients", {}) or {}).get(param, {}) if jok else {}
+        L.append(macro(f"SensBeta{lab}", fmt(c.get("beta_dB_per_sd"), "+.3f")))
+        L.append(macro(f"SensBetaLo{lab}", fmt(c.get("ci95_lo"), "+.3f")))
+        L.append(macro(f"SensBetaHi{lab}", fmt(c.get("ci95_hi"), "+.3f")))
+    n_resolved = (sum(1 for c in joint.get("coefficients", {}).values()
+                      if c.get("excludes_zero")) if jok else None)
+    L.append(macro("SensNResolved", str(n_resolved) if n_resolved is not None else None))
+
+    sweep = _load("results", "applied_optics", "rcwa_slant_sweep.json") or {}
+    bragg = (sweep.get("by_incidence_s8_K_only", {}) or {}).get("bragg", {})
+    by_slant = bragg.get("by_slant", {})
+    L.append(macro("RCWASlantNCases",
+                   str(sweep["n_cases"]) if sweep.get("n_cases") else None))
+    L.append(macro("RCWASlantOnsetDeg",
+                   fmt(bragg.get("median_doubling_onset_deg"), ".1f")))
+    for sl, lab in _AO_SLANT_LABELS.items():
+        rec = by_slant.get(f"{sl:g}", {})
+        L.append(macro(f"RCWASlantFirst{lab}",
+                       fmt(rec.get("median_rcwa_first_order"), ".3f")))
+        L.append(macro(f"RCWASlantZeroth{lab}",
+                       fmt(rec.get("median_rcwa_zero_order"), ".2f")))
+        L.append(macro(f"RCWASlantDev{lab}", fmt(rec.get("median"), ".2f")))
+
+    # Smallest tested nonzero slant at which EVERY tested K has collapsed,
+    # and the largest gain still seen at or beyond it.
+    s8 = paper_numbers.get("s8_slant_summary", {})
+    collapse_deg, max_gain_beyond = None, None
+    if s8.get("status") == "ok":
+        by_K = s8.get("by_K", {})
+        slants = sorted({float(s) for rec in by_K.values() for s in rec})
+        for sl in (s for s in slants if s > 0):
+            means = [by_K[k].get(str(sl), {}).get("mean") for k in by_K]
+            means = [m for m in means if m is not None]
+            if means and max(means) <= SLANT_COLLAPSE_THRESHOLD_DB:
+                collapse_deg = sl
+                break
+        if collapse_deg is not None:
+            beyond = [by_K[k][s]["mean"] for k in by_K for s in by_K[k]
+                      if float(s) >= collapse_deg and by_K[k][s].get("mean") is not None]
+            max_gain_beyond = max(beyond) if beyond else None
+    L.append(macro("SlantCollapseDeg", fmt(collapse_deg, ".1f")))
+    L.append(macro("SlantMaxGainBeyondCollapse", fmt(max_gain_beyond, ".2f")))
+    L.append(macro("SlantCollapseThreshDB", fmt(SLANT_COLLAPSE_THRESHOLD_DB, ".1f")))
+
+    L.append(build_bpm_rcwa_macros())
+    return "".join(L)
+
+
+# The design loop reads the slab out at normal incidence with the default
+# medium's index budget, so that is the slice of the comparison the main text
+# quotes; dn = 3.5e-3 is Table 1's dn_max.
+BPM_QUOTED_DN = 3.5e-3
+BPM_KLABELS = {16: "KLow", 32: "KMid"}
+
+
+def build_bpm_rcwa_macros() -> str:
+    """Macros for the direct comparison of the design loop's split-step beam
+    propagation against RCWA (experiments/bpm_vs_rcwa.py), and for the slant
+    that Bragg-matches a normally incident readout."""
+    L = ["\n% ---- beam propagation against RCWA ----\n"]
+    d = _load("results", "applied_optics", "bpm_vs_rcwa.json") or {}
+    by_inc = d.get("by_incidence", {})
+
+    L.append(macro("BPMRCWANCases", str(d["n_cases"]) if d.get("n_cases") else None))
+    L.append(macro("BPMRCWAMaxDev", fmt(d.get("max_abs_deviation"), ".3f")))
+    L.append(macro("BPMRCWAAnchored",
+                   "yes" if d.get("anchor_passed") else ("no" if d else None)))
+    for inc, lab in (("normal", "Normal"), ("bragg", "Bragg")):
+        rec = by_inc.get(inc, {})
+        for key, klab in (("overall", ""), ("unslanted", "Unslanted"),
+                          ("slanted", "Slanted")):
+            s = rec.get(key, {})
+            L.append(macro(f"BPMRCWA{lab}{klab}Median", fmt(s.get("median"), ".3f")))
+            L.append(macro(f"BPMRCWA{lab}{klab}Max", fmt(s.get("max"), ".3f")))
+
+    # First-order fraction against slant at normal incidence, the quantity the
+    # mechanism argument rests on, at the quoted index modulation.
+    cases = [c for c in d.get("cases", [])
+             if c.get("incidence") == "normal"
+             and abs(c.get("dn", 0) - BPM_QUOTED_DN) < 1e-9
+             and c.get("bpm_eta1") is not None]
+    periods = d.get("K_values", [])
+    for n_per, klab in BPM_KLABELS.items():
+        K_target = next((k for k in periods
+                         if abs(k * d.get("window_um", 51.2) / (2 * math.pi) - n_per) < 1e-3),
+                        None)
+        rows = sorted((c for c in cases if K_target is not None
+                       and abs(c["K"] - K_target) < 1e-6),
+                      key=lambda c: c["slant_deg"])
+        if not rows:
+            for suffix in ("PeakSlant", "PeakEta", "ZeroEta", "SevenFiveEta",
+                           "BraggMatchSlant"):
+                L.append(macro(f"BPM{klab}{suffix}", None))
+            continue
+        peak = max(rows, key=lambda c: c["bpm_eta1"])
+        zero = next((c for c in rows if c["slant_deg"] == 0.0), None)
+        sevenfive = next((c for c in rows if c["slant_deg"] == 7.5), None)
+        L.append(macro(f"BPM{klab}PeakSlant", fmt(peak["slant_deg"], ".1f")))
+        L.append(macro(f"BPM{klab}PeakEta", fmt(peak["bpm_eta1"], ".2f")))
+        L.append(macro(f"BPM{klab}ZeroEta",
+                       fmt(zero["bpm_eta1"], ".2f") if zero else None))
+        L.append(macro(f"BPM{klab}SevenFiveEta",
+                       fmt(sevenfive["bpm_eta1"], ".3f") if sevenfive else None))
+        # Closed form for the slant that Bragg-matches normal incidence:
+        # sin(phi) = K*lambda/(4*pi*n0), i.e. the Bragg angle itself, since
+        # tilting the fringes by theta_B is the same as tilting the beam.
+        lam = d.get("wavelength_um", 0.405)
+        n0 = d.get("n0", 1.5)
+        s = peak["K"] * lam / (4 * math.pi * n0)
+        phi = math.degrees(math.asin(min(max(s, -1.0), 1.0)))
+        L.append(macro(f"BPM{klab}BraggMatchSlant", fmt(phi, ".2f")))
+    return "".join(L)
+
+
 def main():
     paper_numbers = {}
     if os.path.exists(PAPER_NUMBERS_PATH):
@@ -773,7 +935,8 @@ def main():
           + build_shrinkage_bound_macros() + build_cost_benefit_macros()
           + build_r1_macros() + build_wp3_baseline_macros() + build_wp4_macros()
           + build_wp5_macros() + build_wp6_macros()
-          + build_path7_macros(paper_numbers))
+          + build_path7_macros(paper_numbers)
+          + build_applied_optics_macros(paper_numbers))
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     with open(OUT_PATH, "w") as f:
         f.write(tex)

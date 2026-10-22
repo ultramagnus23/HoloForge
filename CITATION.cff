@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: If you use this software, please cite it as below.
+title: HoloForge
+type: software
+authors:
+  - family-names: Tripathi
+    given-names: Chaitanya
+    orcid: https://orcid.org/0009-0002-4094-0323
+    affiliation: Ashoka University
+repository-code: https://github.com/ultramagnus23/HoloForge
+license: Apache-2.0
+doi: 10.5281/zenodo.22202762

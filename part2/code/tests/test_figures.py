@@ -19,9 +19,11 @@ import make_all as fig_mod
 import run_manifest as rm
 from manifest import _job, DEFAULT_MEDIUM
 
-RESULTS_TREE_FIGS = [fig_mod.make_fig1_paired_gain, fig_mod.make_fig3_slant_mismatch,
-                     fig_mod.make_figS2_ablation, fig_mod.make_figS3_factorial]
-JSON_FIGS = [fig_mod.make_fig2_reconstructions, fig_mod.make_fig4_twin_validation,
+RESULTS_TREE_FIGS = [fig_mod.make_fig1_paired_gain, fig_mod.make_fig3_regime_map,
+                     fig_mod.make_figS2_ablation, fig_mod.make_figS3_factorial,
+                     fig_mod.make_figS6_miscalibration]
+JSON_FIGS = [fig_mod.make_fig2_reconstructions, fig_mod.make_fig4_sensitivity,
+             fig_mod.make_fig5_twin_validation,
              fig_mod.make_figS1_exposure_profiles, fig_mod.make_figS4_rcwa_envelope,
              fig_mod.make_figS5_twin_fits_held_kbleach]
 

@@ -51,5 +51,5 @@ part1/code/results/*.npy
 # anywhere else in this repo.
 part2/code/results/S3/_designs/
 
-# JOSA A submission package: build artifact of part2/code/scripts/make_submission_package.py
+# Applied Optics submission package: build artifact of part2/code/scripts/make_submission_package.py
 part2/submission/
