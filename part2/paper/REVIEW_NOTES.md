@@ -27,17 +27,20 @@ wording needs updating.
 Wikipedia still lists Gisele Bennett as editor of Applied Optics and is out of
 date. The cover letter uses the Optica sources.
 
-## Title: not changed, two options for you
+## Title: DECIDED, keeping the current one
 
-Current title, which I recommend keeping:
+The author confirmed on 2026-10-22 that the title stays as it is. The
+alternatives below are kept only as a record of what was considered; nothing
+here is open.
+
+Current title:
 
 > Media-in-the-loop holography: designing photopolymer exposures through a
 > differentiable recording model
 
 It already names the application and the method and it is the title of the
-archived Zenodo release, so changing it costs continuity. Neither alternative is
-clearly better, so I have not touched it. If you want a more
-application-forward title, these two are the candidates:
+archived Zenodo release, so changing it costs continuity. Neither alternative
+was clearly better. The two that were considered:
 
 1. **Design guidelines for photopolymer exposure in volume holographic
    recording from a differentiable recording model.** Leads with "design
