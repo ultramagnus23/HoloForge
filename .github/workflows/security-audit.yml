@@ -48,7 +48,7 @@ jobs:
       - name: Scan dependencies and configuration with Trivy
         continue-on-error: true
         run: |
-          docker run --rm -v "$PWD:/src" --entrypoint trivy aquasec/trivy:0.69.3 \
+          docker run --rm -v "$PWD:/src" --entrypoint trivy aquasec/trivy:0.76.2 \
             fs --scanners vuln,misconfig,secret --skip-dirs .git --skip-dirs node_modules \
             --skip-dirs .venv --format sarif --output /src/reports/trivy.sarif /src
 
