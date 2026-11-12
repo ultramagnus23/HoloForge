@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "updates": [
+    {
+      "package_ecosystem": "github-actions",
+      "directory": "/",
+      "schedule": {
+        "interval": "weekly",
+        "day": "monday",
+        "time": "08:00"
+      }
+    },
+    {
+      "package_ecosystem": "pip",
+      "directory": "/part2/code",
+      "schedule": {
+        "interval": "weekly",
+        "day": "monday",
+        "time": "08:00"
+      },
+      "open_pull_requests_limit": 5
+    }
+  ]
+}
