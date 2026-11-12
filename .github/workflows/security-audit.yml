@@ -16,6 +16,6 @@ concurrency:
 
 jobs:
   audit:
-    uses: ultramagnus23/ultramagnus23/.github/workflows/reusable-repo-audit.yml@1fb09bf73ed7998a1b1edc16f7ca586e7f123fae
+    uses: ultramagnus23/ultramagnus23/.github/workflows/reusable-repo-audit.yml@c2506a68e4088c67710b613d678862e42346faad
     permissions:
       contents: read
